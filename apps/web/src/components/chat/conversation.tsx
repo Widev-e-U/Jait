@@ -2,7 +2,7 @@ import { isUserTurn } from '@/lib/conversation-turn'
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { observeConversationRect } from '@/lib/conversation-viewport'
-import { ChevronUp, Loader2 } from 'lucide-react'
+import { ArrowRight, ChevronUp, Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
 import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
@@ -1169,6 +1169,15 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     onEditPreviousUserMessage?.(target)
   }, [detachFromBottom, findPreviousUserMessage, onEditPreviousUserMessage, previousUserMessageIndex])
 
+  // Scroll to the previous user message without opening its editor.
+  const goToPreviousMessage = useCallback(() => {
+    const target = previousUserMessageIndex ?? findPreviousUserMessage()
+    if (target == null) return
+    setPreviousMessagePreviewSuppressed(true)
+    detachFromBottom()
+    virtualizerRef.current.scrollToIndex(target, { align: 'start', behavior: 'auto' })
+  }, [detachFromBottom, findPreviousUserMessage, previousUserMessageIndex])
+
   useLayoutEffect(() => {
     const target = resolvePendingEditJumpIndex(childItems, pendingEditJumpIndex, elevatedMessageId)
     if (target == null) return
@@ -1540,16 +1549,28 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
               'pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-end sm:top-10',
             )}
           >
-            <TooltipHint content="Jump to and edit previous user message">
-            <button
-              type="button"
-              aria-label="Jump to and edit previous user message"
-              className="pointer-events-auto block w-fit max-w-full cursor-text rounded-lg bg-muted px-4 py-3 text-left text-[0.9rem] leading-relaxed text-foreground shadow-sm transition-colors hover:bg-muted/80"
-              onClick={jumpToPreviousMessage}
-            >
-              <span className="block truncate">{previousMessagePreview}</span>
-            </button>
-            </TooltipHint>
+            <div className="pointer-events-auto flex w-fit max-w-full items-center rounded-lg bg-muted text-[0.9rem] leading-relaxed text-foreground shadow-sm transition-colors hover:bg-[color-mix(in_oklab,var(--muted)_85%,white_15%)]">
+              <TooltipHint content="Jump to and edit previous user message">
+                <button
+                  type="button"
+                  aria-label="Jump to and edit previous user message"
+                  className="min-w-0 cursor-text py-3 pl-4 pr-2 text-left"
+                  onClick={jumpToPreviousMessage}
+                >
+                  <span className="block truncate">{previousMessagePreview}</span>
+                </button>
+              </TooltipHint>
+              <TooltipHint content="Go to previous user message">
+                <button
+                  type="button"
+                  aria-label="Go to previous user message"
+                  className="mr-2 flex size-7 shrink-0 items-center justify-center self-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                  onClick={goToPreviousMessage}
+                >
+                  <ArrowRight className="size-4" />
+                </button>
+              </TooltipHint>
+            </div>
           </div>
         )}
 

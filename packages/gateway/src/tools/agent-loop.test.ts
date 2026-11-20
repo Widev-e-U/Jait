@@ -127,6 +127,22 @@ describe("serializeMessages", () => {
       { role: "assistant", content: "Done" },
     ]);
   });
+
+  it("sends system messages only at the head and as user messages after the first turn", () => {
+    expect(serializeMessages([
+      { role: "system", content: "base instructions" },
+      { role: "user", content: "task" },
+      { role: "system", content: "[active-turn-summary]scope:18:00[/active-turn-summary]" },
+      { role: "assistant", content: "Working" },
+      { role: "system", content: "steering note" },
+    ])).toEqual([
+      { role: "system", content: "base instructions" },
+      { role: "user", content: "task" },
+      { role: "user", content: "[active-turn-summary]scope:18:00[/active-turn-summary]" },
+      { role: "assistant", content: "Working" },
+      { role: "user", content: "steering note" },
+    ]);
+  });
 });
 
 describe("serializeMessagesForOllama", () => {
@@ -3469,14 +3485,15 @@ describe("runAgentLoop tool-loop detection", () => {
     let maxCompletedToolRounds = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       const body = JSON.parse(String(init?.body ?? "{}")) as { messages?: AgentMessage[] };
+      // serializeMessages sends a mid-history summary as a user message (strict
+      // chat templates accept system messages only at the head), so accept either role.
+      const isSummary = (message: AgentMessage) =>
+        (message.role === "system" || message.role === "user") &&
+        message.content.includes("[active-turn-summary]");
       preservedRecentEvidence ||= (body.messages ?? []).some(
-        (message) => message.role === "system" &&
-          message.content.includes("[active-turn-summary]") &&
-          message.content.includes("evidence:unique-"),
+        (message) => isSummary(message) && message.content.includes("evidence:unique-"),
       );
-      const compacted = (body.messages ?? []).some(
-        (message) => message.role === "system" && message.content.includes("[active-turn-summary]"),
-      );
+      const compacted = (body.messages ?? []).some(isSummary);
       maxCompletedToolRounds = Math.max(
         maxCompletedToolRounds,
         (body.messages ?? []).filter(
@@ -3493,6 +3510,8 @@ describe("runAgentLoop tool-loop detection", () => {
       // ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP, and the run would never terminate if
       // that window were ever widened.
       if (!compacted) {
+        // Bound the loop so a regression that hides the summary fails fast.
+        if (round >= 100) return textResponse("Never compacted.");
         return toolCallSSE(`call-stuck-${round}`, "execute", { command: "check the same logs" });
       }
       return textResponse("Recovered from the long investigation.");

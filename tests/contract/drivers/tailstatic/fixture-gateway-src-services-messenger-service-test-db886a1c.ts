@@ -124,6 +124,49 @@ await (async()=>{
 
     const { service, c, room, message } = setup();
     const sharp = (await import(Bun.resolveSync("sharp", __jait_original_dir))).default;
+    c.client.doRequest.mockResolvedValue(await sharp({ create: { width: 300, height: 300, channels: 3, background: '#3388aa' } }).png().toBuffer());
+    room.states = [{ type: 'm.room.member', state_key: '@bob:test', content: { avatar_url: 'mxc://test/bob' } }] as any;
+    room.events.push(message('$avatar', '@bob:test'));
+    const avatar = await service.notificationAvatar('test', '!room:test', '$avatar');
+    __jait_capture(0, (await sharp(avatar).metadata()));
+    await __jait_rejected(1, service.notificationAvatar('other', '!room:test', '$avatar'));
+    await __jait_rejected(2, service.notificationAvatar('test', '!room:test', '$missing'));
+    room.summary.hidden = true;
+    await __jait_rejected(3, service.notificationAvatar('test', '!room:test', '$avatar'));
+    room.summary.hidden = false;
+    room.summary.membership = 'leave';
+    await __jait_rejected(4, service.notificationAvatar('test', '!room:test', '$avatar'));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_71_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, c, room, message } = setup();
+    const sharp = (await import(Bun.resolveSync("sharp", __jait_original_dir))).default;
     const source = await sharp({ create: { width: 600, height: 400, channels: 3, background: '#c46422' } }).png().toBuffer();
     c.client.doRequest.mockResolvedValue(source);
     room.events.push(message('$photo', '@bob:test', { body: 'photo.png', msgtype: 'm.image', url: 'mxc://test/photo', info: { mimetype: 'image/png', size: source.length } } as any));
@@ -147,7 +190,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_75_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_91_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -176,8 +219,11 @@ await (async()=>{
       await update([]);
       __jait_capture(1, (c.snapshot('!room:test').typing));
       await update(['@bob:test']);
-      vi.advanceTimersByTime(15001);
+      c.connectionInterrupted();
       __jait_capture(2, (c.snapshot('!room:test').typing));
+      await update(['@bob:test']);
+      vi.advanceTimersByTime(15001);
+      __jait_capture(3, (c.snapshot('!room:test').typing));
     } finally { vi.useRealTimers(); }
   
 })();
@@ -189,7 +235,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_91_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_110_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -236,7 +282,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_112_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_131_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -269,7 +315,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_118_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_137_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -307,7 +353,45 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_129_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_148_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { c, room, message } = setup();
+    room.states = [
+      { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob', avatar_url: 'mxc://test/bob' } },
+      { type: 'm.room.member', state_key: '@eve:test', content: { displayname: 'Eve' } },
+    ] as any;
+    await c.sync({ rooms: { join: { '!room:test': { timeline: { events: [message('$bob', '@bob:test')] } } } } });
+    __jait_capture(0, (c.snapshot().rooms[0].latestSenderAvatarUrl));
+    await c.sync({ rooms: { join: { '!room:test': { timeline: { events: [message('$eve', '@eve:test')] } } } } });
+    __jait_captureType(1, (c.snapshot().rooms[0].latestSenderAvatarUrl));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_159_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -340,7 +424,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_135_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_165_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -374,7 +458,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_142_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_172_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -408,7 +492,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_149_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_179_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -444,7 +528,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_158_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_188_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -480,7 +564,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_167_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_197_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -519,7 +603,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_179_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_209_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -556,8 +640,11 @@ await (async()=>{
     __jait_capture(3, (c.messages('!room:test')[0].bridgeStatus));
     await sync(status('$delivered', '@teamsbot:test', 'SUCCESS', ['@bob:test']));
     __jait_capture(4, (c.messages('!room:test')[0].bridgeStatus));
-    await sync(status('$failed', '@teamsbot:test', 'FAIL_PERMANENT'));
+    await sync(status('$later-sent', '@teamsbot:test', 'SUCCESS'));
+    await sync(status('$retrying', '@teamsbot:test', 'FAIL_RETRIABLE'));
     __jait_capture(5, (c.messages('!room:test')[0].bridgeStatus));
+    await sync(status('$failed', '@teamsbot:test', 'FAIL_PERMANENT'));
+    __jait_capture(6, (c.messages('!room:test')[0].bridgeStatus));
   
 })();
 
@@ -568,7 +655,43 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_201_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_234_3": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { c, room, message } = setup();
+    room.states = [{ type: 'm.bridge', state_key: 'teams', content: { bridgebot: '@teamsbot:test' } }] as any;
+    room.events = [message('$one'), message('$two')];
+    room.receipts = { '$two': { '@bob:test': { ts: 123, thread_id: '$thread' }, '@teamsbot:test': { ts: 124, thread_id: '$thread' } } } as any;
+    __jait_capture(0, (c.messages('!room:test').map((m: any) => [m.readBy, m.bridgeStatus])));
+    room.receipts['$two']['@bob:test'].thread_id = 'main';
+    __jait_capture(1, (c.messages('!room:test')[0].readBy));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_243_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -604,7 +727,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_210_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_252_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -638,7 +761,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_220_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_262_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -680,7 +803,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_235_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_277_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -715,7 +838,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_246_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_288_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -747,7 +870,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_252_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_294_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -778,7 +901,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_257_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_299_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -809,7 +932,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_262_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_304_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -839,7 +962,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_266_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_308_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -872,7 +995,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_273_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_315_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -903,7 +1026,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_281_3_each0": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_323_3_each0": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -961,7 +1084,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_281_3_each1": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_323_3_each1": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1019,7 +1142,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_314_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_356_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1054,7 +1177,115 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each0": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_364_3_each0": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const name = '';
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    const id = '!teams:test';
+    const summary = () => c.snapshot().rooms.find((room: any) => room.id === id);
+    await c.sync({
+      account_data: { events: [{ type: 'm.direct', content: { '@bob:test': [id] } }] },
+      rooms: { join: { [id]: { state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name: 'Alice' } },
+        { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: 'msteams' }, bridgebot: '@bridge:test' } },
+        { type: 'm.room.member', state_key: '@bridge:test', content: { displayname: 'Teams bridge', membership: 'join' } },
+        { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Alice', membership: 'join' } },
+      ] } } } },
+    });
+    __jait_capture(0, (summary()));
+
+    const updateTitle = (title: string) => c.sync({ rooms: { join: { [id]: { timeline: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: title } },
+    ] } } } } });
+    await updateTitle(name);
+    __jait_capture(1, (summary()));
+
+    await updateTitle('New conversation title');
+    __jait_capture(2, (summary().name));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_364_3_each1": {
+
+const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { service, c, room, message };
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const name = '   ';
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    const id = '!teams:test';
+    const summary = () => c.snapshot().rooms.find((room: any) => room.id === id);
+    await c.sync({
+      account_data: { events: [{ type: 'm.direct', content: { '@bob:test': [id] } }] },
+      rooms: { join: { [id]: { state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name: 'Alice' } },
+        { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: 'msteams' }, bridgebot: '@bridge:test' } },
+        { type: 'm.room.member', state_key: '@bridge:test', content: { displayname: 'Teams bridge', membership: 'join' } },
+        { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Alice', membership: 'join' } },
+      ] } } } },
+    });
+    __jait_capture(0, (summary()));
+
+    const updateTitle = (title: string) => c.sync({ rooms: { join: { [id]: { timeline: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: title } },
+    ] } } } } });
+    await updateTitle(name);
+    __jait_capture(1, (summary()));
+
+    await updateTitle('New conversation title');
+    __jait_capture(2, (summary().name));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_388_3_each0": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1095,7 +1326,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each1": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_388_3_each1": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1136,7 +1367,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each2": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_388_3_each2": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1177,7 +1408,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_388_3_each3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1218,7 +1449,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_337_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_403_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1297,7 +1528,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_390_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_456_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1336,7 +1567,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_403_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_469_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {

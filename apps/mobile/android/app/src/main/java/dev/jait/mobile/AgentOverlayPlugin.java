@@ -204,6 +204,10 @@ public class AgentOverlayPlugin extends Plugin {
             call.getString("link", "/chat"), call.getString("scope", NotificationNavigation.scope(getContext())),
             call.getString("sessionId", ""), "completion".equals(call.getString("kind", "")), call.getString("markReadLink", null));
         String cardId = call.getString("replaceId", id);
+        if (call.getString("link", "").startsWith("/messenger?")) {
+            ChatNotifications.attachAvatar(getContext(), cardId == null || cardId.isEmpty() ? id : cardId,
+                id, NotificationAvatar.fallback(call.getString("title", "?")));
+        }
         NotificationAvatar.attach(getContext(), cardId == null || cardId.isEmpty() ? id : cardId,
             id, call.getString("iconUrl", ""));
         if (Boolean.TRUE.equals(call.getBoolean("imageAvailable", false))) {

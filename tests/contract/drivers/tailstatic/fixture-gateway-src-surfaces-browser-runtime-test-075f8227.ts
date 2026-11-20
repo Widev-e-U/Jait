@@ -8,6 +8,8 @@ import {
   resolveBrowserRuntimeMode,
   selectInitialBrowserPage,
   selectVisibleBrowserPage,
+  selectPageAfterClose,
+  isReusableBootstrapPageUrl,
 } from "../../../../packages/gateway/src/surfaces/browser.js";
 import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
@@ -50,7 +52,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_55_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_57_3": {
 
 
 const originalPlatform = process.platform;
@@ -80,7 +82,7 @@ function setBrowserRuntimeEnv(value: string): void {
   delete process.env.BROWSER_RUNTIME;
 }
 /*__jait_scope_open__*/{
-const __jait_hook_1091 = () => {
+const __jait_hook_1145 = () => {
     vi.useRealTimers();
     setPlatform(originalPlatform);
     setBunVersion(originalBunVersion);
@@ -103,13 +105,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1091();
+await __jait_hook_1145();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_63_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_65_3": {
 
 
 const originalPlatform = process.platform;
@@ -139,7 +141,7 @@ function setBrowserRuntimeEnv(value: string): void {
   delete process.env.BROWSER_RUNTIME;
 }
 /*__jait_scope_open__*/{
-const __jait_hook_1091 = () => {
+const __jait_hook_1145 = () => {
     vi.useRealTimers();
     setPlatform(originalPlatform);
     setBunVersion(originalBunVersion);
@@ -162,13 +164,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1091();
+await __jait_hook_1145();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_71_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_73_3": {
 
 
 const originalPlatform = process.platform;
@@ -198,7 +200,7 @@ function setBrowserRuntimeEnv(value: string): void {
   delete process.env.BROWSER_RUNTIME;
 }
 /*__jait_scope_open__*/{
-const __jait_hook_1091 = () => {
+const __jait_hook_1145 = () => {
     vi.useRealTimers();
     setPlatform(originalPlatform);
     setBunVersion(originalBunVersion);
@@ -221,13 +223,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1091();
+await __jait_hook_1145();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_81_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_83_3": {
 
 
 const originalPlatform = process.platform;
@@ -318,7 +320,67 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_133_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_135_3": {
+
+
+const originalPlatform = process.platform;
+const originalBunVersion = process.versions.bun;
+const originalBrowserRuntime = process.env.BROWSER_RUNTIME;
+function setPlatform(value: NodeJS.Platform): void {
+  Object.defineProperty(process, "platform", {
+    value,
+    configurable: true,
+  });
+}
+function setBunVersion(value: string | undefined): void {
+  if (value === undefined) {
+    delete (process.versions as NodeJS.ProcessVersions & { bun?: string }).bun;
+    return;
+  }
+  Object.defineProperty(process.versions, "bun", {
+    value,
+    configurable: true,
+  });
+}
+function setBrowserRuntimeEnv(value: string): void {
+  if (value) {
+    process.env.BROWSER_RUNTIME = value;
+    return;
+  }
+  delete process.env.BROWSER_RUNTIME;
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const page = { url: "https://example.test/redirected", title: "Redirected", text: "", elements: [] };
+    const snapshot = vi.fn()
+      .mockRejectedValueOnce(new Error("page.evaluate: Execution context was destroyed, most likely because of a navigation"))
+      .mockResolvedValueOnce(page);
+    const navigate = vi.fn().mockResolvedValue(undefined);
+    const driver = { navigate, snapshot, close: vi.fn().mockResolvedValue(undefined) } as unknown as BrowserDriver;
+    const surface = new BrowserSurface("redirect-browser", { driverFactory: async () => driver });
+    await surface.start({ sessionId: "session-1", projectRoot: "/project" });
+    try {
+      __jait_capture(0, (await surface.navigate("https://example.test/start")), (page));
+      __jait_capture(1, (navigate.mock.calls));
+      __jait_capture(2, (snapshot.mock.calls));
+      __jait_capture(3, (surface.snapshot().metadata), ({ currentUrl: page.url, actionCount: 1 }));
+    } finally {
+      await surface.stop();
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_156_3": {
 
 
 const originalPlatform = process.platform;
@@ -375,7 +437,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_149_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_172_3": {
 
 
 const originalPlatform = process.platform;
@@ -428,7 +490,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_167_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_190_3": {
 
 
 const originalPlatform = process.platform;
@@ -485,7 +547,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_180_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_203_3": {
 
 
 const originalPlatform = process.platform;
@@ -542,7 +604,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_193_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_216_3": {
 
 
 const originalPlatform = process.platform;
@@ -602,7 +664,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_212_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_235_3": {
 
 
 const originalPlatform = process.platform;
@@ -664,7 +726,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_230_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_253_3": {
 
 
 const originalPlatform = process.platform;
@@ -725,7 +787,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_247_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_270_3": {
 
 
 const originalPlatform = process.platform;
@@ -785,7 +847,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_265_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_288_3": {
 
 
 const originalPlatform = process.platform;
@@ -839,7 +901,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_278_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_301_3": {
 
 
 const originalPlatform = process.platform;
@@ -893,7 +955,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_291_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_314_3": {
 
 
 const originalPlatform = process.platform;
@@ -946,7 +1008,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_303_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_326_3": {
 
 
 const originalPlatform = process.platform;
@@ -1000,7 +1062,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_319_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_342_3": {
 
 
 const originalPlatform = process.platform;
@@ -1046,6 +1108,118 @@ await (async()=>{
     popup.evaluate.mockRejectedValue(new Error("Tab closed"));
     __jait_capture(4, (await selectVisibleBrowserPage([original, popup], original)), (original));
     __jait_capture(5, (await bridge.selectVisiblePage([original, popup], original)), (original));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_361_3": {
+
+
+const originalPlatform = process.platform;
+const originalBunVersion = process.versions.bun;
+const originalBrowserRuntime = process.env.BROWSER_RUNTIME;
+function setPlatform(value: NodeJS.Platform): void {
+  Object.defineProperty(process, "platform", {
+    value,
+    configurable: true,
+  });
+}
+function setBunVersion(value: string | undefined): void {
+  if (value === undefined) {
+    delete (process.versions as NodeJS.ProcessVersions & { bun?: string }).bun;
+    return;
+  }
+  Object.defineProperty(process.versions, "bun", {
+    value,
+    configurable: true,
+  });
+}
+function setBrowserRuntimeEnv(value: string): void {
+  if (value) {
+    process.env.BROWSER_RUNTIME = value;
+    return;
+  }
+  delete process.env.BROWSER_RUNTIME;
+}
+/*__jait_scope_open__*/{
+const page = (url: string, closed = false) => ({ url: () => url, isClosed: () => closed });
+
+try {
+await (async()=>{
+
+    const { createRequire } = await import("node:module");
+    const bridge = createRequire(__jait_original_url)("./playwright-node-bridge.cjs");
+    const startPage = page("https://start.duckduckgo.com/");
+    const newPage = vi.fn();
+    await __jait_captureResolved(0, (selectInitialBrowserPage({ pages: () => [startPage], newPage })), (startPage));
+    __jait_capture(1, (newPage.mock.calls));
+    for (const check of [isReusableBootstrapPageUrl, bridge.isReusableBootstrapPageUrl]) {
+      __jait_capture(2, (check("https://start.duckduckgo.com/")));
+      __jait_capture(3, (check("https://duckduckgo.com/?q=teams")));
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_374_3": {
+
+
+const originalPlatform = process.platform;
+const originalBunVersion = process.versions.bun;
+const originalBrowserRuntime = process.env.BROWSER_RUNTIME;
+function setPlatform(value: NodeJS.Platform): void {
+  Object.defineProperty(process, "platform", {
+    value,
+    configurable: true,
+  });
+}
+function setBunVersion(value: string | undefined): void {
+  if (value === undefined) {
+    delete (process.versions as NodeJS.ProcessVersions & { bun?: string }).bun;
+    return;
+  }
+  Object.defineProperty(process.versions, "bun", {
+    value,
+    configurable: true,
+  });
+}
+function setBrowserRuntimeEnv(value: string): void {
+  if (value) {
+    process.env.BROWSER_RUNTIME = value;
+    return;
+  }
+  delete process.env.BROWSER_RUNTIME;
+}
+/*__jait_scope_open__*/{
+const page = (url: string, closed = false) => ({ url: () => url, isClosed: () => closed });
+
+try {
+await (async()=>{
+
+    const { createRequire } = await import("node:module");
+    const bridge = createRequire(__jait_original_url)("./playwright-node-bridge.cjs");
+    const startPage = page("https://start.duckduckgo.com/");
+    const app = page("https://partner.microsoft.com/dashboard");
+    const popup = page("https://login.microsoftonline.com/common/oauth2", true);
+    for (const select of [selectPageAfterClose, bridge.selectPageAfterClose]) {
+      __jait_capture(0, (select(popup, [app, popup], [startPage, app])), (app));
+      // Without history, still prefer a real page over a stray start page.
+      __jait_capture(1, (select(popup, [], [startPage, app])), (app));
+      __jait_capture(2, (select(popup, [], [startPage])), (startPage));
+      __jait_captureType(3, (select(popup, [popup], [])));
+    }
   
 })();
 

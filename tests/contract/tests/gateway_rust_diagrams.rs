@@ -197,7 +197,6 @@ fn path_normalization_boundary_null_precedence_denied_case_and_relative_roots() 
         "foo//bar",
         "../root/file",
         "../other/file",
-        "..hidden",
         "..",
         "../../../../../../etc/passwd",
         "a\0b",
@@ -228,6 +227,20 @@ fn path_normalization_boundary_null_precedence_denied_case_and_relative_roots() 
         vec!["custom/private".into()],
         true,
     );
+    // The native guard compares path components. The TypeScript guard rejects
+    // even a contained basename with a leading pair of dots.
+    let guard = PathGuard::new(&project, &[], true).unwrap();
+    assert_eq!(
+        guard.validate_with_symlink_check("..hidden").unwrap(),
+        project.join("..hidden")
+    );
+    let reference = reference(
+        &dir,
+        json!({"op":"nativediagrams.paths","root":project,"steps":[{"target":"..hidden"}],"denied":[],"checkSymlinks":true}),
+    );
+    assert_eq!(reference[0]["name"], "PathTraversalError");
+    assert_eq!(reference[0]["allowed"], false);
+
     paths(
         &dir,
         &root().join(".jait/artifacts/../artifacts"),

@@ -228,8 +228,8 @@ fn encrypted_shared_device(s: &mut Suite) -> Result<()> {
         );
         equal(
             &message["assistantAccess"],
-            json!(false),
-            "assistant access resets at restart",
+            json!(true),
+            "assistant access persists across restart",
         )?;
     }
     s.gateway

@@ -1,7 +1,9 @@
 // Translated fixture from packages/gateway/src/routes/providers-model-routing.test.ts; expected literals are in tail_static.rs.
 
+
 import { loadConfig } from "../../../../packages/gateway/src/config.js"
 import { migrateDatabase, openDatabase } from "../../../../packages/gateway/src/db/index.js"
+import { resetModelFetcherCaches } from "../../../../packages/gateway/src/providers/model-fetchers.js"
 import { ProviderRegistry } from "../../../../packages/gateway/src/providers/registry.js"
 import { signAuthToken } from "../../../../packages/gateway/src/security/http-auth.js"
 import { ProviderAccountService } from "../../../../packages/gateway/src/services/provider-accounts.js"
@@ -48,8 +50,9 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_providers_model_routing_test_ts_12_3": {
+case "tailstatic_packages_gateway_src_routes_providers_model_routing_test_ts_14_3": {
 
+const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 /*__jait_scope_open__*/{
 
@@ -93,8 +96,74 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_providers_model_routing_test_ts_42_3": {
+case "tailstatic_packages_gateway_src_routes_providers_model_routing_test_ts_44_3": {
 
+const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(':memory:')
+    migrateDatabase(sqlite)
+    const config = { ...loadConfig(), jwtSecret: 'ollama-model-refresh-test', logLevel: 'silent' }
+    const users = new UserService(db)
+    const user = users.createUser('ollama-user', 'password123')
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)
+    const headers = { authorization: `Bearer ${token}` }
+    const baseUrl = 'http://office.test:11434'
+    users.updateSettings(user.id, { apiKeys: {
+      JAIT_BACKEND_INSTANCES: serializeJaitBackendInstances([
+        { id: 'office', type: 'ollama', name: 'Office', baseUrl },
+      ]),
+    } })
+    const registry = new ProviderRegistry()
+    registry.register({
+      id: 'jait',
+      info: { id: 'jait', name: 'Jait', description: 'Gateway provider', available: true, modes: ['full-access'] },
+      checkAvailability: async () => true,
+      listModels: async () => [],
+    } as any)
+    const app = Fastify({ logger: false })
+    registerProviderRoutes(app, config, { providerRegistry: registry, userService: users })
+    let installedTags = ['gemma3:27b']
+    const fetchMock = vi.fn(async (url: string) => url === `${baseUrl}/api/tags`
+      ? Response.json({ models: installedTags.map(name => ({ name })) })
+      : new Response(null, { status: 401 }))
+    vi.stubGlobal('fetch', fetchMock)
+    resetModelFetcherCaches()
+
+    try {
+      const url = '/api/providers/jait/models'
+      const initial = await app.inject({ url, headers })
+      __jait_capture(0, (initial.statusCode))
+      __jait_capture(1, (initial.json().models.map(({ name }: { name: string }) => name)), (installedTags))
+      installedTags = ['gemma4:31b']
+      const refreshed = await app.inject({ url: `${url}?refresh=true`, headers })
+      __jait_capture(2, (refreshed.statusCode))
+      __jait_capture(3, (refreshed.headers['cache-control']))
+      __jait_capture(4, (refreshed.json().models), ([encodeJaitModelId('ollama', 'office', 'gemma4:31b')]))
+      __jait_capture(5, (fetchMock.mock.calls), ([`${baseUrl}/api/tags`]))
+    } finally {
+      await app.close()
+      sqlite.close()
+      vi.unstubAllGlobals()
+      resetModelFetcherCaches()
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_providers_model_routing_test_ts_98_3": {
+
+const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 /*__jait_scope_open__*/{
 

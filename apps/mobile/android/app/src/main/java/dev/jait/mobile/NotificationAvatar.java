@@ -3,6 +3,10 @@ package dev.jait.mobile;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import java.util.Locale;
 import android.util.Base64;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -22,6 +26,26 @@ final class NotificationAvatar {
             Bitmap image = decode(dataUrl);
             if (image != null) ChatNotifications.attachAvatar(app, cardId, eventId, image);
         });
+    }
+
+    /** Provide a recognizable sender icon while an avatar is unavailable or loading. */
+    static Bitmap fallback(String name) {
+        String label = name == null ? "" : name.trim();
+        if (label.isEmpty()) label = "?";
+        int codePoint = label.codePointAt(0);
+        String initial = new String(Character.toChars(codePoint)).toUpperCase(Locale.ROOT);
+        float hue = (label.hashCode() & 0x7fffffff) % 360;
+        Bitmap bitmap = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.HSVToColor(new float[]{hue, 0.55f, 0.65f}));
+        canvas.drawCircle(64, 64, 64, paint);
+        paint.setColor(Color.WHITE);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD));
+        paint.setTextSize(60);
+        canvas.drawText(initial, 64, 64 - (paint.ascent() + paint.descent()) / 2, paint);
+        return bitmap;
     }
 
     static Bitmap decode(String dataUrl) {

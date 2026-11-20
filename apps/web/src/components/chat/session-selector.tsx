@@ -119,6 +119,23 @@ export function orderSidebarItems<T extends { id: string }>(items: T[], order?: 
 }
 
 /**
+ * `orderSidebarItems` for the project list, which the server pages newest
+ * first. Projects missing from the saved order sort first there so a project
+ * created after the user arranged the list lands on top. But the ones that come
+ * after every arranged project are older, not new: they were just paged in by
+ * "Show more projects" (a saved order only covers the projects loaded when it
+ * was made). They stay below the user's order, in the server's order, instead
+ * of jumping above it.
+ */
+export function orderSidebarProjects<T extends { id: string }>(projects: T[], order?: string[]): T[] {
+  if (!order?.length) return projects
+  const arranged = new Set(order)
+  let olderStart = projects.length
+  while (olderStart > 0 && !arranged.has(projects[olderStart - 1]!.id)) olderStart--
+  return [...orderSidebarItems(projects.slice(0, olderStart), order), ...projects.slice(olderStart)]
+}
+
+/**
  * Newest activity first. A running chat (streaming turn or running goal loop)
  * counts as active now: the server only bumps `lastActiveAt` when a turn
  * starts or ends, so a long loop turn would otherwise sink below chats used
@@ -465,7 +482,7 @@ export function SessionSelector({
     if (normalizedSearchQuery) {
       return filteredProjects.map((project) => ({ project, depth: 0, hasChildren: false, }))
     }
-    const orderedProjects = orderSidebarItems(filteredProjects, manualOrder.projects)
+    const orderedProjects = orderSidebarProjects(filteredProjects, manualOrder.projects)
     const rows = flattenProjectTree(buildProjectTree(orderedProjects))
     const hiddenUnder = new Set<string>()
     const out: Array<{ project: (typeof filteredProjects)[number]; depth: number; hasChildren: boolean }> = []
@@ -547,7 +564,7 @@ export function SessionSelector({
     onCommit: (action) => {
       if (action.type === 'order') {
         const ids = action.scope === 'projects'
-          ? orderSidebarItems(projects, manualOrder.projects).map((item) => item.id)
+          ? orderSidebarProjects(projects, manualOrder.projects).map((item) => item.id)
           : action.ids
         saveOrder(action.storeKey, ids, action.source, action.target, action.after)
       } else if (action.type === 'move-session') onMoveSession?.(action.sessionId, action.to)
@@ -934,7 +951,7 @@ export function SessionSelector({
                         const edge = (e.clientY - rect.top) / rect.height
                         if (!normalizedSearchQuery && source && source.id !== project.id && (source.parentId ?? null) === (project.parentId ?? null) && (!isFolder || edge < 0.25 || edge > 0.75)) {
                           e.preventDefault(); e.stopPropagation()
-                          const ids = orderSidebarItems(projects, manualOrder.projects).map((item) => item.id)
+                          const ids = orderSidebarProjects(projects, manualOrder.projects).map((item) => item.id)
                           saveOrder('projects', ids, source.id, project.id, edge >= 0.5)
                           setOrderTarget(null)
                           return

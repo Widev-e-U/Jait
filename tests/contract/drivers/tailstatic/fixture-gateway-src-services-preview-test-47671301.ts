@@ -418,6 +418,82 @@ try {
 await (async()=>{
 
     const browser = {
+      id: "browser-idle-chat", sessionId: "idle-chat", type: "browser", state: "running",
+      inspect: vi.fn().mockResolvedValue({ snapshot: { url: "https://en.wikipedia.org/wiki/Web_browser" } }),
+      getEvents: vi.fn().mockReturnValue([]), getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue({ vncPort: 5900, websockifyPort: 6080, novncUrl: "ws://127.0.0.1:6080" }),
+    };
+    const registry = { getSurface: vi.fn().mockReturnValue(browser), stopSurface: vi.fn().mockResolvedValue(undefined), startSurface: vi.fn() };
+    const service = new PreviewService(registry as any);
+    service.attachAgentBrowser("idle-chat", browser as any);
+    __jait_capture(0, (await service.suspendIdleAgentBrowser("browser-idle-chat")));
+    __jait_capture(1, (service.get("idle-chat")?.status));
+
+    // The next browser tool call runs a browser under the same id, which must relink the chat.
+    const running = { ...browser };
+    registry.getSurface.mockReturnValue(running);
+    service.attachAgentBrowser("idle-chat", running as any, undefined, false);
+    const session = service.get("idle-chat");
+    __jait_capture(2, (session?.status));
+    __jait_capture(3, (session?.url));
+    __jait_capture(4, (session?.sharedWithAgent));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_preview_test_ts_253_3": {
+
+
+const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const browser = {
+      id: "browser-reopen-chat", sessionId: "reopen-chat", type: "browser", state: "running",
+      navigate: vi.fn().mockResolvedValue({ url: "https://en.wikipedia.org/wiki/Web_browser" }),
+      inspect: vi.fn().mockResolvedValue({ snapshot: { url: "https://en.wikipedia.org/wiki/Firefox" } }),
+      getEvents: vi.fn().mockReturnValue([]), getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue({ vncPort: 5900, websockifyPort: 6080, novncUrl: "ws://127.0.0.1:6080" }),
+    };
+    const registry = { getSurface: vi.fn().mockReturnValue(browser), stopSurface: vi.fn().mockResolvedValue(undefined), startSurface: vi.fn() };
+    const service = new PreviewService(registry as any);
+    service.attachAgentBrowser("reopen-chat", browser as any, undefined, false);
+    __jait_capture(0, (await service.suspendIdleAgentBrowser("browser-reopen-chat")));
+    __jait_capture(1, (service.get("reopen-chat")?.status));
+
+    const reopened = await service.reopen("reopen-chat", "https://en.wikipedia.org/wiki/Web_browser", null);
+    __jait_capture(2, (registry.startSurface.mock.calls));
+    __jait_capture(3, (browser.navigate.mock.calls));
+    __jait_capture(4, (reopened.status));
+    __jait_capture(5, (reopened.url));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_preview_test_ts_274_3": {
+
+
+const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const browser = {
       type: "browser",
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
@@ -470,7 +546,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_283_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_327_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -529,7 +605,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_326_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_370_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -630,7 +706,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_411_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_455_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -713,7 +789,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_481_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_525_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -767,7 +843,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_523_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_567_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");

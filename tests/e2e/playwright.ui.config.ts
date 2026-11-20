@@ -44,6 +44,7 @@ export default defineConfig({
     'agent-github-connection.spec.ts',
     'agents-graph-layout.spec.ts',
     'sidebar-overflow.spec.ts',
+    'session-selector-show-more.spec.ts',
     'message-attachment-regressions.spec.ts',
     'message-send-status.spec.ts',
     'queue-edit-workspace.spec.ts',

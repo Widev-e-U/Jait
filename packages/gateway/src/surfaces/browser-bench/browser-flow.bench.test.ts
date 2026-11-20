@@ -110,7 +110,7 @@ describe.skipIf(!enabled)("browser steering benchmark", () => {
     const steps: Array<Pick<FlowStep, "name" | "tool"> & { input: Record<string, unknown> }> = [
       { name: "open Wikipedia article", tool: "browser.navigate", input: { url: "https://en.wikipedia.org/wiki/Web_browser" } },
       { name: "observe Wikipedia article", tool: "browser.snapshot", input: { maxElements: 30 } },
-      { name: "follow first article link", tool: "browser.click", input: { selector: "#mw-content-text p a[href^='/wiki/']:not([href*=':'])" } },
+      { name: "follow first article link", tool: "browser.click", input: { selector: "#mw-content-text p a[href^='https://en.wikipedia.org/wiki/']" } },
       { name: "observe linked article", tool: "browser.snapshot", input: { maxElements: 30 } },
       { name: "type into Wikipedia search", tool: "browser.type", input: { selector: "input[name='search']", text: "Hypertext" } },
       { name: "open Hacker News", tool: "browser.navigate", input: { url: "https://news.ycombinator.com/" } },

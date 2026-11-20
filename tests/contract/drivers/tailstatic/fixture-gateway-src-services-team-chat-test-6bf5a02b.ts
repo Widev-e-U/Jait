@@ -2333,7 +2333,116 @@ await __jait_hook_1987();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_team_chat_test_ts_640_3": {
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_642_3": {
+
+const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+const owner = "owner";
+const profile = (id: string, reportsToId: string | null = null) => personaAgentProfileSchema.parse({
+  id, name: id, reportsToId, persona: "Handle " + id + " work.", avatar: "Nova", providerId: "codex",
+  repositoryIds: [], skillIds: [], allowedTools: [], requiresApproval: true, paused: false,
+  schedule: { kind: "adaptive", rules: "" }, notificationChannels: [], notificationEvents: [],
+});
+const human: TeamSender = { kind: "user", id: owner, name: "Jakob", avatar: null };
+const sender = (id: string): TeamSender => ({ kind: "agent", id, name: id, avatar: "Nova" });
+/*__jait_scope_open__*/{
+let opened: Awaited<ReturnType<typeof openDatabase>>;
+let profiles: ThreadService;
+let sessions: SessionService;
+let service: TeamChatService;
+let room: TeamRoom;
+let databaseClosed = false;
+const post = (content: string, key: string, recipientIds?: string[]) => service.post(owner, room.id, { content, clientKey: key, sender: human, recipientIds });
+const __jait_hook_1399 = async () => {
+    databaseClosed = false;
+    opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
+    profiles = new ThreadService(opened.db); sessions = new SessionService(opened.db);
+    profiles.savePersonaAgent(owner, profile("Scrum"));
+    profiles.savePersonaAgent(owner, profile("Developer", "Scrum"));
+    profiles.savePersonaAgent(owner, profile("QA", "Scrum"));
+    profiles.savePersonaAgent(owner, profile("Research"));
+    service = new TeamChatService(opened.db, sessions, profiles);
+    room = service.ensureRoom(owner, "Developer");
+  };
+const __jait_hook_1987 = () => { vi.restoreAllMocks(); service.close(); if (!databaseClosed) opened.sqlite.close(); };
+await __jait_hook_1399();
+try {
+await (async()=>{
+
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2024-06-15T12:34:56.789Z").getTime());
+    const posted = Array.from({ length: 40 }, (_, index) => post("Burst " + index, "burst-" + index));
+    const history = service.history(owner, room.id).filter(item => item.content.startsWith("Burst "));
+    __jait_capture(0, (history.map(item => item.id)), (posted.map(item => item.id)));
+  
+})();
+
+} finally {
+await __jait_hook_1987();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_651_3": {
+
+const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+const owner = "owner";
+const profile = (id: string, reportsToId: string | null = null) => personaAgentProfileSchema.parse({
+  id, name: id, reportsToId, persona: "Handle " + id + " work.", avatar: "Nova", providerId: "codex",
+  repositoryIds: [], skillIds: [], allowedTools: [], requiresApproval: true, paused: false,
+  schedule: { kind: "adaptive", rules: "" }, notificationChannels: [], notificationEvents: [],
+});
+const human: TeamSender = { kind: "user", id: owner, name: "Jakob", avatar: null };
+const sender = (id: string): TeamSender => ({ kind: "agent", id, name: id, avatar: "Nova" });
+/*__jait_scope_open__*/{
+let opened: Awaited<ReturnType<typeof openDatabase>>;
+let profiles: ThreadService;
+let sessions: SessionService;
+let service: TeamChatService;
+let room: TeamRoom;
+let databaseClosed = false;
+const post = (content: string, key: string, recipientIds?: string[]) => service.post(owner, room.id, { content, clientKey: key, sender: human, recipientIds });
+const __jait_hook_1399 = async () => {
+    databaseClosed = false;
+    opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
+    profiles = new ThreadService(opened.db); sessions = new SessionService(opened.db);
+    profiles.savePersonaAgent(owner, profile("Scrum"));
+    profiles.savePersonaAgent(owner, profile("Developer", "Scrum"));
+    profiles.savePersonaAgent(owner, profile("QA", "Scrum"));
+    profiles.savePersonaAgent(owner, profile("Research"));
+    service = new TeamChatService(opened.db, sessions, profiles);
+    room = service.ensureRoom(owner, "Developer");
+  };
+const __jait_hook_1987 = () => { vi.restoreAllMocks(); service.close(); if (!databaseClosed) opened.sqlite.close(); };
+await __jait_hook_1399();
+try {
+await (async()=>{
+
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2024-06-15T12:34:56.789Z").getTime());
+    service.setDispatcher(async (delivery, agent) => {
+      for (const kind of ["blocked", "verification"] as const) service.post(owner, room.id, {
+        sender: { ...sender(agent.id), sourceSessionId: delivery.sessionId }, content: kind,
+        kind, recipientIds: [], clientKey: delivery.id + ":" + kind, parentMessageId: delivery.messageId,
+      });
+      return { content: "Verified." };
+    });
+    for (let round = 0; round < 25; round += 1) {
+      const message = post("Verify " + round, "resolved-blocker-" + round, ["QA"]);
+      await vi.waitFor(() => {
+        const delivery = service.deliveries(owner, room.id).find(item => item.messageId === message.id);
+        __jait_capture(0, ({ round, status: delivery?.status, error: delivery?.error }), ({ round, status: "completed", error: null }));
+      }, { timeout: 2_000, interval: 10 });
+    }
+  
+})();
+__jait_record({slot:1,completed:true});
+} finally {
+await __jait_hook_1987();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_team_chat_test_ts_669_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const owner = "owner";

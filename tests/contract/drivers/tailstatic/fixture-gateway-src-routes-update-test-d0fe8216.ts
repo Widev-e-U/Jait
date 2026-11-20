@@ -44,7 +44,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_update_test_ts_43_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_44_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -56,12 +56,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -75,7 +76,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -104,13 +105,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_60_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_61_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -122,12 +123,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -141,7 +143,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -165,13 +167,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_74_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_75_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -183,12 +185,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -202,7 +205,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -237,13 +240,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_105_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_106_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -255,12 +258,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -274,7 +278,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -304,13 +308,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_123_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_124_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -322,12 +326,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -341,7 +346,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -381,13 +386,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_151_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_152_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -399,12 +404,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -418,7 +424,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -453,13 +459,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_174_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_175_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -471,12 +477,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -490,7 +497,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -518,13 +525,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_195_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_196_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -536,12 +543,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -555,7 +563,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -597,13 +605,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_233_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_234_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -615,12 +623,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -634,7 +643,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -675,13 +684,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_265_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_266_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -693,12 +702,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -712,7 +722,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -746,13 +756,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_287_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_288_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -764,12 +774,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -783,7 +794,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -817,13 +828,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_313_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_314_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -835,12 +846,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -854,7 +866,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -885,13 +897,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_337_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_338_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -903,12 +915,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -922,7 +935,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -950,13 +963,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_356_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_357_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -968,12 +981,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -987,7 +1001,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -1015,13 +1029,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_375_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_376_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -1033,12 +1047,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -1052,7 +1067,139 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.resetAllMocks();
+  __resetUpdateCaches();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const node = { id: "n1", name: "Node", appVersion: "1.0.0", online: true, granted: true };
+    const listUpdateNodes = vi.fn().mockReturnValue([node]);
+    const proxyNodeUpdate = vi.fn().mockResolvedValue({ ok: true, newVersion: "2.0.0" });
+    const ws = { listUpdateNodes, proxyNodeUpdate } as unknown as import("../ws.js").WsControlPlane;
+    updateMocks.exec.mockImplementation((_cmd, _options, callback) => callback(null, "2.0.0"));
+    const { app, headers } = await createUpdateServer(ws);
+    __jait_capture(0, ((await app.inject({ method: "GET", url: "/api/update/nodes", headers })).json()), ({ nodes: [node] }));
+    for (const version of ["1.0.0", "1.5.0", "9.0.0"]) {
+      __jait_capture(1, ((await app.inject({ method: "POST", url: "/api/update/nodes/n1/apply", headers, payload: { version } })).statusCode));
+    }
+    __jait_capture(2, (proxyNodeUpdate.mock.calls));
+    const response = await app.inject({ method: "POST", url: "/api/update/nodes/n1/apply", headers, payload: { version: "2.0.0" } });
+    __jait_capture(3, (response.json()));
+    __jait_capture(4, (proxyNodeUpdate.mock.calls));
+    node.granted = false;
+    __jait_capture(5, ((await app.inject({ method: "POST", url: "/api/update/nodes/n1/apply", headers, payload: { version: "2.0.0" } })).statusCode));
+    __jait_capture(6, ((await app.inject({ method: "POST", url: "/api/update/nodes/n1/apply", payload: { version: "2.0.0" } })).statusCode));
+    await app.close();
+  
+})();
+
+} finally {
+await __jait_hook_1147();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_update_test_ts_399_3": {
+const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
+await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
+  prepareUpdate: updateMocks.prepare,
+  launchSystemdUpdate: updateMocks.launch,
+  discardUpdate: updateMocks.discard,
+}));
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
+const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
+const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
+  const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
+  const app = Fastify({ logger: false });
+  registerUpdateRoutes(app, config, {
+    shutdown: async () => undefined,
+    port: 0,
+    ws,
+  });
+  await app.ready();
+
+  const token = await signAuthToken(
+    { id: "android-owner", username: "alice" },
+    config.jwtSecret,
+  );
+
+  return {
+    app,
+    headers: { Authorization: `Bearer ${token}` },
+  };
+}
+const __jait_hook_1147 = () => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.resetAllMocks();
+  __resetUpdateCaches();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    updateMocks.exec.mockImplementation((_cmd, _options, callback) => callback(null, "99.0.0"));
+    const { app, headers } = await createUpdateServer();
+    vi.stubEnv("INVOCATION_ID", "");
+    __jait_capture(0, ((await app.inject({ method: "GET", url: "/api/update/check", headers })).json().canApply));
+    vi.stubEnv("INVOCATION_ID", "systemd-invocation");
+    __jait_capture(1, ((await app.inject({ method: "GET", url: "/api/update/check", headers })).json().canApply));
+    vi.unstubAllEnvs();
+    await app.close();
+  
+})();
+
+} finally {
+await __jait_hook_1147();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_update_test_ts_410_3": {
+const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
+await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
+  prepareUpdate: updateMocks.prepare,
+  launchSystemdUpdate: updateMocks.launch,
+  discardUpdate: updateMocks.discard,
+}));
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
+const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
+const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
+  const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
+  const app = Fastify({ logger: false });
+  registerUpdateRoutes(app, config, {
+    shutdown: async () => undefined,
+    port: 0,
+    ws,
+  });
+  await app.ready();
+
+  const token = await signAuthToken(
+    { id: "android-owner", username: "alice" },
+    config.jwtSecret,
+  );
+
+  return {
+    app,
+    headers: { Authorization: `Bearer ${token}` },
+  };
+}
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -1082,13 +1229,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_update_test_ts_395_3": {
+case "tailstatic_packages_gateway_src_routes_update_test_ts_430_3": {
 const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
 await vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/bin/safe-update.mjs",import.meta.url)), () => ({
@@ -1100,12 +1247,13 @@ const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveS
 const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
 const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
 const { registerUpdateRoutes, __resetUpdateCaches } = await import("../../../../packages/gateway/src/routes/update.js");
-async function createUpdateServer() {
+async function createUpdateServer(ws?: import("../ws.js").WsControlPlane) {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
   registerUpdateRoutes(app, config, {
     shutdown: async () => undefined,
     port: 0,
+    ws,
   });
   await app.ready();
 
@@ -1119,7 +1267,7 @@ async function createUpdateServer() {
     headers: { Authorization: `Bearer ${token}` },
   };
 }
-const __jait_hook_1101 = () => {
+const __jait_hook_1147 = () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetAllMocks();
@@ -1143,7 +1291,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1101();
+await __jait_hook_1147();
 }
 }
 

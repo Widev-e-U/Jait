@@ -334,12 +334,30 @@ for(const f of files){
    }
   }
   if(ts.isIfStatement(n)&&hasRegistration(n)){
-   const branch=(statement,condition)=>{
+   // Vitest only registers the selected branch for a statically expanded row.
+   // Keep the runtime guard when the condition depends on a runtime value.
+   const expression=unwrap(n.expression);
+   let selected;
+   if(ts.isBinaryExpression(expression)&&ts.isIdentifier(expression.left)&&ts.isStringLiteralLike(expression.right)){
+    const binding=environment.get(expression.left.text);
+    const operator=expression.operatorToken.kind;
+    if(binding&&ts.isStringLiteralLike(unwrap(binding))){
+     const equal=unwrap(binding).text===expression.right.text;
+     if(operator===ts.SyntaxKind.EqualsEqualsEqualsToken)selected=equal;
+     if(operator===ts.SyntaxKind.ExclamationEqualsEqualsToken)selected=!equal;
+    }
+   }
+   const branch=(statement,condition,active)=>{
+    if(!statement||active===false)return;
     const statements=ts.isBlock(statement)?[...statement.statements]:[statement];
     const setup=statements.filter(s=>!isHook(s)&&!hasRegistration(s));
-    for(const child of statements)if(hasRegistration(child))visit(child,[...scopes,'/*__jait_loop_open__*/if ('+condition+') {',...setup],lifecycle,suffix+'_branch',environment);
+    const open=active===true?'/*__jait_scope_open__*/{':'/*__jait_loop_open__*/if ('+condition+') {';
+    for(const child of statements)if(hasRegistration(child))visit(child,[...scopes,open,...setup],lifecycle,suffix+'_branch',environment);
    };
-   branch(n.thenStatement,adjustedText(n.expression));if(n.elseStatement)branch(n.elseStatement,'!('+adjustedText(n.expression)+')');return;
+   const condition=adjustedText(n.expression);
+   branch(n.thenStatement,condition,selected);
+   branch(n.elseStatement,'!('+condition+')',selected===undefined?undefined:!selected);
+   return;
   }
   if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression)&&n.expression.text==='describe'){
    const fn=n.arguments.find(a=>ts.isArrowFunction(a)||ts.isFunctionExpression(a));

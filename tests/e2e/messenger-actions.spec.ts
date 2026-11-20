@@ -96,6 +96,43 @@ test('React, remove reaction, and edit own message', async ({ page }) => {
   expect(calls).toContainEqual({ action: 'edit', roomId: '!room:test', eventId: '$two', text: 'Updated message' })
 })
 
+test('Edit box keeps the bubble width and its controls stay inside', async ({ page }) => {
+  await mount(page)
+  const own = page.locator('[data-message-id="$two"]')
+  const bubble = own.locator('[data-messenger-bubble]')
+  const editor = own.getByRole('textbox', { name: 'Edit message' })
+  const save = own.getByRole('button', { name: 'Save' })
+  const cancel = own.getByRole('button', { name: 'Cancel' })
+  const startEdit = async () => {
+    await own.getByRole('button', { name: 'Message options' }).click()
+    await page.getByRole('menuitem', { name: 'Edit message' }).click()
+    await expect(editor).toBeVisible()
+  }
+  // A short message gets only the width it needs, and Save and Cancel still fit inside it.
+  await startEdit()
+  const shortBubble = (await bubble.boundingBox())!
+  for (const control of [editor, save, cancel]) {
+    const box = (await control.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(shortBubble.x)
+    expect(box.x + box.width).toBeLessThanOrEqual(shortBubble.x + shortBubble.width)
+  }
+  await cancel.click()
+
+  // A full-width message keeps that width while it is edited.
+  await startEdit()
+  await editor.fill('This message is long enough to wrap onto several lines inside the bubble, so the bubble sits at its full width.')
+  await save.click()
+  await expect(own).toContainText('Edited')
+  const sent = (await bubble.boundingBox())!
+  await startEdit()
+  const editing = (await bubble.boundingBox())!
+  const box = (await editor.boundingBox())!
+  expect(Math.abs(editing.width - sent.width)).toBeLessThan(1)
+  expect(box.x).toBeGreaterThanOrEqual(editing.x)
+  expect(box.x + box.width).toBeLessThanOrEqual(editing.x + editing.width)
+  expect(box.width).toBeGreaterThan(editing.width - 30)
+})
+
 test('Day dividers label today and yesterday', async ({ page }) => {
   await mount(page)
   const dividers = page.locator('[data-day-divider]')

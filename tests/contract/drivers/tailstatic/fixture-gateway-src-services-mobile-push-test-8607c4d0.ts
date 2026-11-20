@@ -258,6 +258,53 @@ await (async()=>{
 
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
+    try {
+      const send = vi.fn(async (_url: unknown, _init?: RequestInit) => new Response("{}", { status: 200 }));
+      const service = new MobilePushService(db, {
+        project_id: "test", client_email: "test@example.com", private_key: "unused",
+      }, send as typeof fetch);
+      Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
+      service.register("phone-a", "user-a", "token-a");
+
+      await service.sendChatCompleted("user-a", {
+        id: "chat-complete:s:1", title: "Lady Merge-a-Lot · Chat finished", body: "Junior Software Engineer · Done",
+        replaceId: "chat-complete:s", sessionId: "s", link: "/chat?sessionId=s&projectId=p",
+        agentId: "01a1117a-495f-7dde-a504-7643383195f8", agentName: "Lady Merge-a-Lot",
+        agentRole: "Junior Software Engineer", agentAvatar: "Orbit",
+      });
+      // FCM data values are strings only, so identity must survive as flat strings.
+      __jait_capture(0, (JSON.parse(send.mock.calls[0]![1]!.body as string).message.data));
+
+      await service.sendChatCompleted("user-a", {
+        id: "chat-complete:s:2", title: "Chat finished", body: "Done", sessionId: "s",
+      });
+      const absent = JSON.parse(send.mock.calls[1]![1]!.body as string).message.data;
+      __jait_capture(1, (Object.keys(absent).filter((key) => key.startsWith("agent"))));
+    } finally { sqlite.close(); }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_139_3": {
+
+
+const registrations = [
+  { deviceId: "phone", userId: "user-a", token: "token-phone" },
+  { deviceId: "watch", userId: "user-a", token: "token-watch" },
+];
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
     new MobilePushService(db, null).register("android-primary", "user-a", "token-a");
     __jait_capture(0, (new MobilePushService(db, null).list("user-a")));
     sqlite.close();
@@ -271,7 +318,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_115_3": {
+case "tailstatic_packages_gateway_src_services_mobile_push_test_ts_149_3": {
 
 
 const registrations = [

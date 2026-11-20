@@ -19,6 +19,7 @@ export default defineConfig({
       'src/e2e-fixtures/agent-github-connection.tsx',
       'src/e2e-fixtures/agents-graph-layout.tsx',
       'src/e2e-fixtures/sidebar-overflow.tsx',
+      'src/e2e-fixtures/session-selector-show-more.tsx',
       'src/e2e-fixtures/message-attachment-regressions.tsx',
       'src/e2e-fixtures/message-send-status.tsx',
       'src/e2e-fixtures/queue-edit-workspace.tsx',

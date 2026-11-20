@@ -26,7 +26,7 @@ function setup() {
 }
 
 describe('Messenger assistant access persistence', () => {
-  it('resets assistant access at gateway restart, matching the encrypted-shared-device-restart contract', async () => {
+  it('keeps assistant access enabled across gateway restarts', async () => {
     const directory = fileURLToPath(new URL(`../../../../.jait/artifacts/messenger-access-${randomUUID()}`, import.meta.url));
     try {
       const service = new MessengerService('test-secret', directory);
@@ -37,9 +37,8 @@ describe('Messenger assistant access persistence', () => {
       const restored = (restarted as any).connection('owner');
       restored.start = vi.fn(async (session: unknown) => { restored.session = session; });
       await restarted.resume('owner');
-      expect(restored.assistantAccess).toBe(false);
-      await restored.command({ action: 'assistantAccess', enabled: true });
       expect(restored.assistantAccess).toBe(true);
+      await restored.command({ action: 'assistantAccess', enabled: false });
       const next = new MessengerService('test-secret', directory);
       const nextConnection = (next as any).connection('owner');
       nextConnection.start = vi.fn(async (session: unknown) => { nextConnection.session = session; });

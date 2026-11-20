@@ -6,6 +6,7 @@ import { latestConfirmedEvent, roomBridgeStatuses, roomReadReceipts } from './re
 import { messengerReadLink } from './notification-actions'
 import { triggerSystemNotification, revokeSystemNotification } from '@/lib/system-notifications'
 import { cachedBlob } from './blob-cache'
+import { linkedBodyFromHtml } from './linked-body'
 import {
   MAX_ATTACHMENT_BYTES, bridgeLabel, isStatusRoom, messengerError, normalizeHomeserver, readSession, roomKind, sessionKey,
   type MessengerMessage, type MessengerRoom, type MessengerSession, type MessengerSnapshot,
@@ -248,6 +249,7 @@ export class MessengerStore {
       ...(event.getSender() ? { senderId: event.getSender()! } : {}),
       ...(senderAvatarUrl?.startsWith('mxc://') ? { senderAvatarUrl } : {}),
       body: event.isDecryptionFailure() || event.getType() === 'm.room.encrypted' ? 'Unable to decrypt this message. Verify this device or import room keys.' : String(content.body ?? ''),
+      ...(content.format === 'org.matrix.custom.html' && event.getType() === 'm.room.message' && linkedBodyFromHtml(content.formatted_body) ? { linkedBody: linkedBodyFromHtml(content.formatted_body)! } : {}),
       timestamp: Number.isFinite(event.getTs()) && Math.abs(event.getTs()) <= 8.64e15 ? event.getTs() : 0, own: event.getSender() === this.session?.userId,
       encrypted: event.isEncrypted(), unableToDecrypt: event.isDecryptionFailure() || event.getType() === 'm.room.encrypted',
       pending: event.status === 'sending' || event.status === 'queued' || event.status === 'encrypting',

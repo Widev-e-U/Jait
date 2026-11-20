@@ -64,7 +64,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -81,7 +81,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -109,19 +109,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -148,14 +148,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each0": {
 
 
 const context: ToolContext = {
@@ -169,7 +169,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -186,7 +186,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -214,19 +214,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -239,278 +239,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each0": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each0": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each0": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -531,7 +260,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -548,7 +277,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -576,19 +305,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each0": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each0": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each0": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -609,7 +609,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -630,7 +630,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -647,7 +647,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -675,19 +675,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "describe", args: [] };
+const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -714,14 +714,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_105_5_each1_branch": {
 
 
 const context: ToolContext = {
@@ -735,7 +735,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -752,7 +752,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -780,19 +780,112 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "describe", args: [] };
+const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+      const f = fixture();
+      const result = await f.tool(name).execute(input, context);
+      __jait_capture(0, (result.data), ([snapshot.text,snapshot.text]));
+      __jait_capture(1, (f.surface.capturePageSnapshot.mock.calls));
+      __jait_capture(2, (f.surface.inspect.mock.calls));
+    
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each1": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -805,278 +898,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each1": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "describe", args: [] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each1": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "describe", args: [] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each1": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "describe", args: [] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -1097,7 +919,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -1114,7 +936,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -1142,19 +964,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "describe", args: [] };
+const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each1": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each1": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each1": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -1175,7 +1268,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -1196,7 +1289,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -1213,7 +1306,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -1241,19 +1334,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -1280,14 +1373,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each2": {
 
 
 const context: ToolContext = {
@@ -1301,7 +1394,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -1318,7 +1411,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -1346,19 +1439,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -1371,278 +1464,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each2": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each2": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each2": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -1663,7 +1485,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -1680,7 +1502,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -1708,19 +1530,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each2": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each2": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each2": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -1741,7 +1834,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -1762,7 +1855,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -1779,7 +1872,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -1807,19 +1900,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -1846,14 +1939,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_115_5_each3_branch": {
 
 
 const context: ToolContext = {
@@ -1867,7 +1960,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -1884,7 +1977,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -1912,19 +2005,114 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+      const f = fixture();
+      const elements = Array.from({ length: 35 }, (_, index) => ({ role: "button", name: `Button ${index}`, selector: `#button-${index}` }));
+      f.surface.capturePageSnapshot.mockResolvedValue({ ...snapshot, elements });
+      const result = await f.tool(name).execute(input, { ...context, browserTaskSnapshotElements: 30 });
+      __jait_capture(0, (result.data), ({ interactiveElements: elements.slice(0, 30) }));
+      __jait_capture(1, (f.surface.capturePageSnapshot.mock.calls));
+      __jait_capture(2, (f.surface.inspect.mock.calls));
+    
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each3": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -1937,278 +2125,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each3": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each3": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each3": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -2229,7 +2146,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -2246,7 +2163,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -2274,19 +2191,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each3": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each3": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each3": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -2307,7 +2495,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -2328,7 +2516,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -2345,7 +2533,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -2373,19 +2561,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -2412,14 +2600,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each4": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each4": {
 
 
 const context: ToolContext = {
@@ -2433,7 +2621,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -2450,7 +2638,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -2478,19 +2666,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -2503,278 +2691,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each4": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each4": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each4": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -2795,7 +2712,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -2812,7 +2729,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -2840,19 +2757,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each4": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each4": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each4": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -2873,7 +3061,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -2894,7 +3082,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -2911,7 +3099,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -2939,19 +3127,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -2978,14 +3166,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each5": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each5": {
 
 
 const context: ToolContext = {
@@ -2999,7 +3187,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -3016,7 +3204,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -3044,19 +3232,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -3069,278 +3257,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each5": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each5": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each5": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -3361,7 +3278,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -3378,7 +3295,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -3406,19 +3323,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each5": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each5": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each5": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -3439,7 +3627,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -3460,7 +3648,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -3477,7 +3665,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -3505,19 +3693,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -3544,14 +3732,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each6": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each6": {
 
 
 const context: ToolContext = {
@@ -3565,7 +3753,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -3582,7 +3770,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -3610,19 +3798,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -3635,278 +3823,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each6": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each6": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each6": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -3927,7 +3844,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -3944,7 +3861,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -3972,19 +3889,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each6": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each6": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each6": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -4005,7 +4193,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -4026,7 +4214,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -4043,7 +4231,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -4071,19 +4259,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -4110,14 +4298,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each7": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each7": {
 
 
 const context: ToolContext = {
@@ -4131,7 +4319,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -4148,7 +4336,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -4176,19 +4364,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -4201,278 +4389,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each7": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each7": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each7": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -4493,7 +4410,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -4510,7 +4427,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -4538,19 +4455,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each7": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each7": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each7": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -4571,7 +4759,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -4592,7 +4780,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -4609,7 +4797,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -4637,19 +4825,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -4676,14 +4864,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each8": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_126_3_each8": {
 
 
 const context: ToolContext = {
@@ -4697,7 +4885,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -4714,7 +4902,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -4742,19 +4930,19 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -4767,278 +4955,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each8": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.getSurface.mock.calls));
-    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each8": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.surface.state = "stopped";
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-    __jait_capture(1, (f.registry.startSurface.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each8": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
-    action.mockRejectedValue(new Error("Browser disconnected"));
-    await __jait_rejected(0, f.tool(name).execute(input, context));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 }
@@ -5059,7 +4976,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -5076,7 +4993,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -5104,19 +5021,290 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
 const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.collaboration.assertAgentControl.mockImplementation(() => { throw new Error("Browser controlled by user"); });
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.getSurface.mock.calls));
+    __jait_capture(2, (f.surface[method as keyof typeof f.surface].mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_143_3_each8": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.surface.state = "stopped";
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+    __jait_capture(1, (f.registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_150_3_each8": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const action = f.surface[method as keyof typeof f.surface] as ReturnType<typeof vi.fn>;
+    action.mockRejectedValue(new Error("Browser disconnected"));
+    await __jait_rejected(0, f.tool(name).execute(input, context));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_157_3_each8": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+const { name, input, method, args } = { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] };
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -5137,190 +5325,8 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_153_3": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    f.registry.getSurface.mockReturnValue(undefined);
-    const tool = createBrowserNavigateTool(f.registry as unknown as SurfaceRegistry);
-    await tool.execute({ url: snapshot.url }, context);
-    __jait_capture(0, (f.registry.startSurface.mock.calls), (["browser",`browser-${context.sessionId}`,{
-      sessionId: context.sessionId, projectRoot: context.projectRoot, userId: undefined,
-    }]));
-  
-})();
-
-} finally {
-await __jait_hook_2191();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_163_3": {
-
-
-const context: ToolContext = {
-  sessionId: "browser-tests", actionId: "browser-action",
-  projectRoot: process.cwd(), requestedBy: "test",
-};
-const snapshot = {
-  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
-  elements: [{ role: "button", name: "Save", selector: "#save" }],
-  activeElement: null, dialogs: [], obstruction: null,
-};
-const cases = [
-  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
-  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
-  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
-  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
-  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
-  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
-  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
-  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
-];
-let directory: string;
-let capturePath: string;
-const artifacts: string[] = [];
-function fixture() {
-  const surface = {
-    id: "preview-browser-browser-tests", type: "browser", state: "running",
-    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
-    navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
-    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
-    click: vi.fn().mockResolvedValue(undefined),
-    typeText: vi.fn().mockResolvedValue(undefined),
-    scroll: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockResolvedValue(undefined),
-    waitFor: vi.fn().mockResolvedValue(undefined),
-    screenshot: vi.fn().mockResolvedValue(capturePath),
-  };
-  const registry = {
-    getSurface: vi.fn().mockReturnValue(surface),
-    startSurface: vi.fn().mockResolvedValue(surface),
-  };
-  const collaboration = {
-    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
-    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
-    assertAgentControl: vi.fn(),
-  };
-  const ws = { proxyFsOp: vi.fn() };
-  const typedRegistry = registry as unknown as SurfaceRegistry;
-  const tools: ToolDefinition[] = [
-    createBrowserNavigateTool(typedRegistry, collaboration),
-    createBrowserSnapshotTool(typedRegistry, collaboration),
-    createBrowserInspectTool(typedRegistry, collaboration),
-    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
-  ];
-  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
-}
-const __jait_hook_1982 = async () => {
-  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
-  capturePath = join(directory, "capture.png");
-  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
-};
-const __jait_hook_2191 = async () => {
-  await rm(directory, { recursive: true, force: true });
-  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
-};
-/*__jait_scope_open__*/{
-await __jait_hook_1982();
-try {
-await (async()=>{
-
-    const f = fixture();
-    const result = await f.tool("browser.screenshot").execute({}, { ...context, projectRoot: directory });
-    __jait_capture(0, (result.ok));
-    __jait_capture(1, (result.message));
-    __jait_capture(2, (result.message));
-    const requestedPath = f.surface.screenshot.mock.calls[0]?.[0];
-    __jait_capture(3, (requestedPath?.startsWith(join(directory, ".jait", "shots", "browser-"))));
-    const data = result.data as { result: { path: string } };
-    artifacts.push(data.result.path);
-  
-})();
-
-} finally {
-await __jait_hook_2191();
 }
 }
 
@@ -5340,7 +5346,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -5357,7 +5363,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -5385,17 +5391,199 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.registry.getSurface.mockReturnValue(undefined);
+    const tool = createBrowserNavigateTool(f.registry as unknown as SurfaceRegistry);
+    await tool.execute({ url: snapshot.url }, context);
+    __jait_capture(0, (f.registry.startSurface.mock.calls), (["browser",`browser-${context.sessionId}`,{
+      sessionId: context.sessionId, projectRoot: context.projectRoot, userId: undefined,
+    }]));
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_185_3": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
+try {
+await (async()=>{
+
+    const f = fixture();
+    const result = await f.tool("browser.screenshot").execute({}, { ...context, projectRoot: directory });
+    __jait_capture(0, (result.ok));
+    __jait_capture(1, (result.message));
+    __jait_capture(2, (result.message));
+    const requestedPath = f.surface.screenshot.mock.calls[0]?.[0];
+    __jait_capture(3, (requestedPath?.startsWith(join(directory, ".jait", "shots", "browser-"))));
+    const data = result.data as { result: { path: string } };
+    artifacts.push(data.result.path);
+  
+})();
+
+} finally {
+await __jait_hook_2202();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_197_3": {
+
+
+const context: ToolContext = {
+  sessionId: "browser-tests", actionId: "browser-action",
+  projectRoot: process.cwd(), requestedBy: "test",
+};
+const snapshot = {
+  url: "https://example.com/form", title: "Asset inventory", text: "Asset saved",
+  elements: [{ role: "button", name: "Save", selector: "#save" }],
+  activeElement: null, dialogs: [], obstruction: null,
+};
+const cases = [
+  { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
+  { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
+  { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
+  { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
+  { name: "browser.scroll", input: { x: 0, y: 600 }, method: "scroll", args: [0, 600] },
+  { name: "browser.select", input: { selector: "#status", value: "owned" }, method: "select", args: ["#status", "owned"] },
+  { name: "browser.wait", input: { selector: "#ready", timeoutMs: 125 }, method: "waitFor", args: ["#ready", 125] },
+  { name: "browser.screenshot", input: {}, method: "screenshot", args: [undefined] },
+];
+let directory: string;
+let capturePath: string;
+const artifacts: string[] = [];
+function fixture() {
+  const surface = {
+    id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
+    navigate: vi.fn().mockResolvedValue(snapshot),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
+    inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
+    click: vi.fn().mockResolvedValue(undefined),
+    typeText: vi.fn().mockResolvedValue(undefined),
+    scroll: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn().mockResolvedValue(undefined),
+    waitFor: vi.fn().mockResolvedValue(undefined),
+    screenshot: vi.fn().mockResolvedValue(capturePath),
+  };
+  const registry = {
+    getSurface: vi.fn().mockReturnValue(surface),
+    startSurface: vi.fn().mockResolvedValue(surface),
+  };
+  const collaboration = {
+    getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id }),
+    getSessionByBrowserId: vi.fn().mockReturnValue({ id: "preview-session", browserId: surface.id, controller: "agent" }),
+    assertAgentControl: vi.fn(),
+  };
+  const ws = { proxyFsOp: vi.fn() };
+  const typedRegistry = registry as unknown as SurfaceRegistry;
+  const tools: ToolDefinition[] = [
+    createBrowserNavigateTool(typedRegistry, collaboration),
+    createBrowserSnapshotTool(typedRegistry, collaboration),
+    createBrowserInspectTool(typedRegistry, collaboration),
+    ...createBrowserInteractionTools(typedRegistry, collaboration, ws),
+  ];
+  return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
+}
+const __jait_hook_1993 = async () => {
+  directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
+  capturePath = join(directory, "capture.png");
+  await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
+};
+const __jait_hook_2202 = async () => {
+  await rm(directory, { recursive: true, force: true });
+  await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+};
+/*__jait_scope_open__*/{
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -5411,13 +5599,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_186_3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_208_3": {
 
 
 const context: ToolContext = {
@@ -5431,7 +5619,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -5448,7 +5636,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -5476,17 +5664,17 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -5499,13 +5687,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_196_3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_218_3": {
 
 
 const context: ToolContext = {
@@ -5519,7 +5707,7 @@ const snapshot = {
 };
 const cases = [
   { name: "browser.navigate", input: { url: snapshot.url }, method: "navigate", args: [snapshot.url] },
-  { name: "browser.snapshot", input: {}, method: "describe", args: [] },
+  { name: "browser.snapshot", input: {}, method: "capturePageSnapshot", args: [] },
   { name: "browser.inspect", input: { selector: "#save" }, method: "inspect", args: ["#save"] },
   { name: "browser.click", input: { selector: "#save" }, method: "click", args: ["#save"] },
   { name: "browser.type", input: { selector: "#asset", text: "workstation" }, method: "typeText", args: ["#asset", "workstation"] },
@@ -5536,7 +5724,7 @@ function fixture() {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
     getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
-    describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
+    capturePageSnapshot: vi.fn().mockResolvedValue(snapshot),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
     click: vi.fn().mockResolvedValue(undefined),
     typeText: vi.fn().mockResolvedValue(undefined),
@@ -5564,17 +5752,17 @@ function fixture() {
   ];
   return { surface, registry, collaboration, ws, tool: (name: string) => tools.find((t) => t.name === name)! };
 }
-const __jait_hook_1982 = async () => {
+const __jait_hook_1993 = async () => {
   directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-tools-"));
   capturePath = join(directory, "capture.png");
   await writeFile(capturePath, Buffer.from([137, 80, 78, 71]));
 };
-const __jait_hook_2191 = async () => {
+const __jait_hook_2202 = async () => {
   await rm(directory, { recursive: true, force: true });
   await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
 };
 /*__jait_scope_open__*/{
-await __jait_hook_1982();
+await __jait_hook_1993();
 try {
 await (async()=>{
 
@@ -5587,7 +5775,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2191();
+await __jait_hook_2202();
 }
 }
 

@@ -375,18 +375,21 @@ export class PreviewService {
     }, true);
   }
 
-  /** Start a fresh agent browser for a chat whose live browser was stopped, opened at the remembered page. */
+  /** Open the remembered page for a chat whose live browser was stopped, reusing a browser that still runs. */
   async reopen(sessionId: string, url: string, projectRoot: string | null): Promise<PreviewSession> {
     if (!/^https?:\/\//i.test(url)) throw new Error("Cannot reopen the browser without an HTTP/HTTPS page.");
-    const existing = this.sessions.get(sessionId);
-    if (existing) return this.get(sessionId)!;
+    const current = this.get(sessionId);
+    if (current?.status === "ready") return current;
     const id = `browser-${sessionId}`;
-    const browser = await this.surfaceRegistry.startSurface("browser", id, { sessionId, projectRoot: projectRoot ?? process.cwd(), requireLiveView: true }) as BrowserSurface;
+    // startSurface replaces a registered surface without stopping it, so reuse one that still runs.
+    const running = this.surfaceRegistry.getSurface(id) as BrowserSurface | undefined;
+    const reuse = running?.type === "browser" && running.state === "running";
+    const browser = reuse ? running! : await this.surfaceRegistry.startSurface("browser", id, { sessionId, projectRoot: projectRoot ?? process.cwd(), requireLiveView: true }) as BrowserSurface;
     try {
       await browser.navigate(url);
       this.attachAgentBrowser(sessionId, browser, projectRoot ?? undefined, false);
     } catch (error) {
-      await this.surfaceRegistry.stopSurface(browser.id, "browser-reopen-failed").catch(() => {});
+      if (!reuse) await this.surfaceRegistry.stopSurface(browser.id, "browser-reopen-failed").catch(() => {});
       throw error;
     }
     return this.get(sessionId)!;
@@ -426,10 +429,21 @@ export class PreviewService {
     const existing = this.sessions.get(sessionId);
     if (existing) {
       if (existing.browserId !== browser.id) throw new Error("This chat already has a linked browser.");
-      return; // Never undo user takeover on the next tool call.
+      // Never undo user takeover on the next tool call.
+      if (existing.origin !== "agent" || existing.status === "ready" || existing.terminating) return;
     }
     const live = browser.getLiveViewInfo();
     const remote = live ? createLiveViewRemoteBrowser(live) : null;
+    if (existing) {
+      // The idle reaper leaves a stopped record behind. Relink it to the browser that runs now,
+      // keeping the sharing choice the user made, so the chat shows the live view again.
+      existing.status = "ready";
+      existing.url = remote?.novncUrl ?? null;
+      existing.remoteBrowser = remote;
+      existing.updatedAt = nowIso();
+      this.notifyChanged(existing);
+      return;
+    }
     const timestamp = nowIso();
     const session: InternalPreviewSession = {
       id: `preview-${sessionId}`, sessionId, projectRoot: projectRoot ?? null,

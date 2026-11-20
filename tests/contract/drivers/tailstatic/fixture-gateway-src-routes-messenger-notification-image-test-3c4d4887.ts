@@ -55,6 +55,7 @@ await (async()=>{
 
     const restore = vi.spyOn(MessengerService.prototype, 'restore').mockImplementation(() => {});
     const image = vi.spyOn(MessengerService.prototype, 'notificationImage').mockResolvedValue(Buffer.from('jpeg'));
+    const avatar = vi.spyOn(MessengerService.prototype, 'notificationAvatar').mockResolvedValue(Buffer.from('jpeg'));
     const config = { ...loadConfig(), jwtSecret: 'notification-image-test' };
     const app = Fastify();
     try {
@@ -70,10 +71,17 @@ await (async()=>{
       __jait_capture(4, (response.headers['content-type']));
       __jait_capture(5, (response.headers['cache-control']));
       __jait_capture(6, (image.mock.calls));
+      __jait_capture(7, ((await app.inject({ method: 'POST', url: '/api/messenger/notification-avatar', payload })).statusCode));
+      __jait_capture(8, ((await app.inject({ method: 'POST', url: '/api/messenger/notification-avatar', headers, payload: { ...payload, url: 'https://evil.test' } })).statusCode));
+      const avatarResponse = await app.inject({ method: 'POST', url: '/api/messenger/notification-avatar', headers, payload });
+      __jait_capture(9, (avatarResponse.statusCode));
+      __jait_capture(10, (avatarResponse.headers['cache-control']));
+      __jait_capture(11, (avatar.mock.calls));
     } finally {
       await app.close();
       restore.mockRestore();
       image.mockRestore();
+      avatar.mockRestore();
     }
   
 })();

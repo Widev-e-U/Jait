@@ -2228,6 +2228,10 @@ impl<C> MessengerService<C> {
             return Err(ERR_DEVICE_BOUND.to_string());
         }
         connection.set_session(Some(session));
+        // The user's explicit opt-in survives gateway restarts and updates.
+        connection.set_assistant_access(
+            saved.get("assistantAccess").and_then(|v| v.as_bool()) == Some(true),
+        );
         Ok(())
     }
 

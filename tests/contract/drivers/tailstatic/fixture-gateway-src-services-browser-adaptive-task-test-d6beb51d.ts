@@ -436,6 +436,49 @@ try {
 await (async()=>{
 
     const { service, execute } = fixture();
+    const elements = Array.from({ length: 30 }, (_, i) => ({ selector: `#c${i}`, tagName: "button", name: `Button ${i}` }));
+    const page = { documentUrl: "https://example.test/", documentTimeOrigin: 123 };
+    execute.mockResolvedValueOnce({ ok: true, message: "captured", data: { ...page, interactiveElements: elements.slice(0, 1) } })
+      .mockResolvedValueOnce({ ok: true, message: "clicked", data: { ...page, interactiveElements: elements } });
+    const click = (choice: string) => ({ model: "test", answers: { next: { type: "choice" as const, choice: "click" }, clickTarget: { type: "choice" as const, choice } } });
+    vi.mocked(evaluateDecision).mockReset()
+      .mockResolvedValueOnce(click("c0"))
+      .mockResolvedValueOnce(click("c29"))
+      .mockResolvedValueOnce({ model: "test", answers: { next: { type: "choice", choice: "complete" } } });
+
+    const result = await service.runTask({ task: "Open the menu and click Button 29" }, context);
+    __jait_capture(0, (result));
+    __jait_capture(1, (execute.mock.calls.map(call => call[0])));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_137_3": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
+const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
+const { callJaitLlmCompletion, resolveJaitLlmConfig } = await import("../../../../packages/gateway/src/services/jait-llm.js");
+const { evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const context = { sessionId: "chat", projectRoot: "/project", actionId: "task", requestedBy: "test", apiKeys: {} };
+function fixture() {
+  const db = { select: () => ({ from: () => ({ where: () => ({ all: () => [] }) }) }) };
+  const execute = vi.fn(async (name: string) => name === "browser.snapshot"
+    ? { ok: true, message: "captured", data: { documentUrl: "https://example.test/", documentTimeOrigin: 123, interactiveElements: [{ tagName: "button", selector: execute.mock.calls.length === 1 ? "#menu" : "#save", name: execute.mock.calls.length === 1 ? "Menu" : "Save" }] } }
+    : { ok: true, message: "clicked", data: {} });
+  return { service: new BrowserWorkflowService(db as never, execute), execute };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, execute } = fixture();
     const elements = Array.from({ length: 20 }, (_, i) => ({ selector: `#c${i}`, tagName: "button", name: `Button ${i}`, text: "" }));
     execute.mockResolvedValueOnce({ ok: true, message: "captured", data: { documentUrl: "https://example.test/", documentTimeOrigin: 123, interactiveElements: elements } });
     vi.mocked(evaluateDecision).mockReset()
@@ -456,7 +499,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_133_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_150_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -490,7 +533,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_140_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_157_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -531,7 +574,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_154_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_171_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -567,7 +610,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each0": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_180_3_each0": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -604,7 +647,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each1": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_180_3_each1": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -641,7 +684,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_163_3_each2": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_180_3_each2": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -678,7 +721,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_170_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_187_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -712,7 +755,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_177_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_194_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -745,7 +788,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_183_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_200_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -782,7 +825,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_193_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_210_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -816,7 +859,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_200_3_each0": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_217_3_each0": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -857,7 +900,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_200_3_each1": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_217_3_each1": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -898,7 +941,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_211_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_228_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -936,7 +979,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_222_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_239_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -976,7 +1019,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_235_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_252_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");
@@ -1014,7 +1057,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_246_3": {
+case "tailstatic_packages_gateway_src_services_browser_adaptive_task_test_ts_263_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ systemOneEnabled: () => true, evaluateDecision: vi.fn() }));
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/jait-llm.ts",import.meta.url)), () => ({ resolveJaitLlmConfig: vi.fn(() => ({})), callJaitLlmCompletion: vi.fn(async () => "hello") }));
 const { BrowserWorkflowService } = await import("../../../../packages/gateway/src/services/browser-workflows.js");

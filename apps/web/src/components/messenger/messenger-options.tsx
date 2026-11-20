@@ -78,7 +78,7 @@ export function MessengerOptions({ onBack, onOpenConversation }: {
 
       <section aria-label="Assistant access" className={card}>
         <label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={snapshot.assistantAccess} disabled={!ready} onChange={event => store.setAssistantAccess(event.target.checked)} />Allow assistant access</label>
-        <p className="text-xs text-muted-foreground">When enabled, tools can read and search messages through the gateway and send with consent. Requested message text is shared with the gateway and your AI provider. Matrix credentials and encryption keys stay on the gateway. Assistant access resets when the gateway restarts or you disconnect.</p>
+        <p className="text-xs text-muted-foreground">When enabled, tools can read and search messages through the gateway and send with consent. Requested message text is shared with the gateway and your AI provider. Matrix credentials and encryption keys stay on the gateway. Assistant access stays on across gateway restarts and updates, and resets when you disconnect.</p>
       </section>
 
       <section aria-label="Encrypted history" className={card}>

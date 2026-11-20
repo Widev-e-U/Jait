@@ -921,8 +921,18 @@ export function repairToolCallHistory(messages: AgentMessage[]): void {
 }
 
 export function serializeMessages(messages: AgentMessage[], requireReasoning = false) {
+  // Strict chat templates (vLLM: "System message must be at the beginning")
+  // reject system messages after the first non-system one. Steering notes and
+  // summaries are injected mid-history, so send those as user messages.
+  let seenNonSystem = false;
   return messages.map((m) => {
-    const msg: Record<string, unknown> = { role: m.role, content: m.content };
+    let role = m.role as string;
+    if (role === "system") {
+      if (seenNonSystem) role = "user";
+    } else {
+      seenNonSystem = true;
+    }
+    const msg: Record<string, unknown> = { role, content: m.content };
     if (m.tool_calls) msg.tool_calls = m.tool_calls;
     if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
     // Tool results are correlated by tool_call_id. Strict endpoints reject name.

@@ -1,6 +1,7 @@
 // Translated fixture from packages/gateway/src/security/control-access.test.ts; expected literals are in tail_static.rs.
 import { createServer } from "../../../../packages/gateway/src/server.js";
 import { loadConfig } from "../../../../packages/gateway/src/config.js";
+import { ControlAccess } from "../../../../packages/gateway/src/security/control-access.js";
 import { signAuthToken } from "../../../../packages/gateway/src/security/http-auth.js";
 import { SurfaceRegistry } from "../../../../packages/gateway/src/surfaces/registry.js";
 import { DeviceRegistry } from "../../../../packages/gateway/src/services/device-registry.js";
@@ -47,7 +48,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_security_control_access_test_ts_32_3": {
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_33_3": {
 
 
 const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
@@ -68,7 +69,7 @@ async function setup() {
   const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
   return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
 }
-const __jait_hook_611 = async () => { for (const app of apps.splice(0)) await app.close(); };
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
 /*__jait_scope_open__*/{
 
 try {
@@ -82,13 +83,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_611();
+await __jait_hook_664();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_security_control_access_test_ts_38_3": {
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_39_3": {
 
 
 const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
@@ -109,7 +110,7 @@ async function setup() {
   const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
   return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
 }
-const __jait_hook_611 = async () => { for (const app of apps.splice(0)) await app.close(); };
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
 /*__jait_scope_open__*/{
 
 try {
@@ -125,13 +126,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_611();
+await __jait_hook_664();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_security_control_access_test_ts_46_3": {
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_47_3": {
 
 
 const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
@@ -152,7 +153,7 @@ async function setup() {
   const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
   return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
 }
-const __jait_hook_611 = async () => { for (const app of apps.splice(0)) await app.close(); };
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
 /*__jait_scope_open__*/{
 
 try {
@@ -166,13 +167,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_611();
+await __jait_hook_664();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_security_control_access_test_ts_55_3_each0": {
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_56_3_each0": {
 
 
 const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
@@ -193,7 +194,7 @@ async function setup() {
   const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
   return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
 }
-const __jait_hook_611 = async () => { for (const app of apps.splice(0)) await app.close(); };
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const nodeEnv = "production";
@@ -213,14 +214,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_611();
+await __jait_hook_664();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_security_control_access_test_ts_55_3_each1": {
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_56_3_each1": {
 
 
 const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
@@ -241,7 +242,7 @@ async function setup() {
   const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
   return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
 }
-const __jait_hook_611 = async () => { for (const app of apps.splice(0)) await app.close(); };
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const nodeEnv = "development";
@@ -261,14 +262,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_611();
+await __jait_hook_664();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_security_control_access_test_ts_65_3": {
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_66_3": {
 
 
 const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
@@ -289,7 +290,7 @@ async function setup() {
   const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
   return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
 }
-const __jait_hook_611 = async () => { for (const app of apps.splice(0)) await app.close(); };
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
 /*__jait_scope_open__*/{
 
 try {
@@ -310,13 +311,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_611();
+await __jait_hook_664();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_security_control_access_test_ts_80_1": {
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_81_1": {
 
 
 const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
@@ -337,7 +338,7 @@ async function setup() {
   const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
   return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
 }
-const __jait_hook_611 = async () => { for (const app of apps.splice(0)) await app.close(); };
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
 
 try {
 await (async()=>{
@@ -351,13 +352,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_611();
+await __jait_hook_664();
 }
 
 
 break;
 }
-case "tailstatic_packages_gateway_src_security_control_access_test_ts_89_1": {
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_90_1": {
 
 
 const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
@@ -378,7 +379,7 @@ async function setup() {
   const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
   return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
 }
-const __jait_hook_611 = async () => { for (const app of apps.splice(0)) await app.close(); };
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
 
 try {
 await (async()=>{
@@ -394,9 +395,135 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_611();
+await __jait_hook_664();
 }
 
+
+break;
+}
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_104_3": {
+
+
+const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
+const apps: Array<Awaited<ReturnType<typeof createServer>>> = [];
+async function setup() {
+  const write = vi.fn();
+  const surfaces = new SurfaceRegistry();
+  const snapshot = { id: "fake-terminal", type: "terminal", state: "running", sessionId: "owner-session", metadata: {} };
+  surfaces.registerInstance("fake-terminal", { id: snapshot.id, type: "terminal", sessionId: snapshot.sessionId,
+    state: "running", snapshot: () => snapshot, write, resize: vi.fn() } as any);
+  const approve = vi.fn(() => true);
+  const consentManager = { getRequest: () => ({ id: "pending", status: "pending", sessionId: "owner-session" }), approve, listPending: () => [], reject: vi.fn(() => true) } as any;
+  const app = await createServer(config, { consentManager, deviceRegistry: new DeviceRegistry(), surfaceRegistry: surfaces, toolRegistry: new ToolRegistry(),
+    audit: { write: vi.fn() } as any,
+    sessionService: { getById: (id: string, user?: string) => id === "owner-session" && (!user || user === "owner") ? { id, userId: "owner" } : null } as any });
+  apps.push(app);
+  const token = await signAuthToken({ id: "owner", username: "owner" }, config.jwtSecret);
+  const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
+  return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
+}
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
+/*__jait_scope_open__*/{
+const owners = { ownerOfWorkflowSession: (sessionId: string) => (sessionId === "workflow:run-1" ? "owner" : null) };
+const consent = { getRequest: (id: string) => ({ id, status: "pending", sessionId: "workflow:run-1" }) } as any;
+
+try {
+await (async()=>{
+
+    const access = new ControlAccess(undefined, undefined, consent, undefined, owners);
+    __jait_capture(0, (access.consentSession("workflow:run-1", "owner")));
+    __jait_capture(1, (access.consentSession("workflow:run-1", "stranger")));
+    __jait_capture(2, (access.consentRequest("req-1", "owner")));
+    __jait_capture(3, (access.consentRequest("req-1", "stranger")));
+  
+})();
+
+} finally {
+await __jait_hook_664();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_112_3": {
+
+
+const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
+const apps: Array<Awaited<ReturnType<typeof createServer>>> = [];
+async function setup() {
+  const write = vi.fn();
+  const surfaces = new SurfaceRegistry();
+  const snapshot = { id: "fake-terminal", type: "terminal", state: "running", sessionId: "owner-session", metadata: {} };
+  surfaces.registerInstance("fake-terminal", { id: snapshot.id, type: "terminal", sessionId: snapshot.sessionId,
+    state: "running", snapshot: () => snapshot, write, resize: vi.fn() } as any);
+  const approve = vi.fn(() => true);
+  const consentManager = { getRequest: () => ({ id: "pending", status: "pending", sessionId: "owner-session" }), approve, listPending: () => [], reject: vi.fn(() => true) } as any;
+  const app = await createServer(config, { consentManager, deviceRegistry: new DeviceRegistry(), surfaceRegistry: surfaces, toolRegistry: new ToolRegistry(),
+    audit: { write: vi.fn() } as any,
+    sessionService: { getById: (id: string, user?: string) => id === "owner-session" && (!user || user === "owner") ? { id, userId: "owner" } : null } as any });
+  apps.push(app);
+  const token = await signAuthToken({ id: "owner", username: "owner" }, config.jwtSecret);
+  const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
+  return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
+}
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
+/*__jait_scope_open__*/{
+const owners = { ownerOfWorkflowSession: (sessionId: string) => (sessionId === "workflow:run-1" ? "owner" : null) };
+const consent = { getRequest: (id: string) => ({ id, status: "pending", sessionId: "workflow:run-1" }) } as any;
+
+try {
+await (async()=>{
+
+    const access = new ControlAccess(undefined, undefined, consent, undefined, owners);
+    __jait_capture(0, (access.session("workflow:run-1", "owner")));
+  
+})();
+
+} finally {
+await __jait_hook_664();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_security_control_access_test_ts_117_3": {
+
+
+const config = { ...loadConfig(), jwtSecret: "control-access-regression-secret", nodeEnv: "production", logLevel: "silent" };
+const apps: Array<Awaited<ReturnType<typeof createServer>>> = [];
+async function setup() {
+  const write = vi.fn();
+  const surfaces = new SurfaceRegistry();
+  const snapshot = { id: "fake-terminal", type: "terminal", state: "running", sessionId: "owner-session", metadata: {} };
+  surfaces.registerInstance("fake-terminal", { id: snapshot.id, type: "terminal", sessionId: snapshot.sessionId,
+    state: "running", snapshot: () => snapshot, write, resize: vi.fn() } as any);
+  const approve = vi.fn(() => true);
+  const consentManager = { getRequest: () => ({ id: "pending", status: "pending", sessionId: "owner-session" }), approve, listPending: () => [], reject: vi.fn(() => true) } as any;
+  const app = await createServer(config, { consentManager, deviceRegistry: new DeviceRegistry(), surfaceRegistry: surfaces, toolRegistry: new ToolRegistry(),
+    audit: { write: vi.fn() } as any,
+    sessionService: { getById: (id: string, user?: string) => id === "owner-session" && (!user || user === "owner") ? { id, userId: "owner" } : null } as any });
+  apps.push(app);
+  const token = await signAuthToken({ id: "owner", username: "owner" }, config.jwtSecret);
+  const other = await signAuthToken({ id: "stranger", username: "stranger" }, config.jwtSecret);
+  return { app, write, approve, headers: { authorization: `Bearer ${token}` }, other: { authorization: `Bearer ${other}` } };
+}
+const __jait_hook_664 = async () => { for (const app of apps.splice(0)) await app.close(); };
+/*__jait_scope_open__*/{
+const owners = { ownerOfWorkflowSession: (sessionId: string) => (sessionId === "workflow:run-1" ? "owner" : null) };
+const consent = { getRequest: (id: string) => ({ id, status: "pending", sessionId: "workflow:run-1" }) } as any;
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (new ControlAccess(undefined, undefined, consent).consentSession("workflow:run-1", "owner")));
+    __jait_capture(1, (new ControlAccess(undefined, undefined, consent, undefined, owners).consentSession("workflow:run-1", null)));
+  
+})();
+
+} finally {
+await __jait_hook_664();
+}
+}
 
 break;
 }

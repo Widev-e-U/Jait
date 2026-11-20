@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
 import { describe, expect, it } from 'vitest'
-import { getSessionContextMenuPosition, moveSidebarItem, orderSidebarItems, SessionSelector as SessionSelectorBase, sortSessionsByActivity } from './session-selector'
+import { getSessionContextMenuPosition, moveSidebarItem, orderSidebarItems, orderSidebarProjects, SessionSelector as SessionSelectorBase, sortSessionsByActivity } from './session-selector'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ProjectRecord } from '@/hooks/useProjects'
 
@@ -566,6 +566,50 @@ describe('sidebar manual order', () => {
 
   it('keeps saved items in order while placing new items first', () => {
     expect(orderSidebarItems([{ id: 'b' }, { id: 'new' }, { id: 'a' }], ['a', 'b', 'removed']).map((item) => item.id)).toEqual(['new', 'a', 'b'])
+  })
+})
+
+describe('orderSidebarProjects', () => {
+  // The server pages projects newest first, so a longer page only adds older ones at the end.
+  const order = (loaded: string[], saved?: string[]) => orderSidebarProjects(loaded.map((id) => ({ id })), saved).map((item) => item.id)
+
+  it('keeps projects revealed by "Show more projects" below the saved order', () => {
+    const saved = ['c', 'a', 'b', 'd', 'e']
+    // First page, arranged by the user; then the same page plus the next one.
+    expect(order(['a', 'b', 'c', 'd', 'e'], saved)).toEqual(['c', 'a', 'b', 'd', 'e'])
+    expect(order(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'], saved)).toEqual(['c', 'a', 'b', 'd', 'e', 'f', 'g', 'h', 'i', 'j'])
+  })
+
+  it('keeps revealed projects last even when the user moved the last loaded project to the top', () => {
+    expect(order(['a', 'b', 'c', 'f', 'g'], ['c', 'b', 'a'])).toEqual(['c', 'b', 'a', 'f', 'g'])
+  })
+
+  it('still places a project created after the order was saved on top', () => {
+    expect(order(['new', 'a', 'b', 'c'], ['c', 'a', 'b'])).toEqual(['new', 'c', 'a', 'b'])
+  })
+
+  it('places a new project on top and revealed projects at the bottom together', () => {
+    expect(order(['new', 'a', 'b', 'c', 'older-1', 'older-2'], ['c', 'a', 'b'])).toEqual(['new', 'c', 'a', 'b', 'older-1', 'older-2'])
+  })
+
+  it('treats a project between arranged ones as new, like orderSidebarItems', () => {
+    expect(order(['b', 'new', 'a'], ['a', 'b', 'removed'])).toEqual(['new', 'a', 'b'])
+  })
+
+  it('ignores saved ids that are no longer loaded', () => {
+    expect(order(['a', 'b', 'f'], ['gone', 'b', 'a'])).toEqual(['b', 'a', 'f'])
+  })
+
+  it('leaves the server order alone when none of the projects were arranged', () => {
+    expect(order(['a', 'b', 'c'], undefined)).toEqual(['a', 'b', 'c'])
+    expect(order(['a', 'b', 'c'], [])).toEqual(['a', 'b', 'c'])
+    expect(order(['a', 'b', 'c'], ['x', 'y'])).toEqual(['a', 'b', 'c'])
+  })
+
+  it('does not mutate the projects it is given', () => {
+    const loaded = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    orderSidebarProjects(loaded, ['c', 'b'])
+    expect(loaded.map((item) => item.id)).toEqual(['a', 'b', 'c'])
   })
 })
 

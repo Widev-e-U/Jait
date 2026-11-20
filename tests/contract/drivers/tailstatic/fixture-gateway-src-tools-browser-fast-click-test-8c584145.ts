@@ -67,7 +67,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -80,13 +80,13 @@ function fixture() {
   const tool = createBrowserInteractionTools(registry, collaboration).find(t => t.name === "browser.click")!;
   return { browser, session, tool, loseControl: () => { session.controller = "user"; lost?.(browser.id); } };
 }
-const __jait_hook_2651 = () => {
+const __jait_hook_2681 = () => {
   vi.resetAllMocks();
   vi.mocked(systemOneEnabled).mockReturnValue(true);
   vi.mocked(evaluateDecision).mockResolvedValue(selected);
 };
 /*__jait_scope_open__*/{
-await __jait_hook_2651();
+await __jait_hook_2681();
 try {
 await (async()=>{
 
@@ -128,7 +128,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -141,13 +141,13 @@ function fixture() {
   const tool = createBrowserInteractionTools(registry, collaboration).find(t => t.name === "browser.click")!;
   return { browser, session, tool, loseControl: () => { session.controller = "user"; lost?.(browser.id); } };
 }
-const __jait_hook_2651 = () => {
+const __jait_hook_2681 = () => {
   vi.resetAllMocks();
   vi.mocked(systemOneEnabled).mockReturnValue(true);
   vi.mocked(evaluateDecision).mockResolvedValue(selected);
 };
 /*__jait_scope_open__*/{
-await __jait_hook_2651();
+await __jait_hook_2681();
 try {
 await (async()=>{
 
@@ -184,7 +184,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -197,13 +197,13 @@ function fixture() {
   const tool = createBrowserInteractionTools(registry, collaboration).find(t => t.name === "browser.click")!;
   return { browser, session, tool, loseControl: () => { session.controller = "user"; lost?.(browser.id); } };
 }
-const __jait_hook_2651 = () => {
+const __jait_hook_2681 = () => {
   vi.resetAllMocks();
   vi.mocked(systemOneEnabled).mockReturnValue(true);
   vi.mocked(evaluateDecision).mockResolvedValue(selected);
 };
 /*__jait_scope_open__*/{
-await __jait_hook_2651();
+await __jait_hook_2681();
 try {
 await (async()=>{
 
@@ -252,7 +252,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -265,13 +265,13 @@ function fixture() {
   const tool = createBrowserInteractionTools(registry, collaboration).find(t => t.name === "browser.click")!;
   return { browser, session, tool, loseControl: () => { session.controller = "user"; lost?.(browser.id); } };
 }
-const __jait_hook_2651 = () => {
+const __jait_hook_2681 = () => {
   vi.resetAllMocks();
   vi.mocked(systemOneEnabled).mockReturnValue(true);
   vi.mocked(evaluateDecision).mockResolvedValue(selected);
 };
 /*__jait_scope_open__*/{
-await __jait_hook_2651();
+await __jait_hook_2681();
 try {
 await (async()=>{
 
@@ -314,7 +314,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -327,13 +327,13 @@ function fixture() {
   const tool = createBrowserInteractionTools(registry, collaboration).find(t => t.name === "browser.click")!;
   return { browser, session, tool, loseControl: () => { session.controller = "user"; lost?.(browser.id); } };
 }
-const __jait_hook_2651 = () => {
+const __jait_hook_2681 = () => {
   vi.resetAllMocks();
   vi.mocked(systemOneEnabled).mockReturnValue(true);
   vi.mocked(evaluateDecision).mockResolvedValue(selected);
 };
 /*__jait_scope_open__*/{
-await __jait_hook_2651();
+await __jait_hook_2681();
 try {
 await (async()=>{
 
@@ -373,7 +373,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -386,7 +386,7 @@ function fixture() {
   const tool = createBrowserInteractionTools(registry, collaboration).find(t => t.name === "browser.click")!;
   return { browser, session, tool, loseControl: () => { session.controller = "user"; lost?.(browser.id); } };
 }
-const __jait_hook_2651 = () => {
+const __jait_hook_2681 = () => {
   vi.resetAllMocks();
   vi.mocked(systemOneEnabled).mockReturnValue(true);
   vi.mocked(evaluateDecision).mockResolvedValue(selected);
@@ -394,7 +394,7 @@ const __jait_hook_2651 = () => {
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const change = "privacy";
-await __jait_hook_2651();
+await __jait_hook_2681();
 try {
 await (async()=>{
 
@@ -435,7 +435,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -448,7 +448,7 @@ function fixture() {
   const tool = createBrowserInteractionTools(registry, collaboration).find(t => t.name === "browser.click")!;
   return { browser, session, tool, loseControl: () => { session.controller = "user"; lost?.(browser.id); } };
 }
-const __jait_hook_2651 = () => {
+const __jait_hook_2681 = () => {
   vi.resetAllMocks();
   vi.mocked(systemOneEnabled).mockReturnValue(true);
   vi.mocked(evaluateDecision).mockResolvedValue(selected);
@@ -456,7 +456,7 @@ const __jait_hook_2651 = () => {
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const change = "control";
-await __jait_hook_2651();
+await __jait_hook_2681();
 try {
 await (async()=>{
 
@@ -497,7 +497,7 @@ const snapshot = {
   ],
 };
 function fixture() {
-  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", inspect: vi.fn(async () => ({ snapshot })), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
+  const browser = { id: "browser-chat", type: "browser", state: "running", sessionId: "chat", capturePageSnapshot: vi.fn(async () => snapshot), fastClickSnapshot: vi.fn(async () => snapshot), click: vi.fn(async (..._args: unknown[]) => {}) };
   const session = { id: "chat", sessionId: "chat", browserId: browser.id, controller: "agent", secretSafe: false };
   let lost: ((id: string) => void) | undefined;
   const collaboration = {
@@ -510,13 +510,13 @@ function fixture() {
   const tool = createBrowserInteractionTools(registry, collaboration).find(t => t.name === "browser.click")!;
   return { browser, session, tool, loseControl: () => { session.controller = "user"; lost?.(browser.id); } };
 }
-const __jait_hook_2651 = () => {
+const __jait_hook_2681 = () => {
   vi.resetAllMocks();
   vi.mocked(systemOneEnabled).mockReturnValue(true);
   vi.mocked(evaluateDecision).mockResolvedValue(selected);
 };
 /*__jait_scope_open__*/{
-await __jait_hook_2651();
+await __jait_hook_2681();
 try {
 await (async()=>{
 
@@ -524,7 +524,7 @@ await (async()=>{
     f.browser.click.mockImplementationOnce(async () => { f.loseControl(); });
     __jait_capture(0, (await f.tool.execute({ target: "Open Settings" }, context)));
     __jait_capture(1, (f.browser.fastClickSnapshot.mock.calls));
-    __jait_capture(2, (f.browser.inspect.mock.calls));
+    __jait_capture(2, (f.browser.capturePageSnapshot.mock.calls));
   
 })();
 

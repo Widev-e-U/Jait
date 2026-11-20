@@ -7008,6 +7008,217 @@ await __jait_hook_5762();
 try {
 await (async()=>{
 
+      const token = await createToken("update-owner");
+      const admin = openWs(port, { token });
+      const remote = openWs(port, { token });
+      await Promise.all([waitForOpen(admin.ws), waitForOpen(remote.ws)]);
+      await Promise.all([admin.collector.next(), remote.collector.next()]);
+      remote.ws.send(JSON.stringify({ type: "node.hello", payload: {
+        id: "update-node", name: "Update node", platform: "linux", role: "remote",
+        pairCredential: true, appVersion: "1.0.0", capabilities: { gatewayUpdate: true },
+      } }));
+      let message: any;
+      do { message = await remote.collector.next(); } while (message.type !== "node.credential");
+      __jait_capture(1, (message.payload.credential));
+      await __jait_rejected(2, plane.proxyNodeUpdate("update-node", "other-user", "1.0.1"));
+      await __jait_rejected(3, plane.proxyNodeUpdate("update-node", "update-owner", "1.0.1"));
+      await grantPermissions(admin, "update-node", { update: true });
+      let settled = false;
+      const pending = plane.proxyNodeUpdate("update-node", "update-owner", "1.0.1").then(result => { settled = true; return result; });
+      do { message = await remote.collector.next(); } while (message.type !== "node.update-request");
+      __jait_capture(4, (message.payload.version));
+      const requestId = message.payload.requestId;
+      admin.ws.send(JSON.stringify({ type: "node.update-response", payload: { requestId, result: { ok: true, newVersion: "9.9.9" } } }));
+      await new Promise(resolve => setTimeout(resolve, 50));
+      __jait_capture(5, (settled));
+      remote.ws.send(JSON.stringify({ type: "node.update-response", payload: { requestId, result: { ok: true, newVersion: "1.0.1" } } }));
+      await __jait_captureResolved(6, (pending));
+      const disconnected = plane.proxyNodeUpdate("update-node", "update-owner", "1.0.2");
+      const rejected = __jait_rejected(7, disconnected);
+      do { message = await remote.collector.next(); } while (message.type !== "node.update-request");
+      remote.ws.close();
+      await rejected;
+      admin.ws.close();
+    
+})();
+
+} finally {
+await __jait_hook_8506();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_test_ts_1210_5": {
+
+const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
+const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
+const TEST_SECRET = "test-jwt-secret-for-ws-tests";
+function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    port: 0,
+    wsPort: 0,
+    host: "127.0.0.1",
+    logLevel: "silent",
+    corsOrigin: "*",
+    nodeEnv: "test",
+    jwtSecret: TEST_SECRET,
+    ollamaUrl: "http://localhost:11434",
+    ollamaModel: "test",
+    ...overrides,
+  };
+}
+async function createToken(
+  sub: string,
+  secret = TEST_SECRET,
+): Promise<string> {
+  const key = new TextEncoder().encode(secret);
+  return new jose.SignJWT({ sub })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(key);
+}
+function createMessageCollector(ws: WebSocket) {
+  const queue: unknown[] = [];
+  const waiters: Array<(msg: unknown) => void> = [];
+
+  ws.on("message", (raw) => {
+    const parsed = JSON.parse(raw.toString());
+    const waiter = waiters.shift();
+    if (waiter) {
+      waiter(parsed);
+    } else {
+      queue.push(parsed);
+    }
+  });
+
+  return {
+    /** Get the next message, waiting up to `ms` milliseconds */
+    next(ms = 3000): Promise<any> {
+      const queued = queue.shift();
+      if (queued) return Promise.resolve(queued);
+      return new Promise((resolve, reject) => {
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
+      });
+    },
+    /** Check if a message arrives within `ms` — returns null if not */
+    async maybeNext(ms = 500): Promise<any | null> {
+      const queued = queue.shift();
+      if (queued) return queued;
+      return new Promise((resolve) => {
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
+      });
+    },
+    /** Shallow copy of the messages currently queued (no blocking) */
+    peekAll(): unknown[] {
+      return [...queue];
+    },
+    /** Remove and return the message at `index` from the queue */
+    removeAt(index: number): unknown {
+      return queue.splice(index, 1)[0];
+    },
+  };
+}
+function waitForOpen(ws: WebSocket): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (ws.readyState === WebSocket.OPEN) return resolve();
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+}
+function openWs(port: number, opts?: { token?: string; headers?: Record<string, string> }) {
+  const url = opts?.token
+    ? `ws://127.0.0.1:${port}?token=${opts.token}`
+    : `ws://127.0.0.1:${port}`;
+  const ws = new WebSocket(url, { headers: opts?.headers });
+  const collector = createMessageCollector(ws);
+  return { ws, collector };
+}
+async function grantPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+  nodeId: string,
+  grants: Record<string, boolean>,
+): Promise<void> {
+  remote.ws.send(
+    JSON.stringify({ type: "nodes.update-permissions", payload: { nodeId, grants } }),
+  );
+  // Wait until a `nodes.permissions` broadcast reflecting the applied grants is
+  // queued. The update is processed synchronously, but a stale snapshot (e.g.
+  // from node registration) may already be queued, so we scan the queue for the
+  // target node's updated grant values. Stale snapshots for the target node are
+  // removed so the loop makes progress; all unrelated messages (fs.node-registered,
+  // node.updated, …) are left untouched for the rest of the test to consume.
+  for (;;) {
+    const queue = remote.collector.peekAll();
+    let madeProgress = false;
+    for (let i = 0; i < queue.length; i++) {
+      const msg = queue[i] as any;
+      if (msg.type !== "nodes.permissions") continue;
+      const node = (msg.payload?.nodes ?? []).find(
+        (n: any) => n.id === nodeId || n.nodeId === nodeId,
+      );
+      if (!node) continue;
+      const perms = node.permissions ?? node;
+      const matches = Object.entries(grants).every(
+        ([cap, expected]) => perms[cap] === expected,
+      );
+      remote.collector.removeAt(i);
+      if (matches) return;
+      // Stale snapshot for the target node — drop it and re-scan.
+      madeProgress = true;
+      break;
+    }
+    if (!madeProgress) await new Promise((r) => setTimeout(r, 30));
+  }
+}
+async function nextNodesPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+): Promise<any> {
+  for (;;) {
+    const msg = await remote.collector.next(3000);
+    if (msg.type === "nodes.permissions") return msg;
+  }
+}
+/*__jait_scope_open__*/{
+let plane: WsControlPlane;
+let port: number;
+let db: Awaited<ReturnType<typeof openDatabase>>["db"];
+const __jait_hook_5762 = async () => {
+    const config = makeConfig({ wsPort: 0 });
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    migrateDatabase(opened.sqlite);
+    plane = new WsControlPlane(config, db);
+    plane.canAccessTerminal = (_id, user) => Boolean(user);
+    plane.canAccessConsent = (_id, user) => Boolean(user);
+    plane.start();
+    const addr = (plane as any).wss?.address();
+    port = typeof addr === "object" ? addr.port : 0;
+    __jait_capture(0, (port));
+  };
+const __jait_hook_8506 = () => {
+    plane.stop();
+  };
+/*__jait_scope_open__*/{
+await __jait_hook_5762();
+try {
+await (async()=>{
+
       const token = await createToken("user-terminal-perms");
 
       const admin = openWs(port, { token });
@@ -7066,7 +7277,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1226_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1260_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -7275,7 +7486,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1258_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1292_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -7503,7 +7714,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1309_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1343_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -7717,7 +7928,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1348_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1382_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -7919,7 +8130,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1373_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1407_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -8129,7 +8340,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1406_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1440_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -8325,7 +8536,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1425_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1459_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -8523,7 +8734,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1446_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1480_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -8724,7 +8935,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1491_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1525_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -8944,7 +9155,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1525_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1559_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -9172,7 +9383,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1562_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1596_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -9392,7 +9603,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1591_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1625_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -9607,7 +9818,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1617_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1651_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
@@ -9798,7 +10009,7 @@ await __jait_hook_8506();
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1631_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1665_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));

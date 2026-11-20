@@ -227,6 +227,50 @@ describe("PreviewService", () => {
     expect(surfaceRegistry.stopSurface).toHaveBeenCalledWith("preview-browser-closing-session", "preview-stop");
   });
 
+  it("relinks an idle-stopped agent browser record when its browser runs again, keeping the sharing choice", async () => {
+    const browser = {
+      id: "browser-idle-chat", sessionId: "idle-chat", type: "browser", state: "running",
+      inspect: vi.fn().mockResolvedValue({ snapshot: { url: "https://en.wikipedia.org/wiki/Web_browser" } }),
+      getEvents: vi.fn().mockReturnValue([]), getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue({ vncPort: 5900, websockifyPort: 6080, novncUrl: "ws://127.0.0.1:6080" }),
+    };
+    const registry = { getSurface: vi.fn().mockReturnValue(browser), stopSurface: vi.fn().mockResolvedValue(undefined), startSurface: vi.fn() };
+    const service = new PreviewService(registry as any);
+    service.attachAgentBrowser("idle-chat", browser as any);
+    expect(await service.suspendIdleAgentBrowser("browser-idle-chat")).toBe(true);
+    expect(service.get("idle-chat")?.status).toBe("stopped");
+
+    // The next browser tool call runs a browser under the same id, which must relink the chat.
+    const running = { ...browser };
+    registry.getSurface.mockReturnValue(running);
+    service.attachAgentBrowser("idle-chat", running as any, undefined, false);
+    const session = service.get("idle-chat");
+    expect(session?.status).toBe("ready");
+    expect(session?.url).toContain("api/live-view/6080/websockify");
+    expect(session?.sharedWithAgent).toBe(true);
+  });
+
+  it("reopens the remembered page on the running browser instead of returning the stopped record", async () => {
+    const browser = {
+      id: "browser-reopen-chat", sessionId: "reopen-chat", type: "browser", state: "running",
+      navigate: vi.fn().mockResolvedValue({ url: "https://en.wikipedia.org/wiki/Web_browser" }),
+      inspect: vi.fn().mockResolvedValue({ snapshot: { url: "https://en.wikipedia.org/wiki/Firefox" } }),
+      getEvents: vi.fn().mockReturnValue([]), getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue({ vncPort: 5900, websockifyPort: 6080, novncUrl: "ws://127.0.0.1:6080" }),
+    };
+    const registry = { getSurface: vi.fn().mockReturnValue(browser), stopSurface: vi.fn().mockResolvedValue(undefined), startSurface: vi.fn() };
+    const service = new PreviewService(registry as any);
+    service.attachAgentBrowser("reopen-chat", browser as any, undefined, false);
+    expect(await service.suspendIdleAgentBrowser("browser-reopen-chat")).toBe(true);
+    expect(service.get("reopen-chat")?.status).toBe("stopped");
+
+    const reopened = await service.reopen("reopen-chat", "https://en.wikipedia.org/wiki/Web_browser", null);
+    expect(registry.startSurface).not.toHaveBeenCalled();
+    expect(browser.navigate).toHaveBeenCalledWith("https://en.wikipedia.org/wiki/Web_browser");
+    expect(reopened.status).toBe("ready");
+    expect(reopened.url).toContain("api/live-view/6080/websockify");
+  });
+
   it("attaches to an existing localhost target instead of spawning a managed preview", async () => {
     const browser = {
       type: "browser",

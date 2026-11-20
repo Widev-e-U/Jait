@@ -1,4 +1,6 @@
 //! Source-level reference acceptance. Production files are never mutated.
+#[path = "../src/evidence.rs"]
+mod evidence;
 #[path = "../src/fixture_internal_contracts.rs"]
 mod fixture_internal_contracts;
 #[path = "../src/internal_driver.rs"]
@@ -127,6 +129,9 @@ fn parallel_reviews_propagate_failure_and_do_not_run_queued_work() {
 #[test]
 fn reviewed_sources_pass_and_reject_mutations() {
     let directory = artifacts();
+    // Bind the review to the gateway and contract sources it ran against, as the
+    // other contract producers do; the coverage audit rejects unbound reports.
+    let source_fingerprints = evidence::snapshot(&root()).unwrap();
     let registry = registry();
     let sources = registry["sources"].as_array().unwrap();
     let cases: Vec<_> = fixture_internal_contracts::cases(&root())
@@ -374,7 +379,8 @@ process.stdout.write(JSON.stringify({version:1,results}));
             .unwrap_or_else(|e| panic!("{module} sandbox baseline: {e:#}"));
         fs::write(&copy, sandboxed.replacen(from, to, 1)).unwrap();
         let error = fixture_internal_contracts::check(&work, &work, &|| false, case)
-            .expect_err("source mutation must fail");
+            .err()
+            .unwrap_or_else(|| panic!("{module}: source mutation must fail for {id}"));
         assert!(
             error.to_string().contains("equality assertion failed")
                 || error
@@ -394,20 +400,25 @@ process.stdout.write(JSON.stringify({version:1,results}));
             "source changed during review: {path}"
         );
     }
+    let sources_unchanged = source_fingerprints == evidence::snapshot(&root()).unwrap();
+    assert!(
+        sources_unchanged,
+        "gateway or contract sources changed during source review"
+    );
     let report = json!({"schema_version":1,"backend_label":"typescript","success":true,"profile":"source-runtime-review",
+        "sources_unchanged":sources_unchanged,"source_fingerprints":source_fingerprints,
         "build_manifest":build_manifest,"cases":verdicts,"mutations":mutations,"source_sha256":hashes,"limits":[
             "Reference behavior only; no native Rust implementation parity claim.",
             "Erased modules have no runtime behavior; static type/schema contract parity remains separate.",
             "Linux runtime fixtures; supported-platform migration evidence remains separate."]});
-    fs::write(
-        directory.join("report.json"),
-        serde_json::to_vec_pretty(&report).unwrap(),
-    )
-    .unwrap();
-    println!(
-        "Source review report: {}",
-        directory.join("report.json").display()
-    );
+    // The coverage audit reads only direct report directories under .jait/artifacts/contracts.
+    let report_directory = root()
+        .join(".jait/artifacts/contracts")
+        .join(format!("source-review-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&report_directory).unwrap();
+    let report_path = report_directory.join("report.json");
+    fs::write(&report_path, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+    println!("Source review report: {}", report_path.display());
 }
 
 // Explicit reviewed IDs; deleting a vector or its review fails this registration.
