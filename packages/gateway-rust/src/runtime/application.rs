@@ -339,6 +339,7 @@ pub struct Application {
     /// leased claim and audit record as an HTTP one.
     consent_decisions: Option<Arc<dyn crate::ws::WsConsentControl>>,
     questions: crate::services::input_requests::UserQuestionService,
+    secret_input: crate::services::input_requests::SecretInputService,
     preview_ports: crate::routes::preview_proxy::PreviewPortRegistry,
     live_view_ports: crate::routes::preview_proxy::PreviewPortRegistry,
     terminals: TerminalRoutes,
@@ -360,6 +361,12 @@ impl crate::routes::sessions::SessionRuntime for SessionRuntimeAdapter {
         match &self.chat {
             Some(chat) => chat.device_change_lease(session),
             None => Some(Box::new(())),
+        }
+    }
+
+    fn drain_queued_chat(&self, owner: &str, session: &str) {
+        if let Some(chat) = &self.chat {
+            chat.drain_queued_soon(owner, session);
         }
     }
 
@@ -410,6 +417,20 @@ impl Application {
     /// Registry of live browser view (noVNC) ports a caller may query; a host registers a port per owner.
     pub fn live_view_ports(&self) -> crate::routes::preview_proxy::PreviewPortRegistry {
         self.live_view_ports.clone()
+    }
+    /// The pending user-question registry the agent loop asks through and the HTTP routes answer.
+    pub fn user_questions(&self) -> crate::services::input_requests::UserQuestionService {
+        self.questions.clone()
+    }
+
+    /// The pending secret-prompt registry the agent loop asks through and the HTTP routes answer.
+    pub fn secret_inputs(&self) -> crate::services::input_requests::SecretInputService {
+        self.secret_input.clone()
+    }
+
+    /// The consent queue shared by the chat executor and the consent routes, when chat is mounted.
+    pub fn consent_manager(&self) -> Option<crate::security::consent_manager::ConsentManager> {
+        self.consent.clone()
     }
     /// Registry of preview ports the dev proxy may reach; a host registers a port per owning user.
     pub fn preview_ports(&self) -> crate::routes::preview_proxy::PreviewPortRegistry {
@@ -534,6 +555,7 @@ impl Application {
                 },
             ) as crate::services::input_requests::Observer
         };
+        let secret_input = crate::services::input_requests::SecretInputService::default();
         let questions = crate::services::input_requests::UserQuestionService::new(
             crate::time::default_clock(),
             Some(question_observer("user-question.requested")),
@@ -573,6 +595,18 @@ impl Application {
                 }
             })
         };
+        let session_events: crate::routes::chat::SessionEventSink = {
+            let hub = repository_hub.clone();
+            Arc::new(
+                move |owner: &str, session: &str, kind: &str, payload: serde_json::Value| {
+                    if let Ok(slot) = hub.lock()
+                        && let Some(hub) = slot.as_ref()
+                    {
+                        hub.broadcast_to_user_session(owner, session, kind, payload);
+                    }
+                },
+            )
+        };
         let chat = factory
             .map(|factory| {
                 ChatRoutes::new(
@@ -585,6 +619,7 @@ impl Application {
                     chat.with_database_owner(database_owner.clone())
                         .with_user_events(repository_events.clone())
                         .with_thread_events(thread_events.clone())
+                        .with_session_events(session_events.clone())
                 })
             })
             .transpose()?;
@@ -864,17 +899,17 @@ impl Application {
             .merge(
                 crate::routes::jobs::JobRoutes {
                     auth: auth.clone(),
-                    // Scheduled tool execution fails closed until the consent engine
-                    // can approve it; job CRUD and run history are served.
+                    // Scheduled tools run through the chat's consent executor on the owner's
+                    // own session; tools the gateway cannot run natively fail the run.
                     scheduler: crate::scheduler::service::SchedulerService::new(
                         crate::scheduler::service::SchedulerOptions::new(
                             auth.worker(),
                             config.project_root.to_string_lossy().into_owned(),
-                            Arc::new(|_| {
-                                Box::pin(async {
-                                    Err("Scheduled tool execution is not available in the Rust gateway yet".to_string())
-                                })
-                            }),
+                            super::tools_mount::scheduled_tool_executor(
+                                auth.clone(),
+                                consent.clone(),
+                                config.project_root.clone(),
+                            ),
                         ),
                     ),
                     project_root: config.project_root.to_string_lossy().into_owned(),
@@ -937,7 +972,7 @@ impl Application {
             .merge(
                 SecretRoutes {
                     auth: auth.clone(),
-                    secret_input: Default::default(),
+                    secret_input: secret_input.clone(),
                     user_secrets: Some(crate::services::user_secrets::UserSecretService::new(
                         &secrets_key,
                     )),
@@ -980,6 +1015,7 @@ impl Application {
                 consent: settings_chat.then_some(consent),
                 consent_decisions,
                 questions,
+                secret_input,
                 preview_ports,
                 live_view_ports,
                 terminals: terminal_routes,

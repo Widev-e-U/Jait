@@ -180,6 +180,44 @@ impl<'a> SessionService<'a> {
             params![id,data.user_id,data.project_id,data.name.unwrap_or_else(||"New Chat".into()),data.project_path,now,now,now,metadata])?;
         Ok(self.get(&id, None)?.expect("inserted session"))
     }
+    /// Active chats that were touched after the user last saw them and whose loop is not running
+    /// (`isSessionUnread` in packages/shared/src/session-unread.ts).
+    pub fn count_unread(&self, user: &str) -> rusqlite::Result<u64> {
+        let mut statement = self.db.prepare(
+            "SELECT last_active_at,viewed_at,created_at,metadata FROM sessions WHERE user_id=?1 AND status='active'",
+        )?;
+        let rows = statement.query_map([user], |r| {
+            Ok((
+                r.get::<_, Option<String>>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+            ))
+        })?;
+        let parse = |value: Option<&str>| {
+            value.and_then(crate::services::subscription_usage_fetchers::js_date_parse)
+        };
+        let mut count = 0;
+        for row in rows {
+            let (last, viewed, created, metadata) = row?;
+            let Some(last) = parse(last.as_deref()) else {
+                continue;
+            };
+            let unread = match viewed.as_deref().filter(|v| !v.is_empty()) {
+                Some(viewed) => parse(Some(viewed)).is_some_and(|v| last > v),
+                None => match created.as_deref().filter(|v| !v.is_empty()) {
+                    None => true,
+                    Some(created) => parse(Some(created)).is_some_and(|c| last > c),
+                },
+            };
+            let running = crate::services::chat_loops::read_chat_loop(metadata.as_deref())
+                .is_some_and(|l| l.status == "running");
+            if unread && !running {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
     pub fn get(&self, id: &str, user: Option<&str>) -> rusqlite::Result<Option<SessionRecord>> {
         self.db
             .query_row(

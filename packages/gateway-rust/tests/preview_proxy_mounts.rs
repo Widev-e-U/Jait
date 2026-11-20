@@ -237,6 +237,38 @@ async fn dev_proxy_only_reaches_ports_registered_to_the_caller() {
         shared_body.contains("/proxy/") && shared_body.contains("/x.png"),
         "{shared_body}"
     );
+    // Every method is forwarded upstream, on both the bearer and token forms.
+    let echo_url = access(&format!("/api/dev-proxy/{port}/echo"))
+        .await
+        .unwrap()
+        .json::<serde_json::Value>()
+        .await
+        .unwrap()["url"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    for method in ["GET", "POST", "PUT", "DELETE", "PATCH"] {
+        let m = reqwest::Method::from_bytes(method.as_bytes()).unwrap();
+        let bearer = client
+            .request(m.clone(), format!("{base}/api/dev-proxy/{port}/echo"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(bearer.status(), 200, "bearer {method}");
+        let seen = bearer.text().await.unwrap();
+        assert!(
+            seen.starts_with(&format!("{method} /echo")),
+            "{method}: {seen}"
+        );
+        let shared = client.request(m, &echo_url).send().await.unwrap();
+        assert_eq!(shared.status(), 200, "token {method}");
+        let seen = shared.text().await.unwrap();
+        assert!(
+            seen.starts_with(&format!("{method} /echo")),
+            "{method}: {seen}"
+        );
+    }
     assert_eq!(
         access("http://evil.example/api/dev-proxy/1/")
             .await

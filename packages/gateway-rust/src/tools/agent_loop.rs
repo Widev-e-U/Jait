@@ -1149,9 +1149,19 @@ pub fn repair_tool_call_history(messages: &[AgentMessage]) -> Vec<AgentMessage> 
 /// reasoning models require for assistant tool-call turns.
 pub fn serialize_messages(messages: &[AgentMessage], require_reasoning: bool) -> Vec<Value> {
     let mut out = Vec::with_capacity(messages.len());
+    // Strict chat templates (vLLM: "System message must be at the beginning")
+    // reject system messages after the first non-system one, so mid-history
+    // steering notes and summaries are sent as user messages.
+    let mut seen_non_system = false;
     for message in messages {
         let mut object = Map::new();
-        object.insert("role".into(), Value::String(message.role.clone()));
+        let role = if message.role == "system" {
+            if seen_non_system { "user" } else { "system" }
+        } else {
+            seen_non_system = true;
+            message.role.as_str()
+        };
+        object.insert("role".into(), Value::String(role.to_string()));
 
         object.insert("content".into(), message.wire_content());
 

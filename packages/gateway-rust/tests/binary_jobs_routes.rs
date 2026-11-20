@@ -226,6 +226,50 @@ async fn jobs_routes_through_the_binary() {
     .await;
     assert!(st == 200 && b["providers"].is_object(), "{b}");
 
+    // Manual trigger runs a native tool through the consent executor and records the run.
+    let (st, tool_job) = call(
+        M::POST,
+        "/api/jobs".into(),
+        owner.clone(),
+        Some(
+            json!({"name":"list","cron_expression":"0 3 * * *","enabled":false,
+            "payload":{"command":"file.list","args":{"path":"."}}}),
+        ),
+    )
+    .await;
+    assert_eq!(st, 201, "{tool_job}");
+    let tool_id = tool_job["id"].as_str().unwrap().to_owned();
+    let (st, run) = call(
+        M::POST,
+        format!("/api/jobs/{tool_id}/trigger"),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(st, 200, "{run}");
+    assert_eq!(run["status"], "completed", "{run}");
+    assert!(run.to_string().contains("notes.txt"), "{run}");
+    // A tool the gateway cannot run natively fails the run instead of silently succeeding.
+    let (_, unknown) = call(
+        M::POST,
+        "/api/jobs".into(),
+        owner.clone(),
+        Some(
+            json!({"name":"x","cron_expression":"0 3 * * *","enabled":false,
+            "payload":{"command":"no.such.tool"}}),
+        ),
+    )
+    .await;
+    let (st, run) = call(
+        M::POST,
+        format!("/api/jobs/{}/trigger", unknown["id"].as_str().unwrap()),
+        owner.clone(),
+        Some(json!({})),
+    )
+    .await;
+    assert_eq!(st, 200, "{run}");
+    assert_eq!(run["status"], "failed", "{run}");
+
     // Delete.
     let (st, _) = call(M::DELETE, format!("/api/jobs/{id}"), owner.clone(), None).await;
     assert_eq!(st, 204);

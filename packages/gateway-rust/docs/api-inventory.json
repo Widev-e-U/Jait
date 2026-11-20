@@ -1,33 +1,33 @@
 {
   "summary": {
     "httpTotal": 448,
-    "missing": 40,
+    "missing": 39,
     "mounted-fail-closed": 107,
-    "native-tested": 228,
-    "native-untested": 66,
+    "native-tested": 237,
+    "native-untested": 58,
     "mounted-incomplete": 7,
-    "nativeRouteReferencePct": 65.6,
-    "nativeTested": 260,
+    "nativeRouteReferencePct": 65.8,
+    "nativeTested": 270,
     "nativeTestedDenominator": 607,
-    "nativeTestedPct": 42.83,
+    "nativeTestedPct": 44.48,
     "wsTotal": 151,
     "wsInbound": 44,
     "wsOutboundCandidates": 107,
-    "wsWithoutDirectionalRustReference": 77,
+    "wsWithoutDirectionalRustReference": 76,
     "clientPathCandidates": 259,
     "clientOnlyRoutes": 5,
     "rustOnlyRoutes": 13,
     "backgroundServices": 8,
     "backgroundServicesMissing": 8,
     "httpRustStatus": {
-      "native-tested": 228,
-      "native-untested": 66,
-      "missing": 154
+      "native-tested": 237,
+      "native-untested": 58,
+      "missing": 153
     },
     "wsRustStatus": {
-      "native-tested": 32,
+      "native-tested": 33,
       "native-untested": 42,
-      "missing": 77
+      "missing": 76
     },
     "serviceRustStatus": {
       "native-tested": 0,
@@ -1580,7 +1580,7 @@
         "routes/plan-runs.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
+      "testPathReference": true,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -1591,7 +1591,7 @@
         "routes/plan-runs.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
+      "testPathReference": true,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -1602,7 +1602,7 @@
         "routes/plan-runs.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
+      "testPathReference": true,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -2602,10 +2602,16 @@
       "nodeFiles": [
         "routes/sessions.ts"
       ],
-      "status": "missing",
-      "testPathReference": false,
-      "binaryTests": [],
-      "rustStatus": "missing"
+      "status": "native-tested",
+      "testPathReference": true,
+      "rustFile": "routes/sessions.rs",
+      "binaryTests": [
+        {
+          "file": "tests/session_unread_count.rs",
+          "name": "unread_count_is_owner_scoped_and_clears_when_viewed"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2963,7 +2969,7 @@
         "routes/update.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
+      "testPathReference": true,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -3381,11 +3387,16 @@
       "nodeFiles": [
         "routes/sessions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/sessions.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -4349,11 +4360,16 @@
       "nodeFiles": [
         "routes/jobs.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/jobs.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4440,7 +4456,7 @@
         "routes/messenger.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
+      "testPathReference": true,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -4461,11 +4477,16 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/mobile_consent_decisions.rs",
+          "name": "mobile_decisions_resolve_pending_consent_for_the_session_owner_only"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4473,11 +4494,16 @@
       "nodeFiles": [
         "routes/mobile.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/mobile.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/mobile_consent_decisions.rs",
+          "name": "mobile_decisions_resolve_pending_consent_for_the_session_owner_only"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -4612,7 +4638,7 @@
         "routes/plan-runs.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
+      "testPathReference": true,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -4623,7 +4649,7 @@
         "routes/plan-runs.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
+      "testPathReference": true,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -5577,11 +5603,16 @@
       "nodeFiles": [
         "routes/secrets.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/secrets.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/secret_input_requests.rs",
+          "name": "secret_prompts_are_answered_and_cancelled_by_their_owner_only"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5589,11 +5620,16 @@
       "nodeFiles": [
         "routes/secrets.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/secrets.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/secret_input_requests.rs",
+          "name": "secret_prompts_are_answered_and_cancelled_by_their_owner_only"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -6247,7 +6283,7 @@
         "routes/update.ts"
       ],
       "status": "missing",
-      "testPathReference": false,
+      "testPathReference": true,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -6257,11 +6293,16 @@
       "nodeFiles": [
         "routes/user-questions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/user_questions.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/user_question_requests.rs",
+          "name": "pending_questions_are_answered_and_cancelled_by_their_owner_only"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -6269,11 +6310,16 @@
       "nodeFiles": [
         "routes/user-questions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/user_questions.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/user_question_requests.rs",
+          "name": "pending_questions_are_answered_and_cancelled_by_their_owner_only"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -7920,10 +7966,15 @@
     {
       "type": "ui.state-sync",
       "direction": "server-to-client-candidate",
-      "rustReference": false,
-      "status": "missing",
-      "binaryTests": [],
-      "rustStatus": "missing"
+      "rustReference": true,
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "busy_chat_send_queues_and_the_finished_turn_starts_it_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "type": "user-question.pending-snapshot",
@@ -9539,6 +9590,7 @@
       "path": "/api/projects",
       "files": [
         "apps/web/src/e2e-fixtures/project-selection-refresh.tsx",
+        "apps/web/src/e2e-fixtures/session-selector-show-more.tsx",
         "apps/web/src/hooks/useProjects.ts"
       ],
       "serverPathReference": true,
@@ -9646,6 +9698,7 @@
       "path": "/api/projects/last-active",
       "files": [
         "apps/web/src/App.tsx",
+        "apps/web/src/e2e-fixtures/session-selector-show-more.tsx",
         "apps/web/src/hooks/useProjects.ts"
       ],
       "serverPathReference": true,
@@ -10228,6 +10281,7 @@
       "files": [
         "apps/web/src/components/manager/agents-page.tsx",
         "apps/web/src/e2e-fixtures/project-selection-refresh.tsx",
+        "apps/web/src/e2e-fixtures/session-selector-show-more.tsx",
         "apps/web/src/hooks/useProjects.ts",
         "apps/web/src/repro/use-chat-resume-repro.tsx"
       ],

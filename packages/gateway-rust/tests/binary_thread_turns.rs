@@ -1,6 +1,7 @@
 //! Thread turns through the production binary: send, steer, approve, stop and interrupt. The
 //! owner's OpenAI-compatible model asks for a consent-gated file write, so a turn waits for a
-//! decision before it changes anything.
+//! decision before it changes anything. Chat sends that arrive during a turn are queued, and the
+//! queue starts once the turn ends or the owner writes it while the session is idle.
 use jait_gateway::ws::{OpCode, read_frame, write_client_frame};
 use serde_json::{Value, json};
 use std::{
@@ -933,5 +934,263 @@ async fn consent_approve_all_resolves_the_pending_request_through_the_binary() {
     .await;
     assert_eq!(status, 404, "{body}");
     assert_eq!(body["error"], "NOT_FOUND", "{body}");
+    model_task.abort();
+}
+
+/// A project on `root` with a plain chat session on it, without a thread.
+async fn new_chat_session(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    root: &std::path::Path,
+) -> String {
+    let (status, project) = send_json(
+        client
+            .post(format!("{base}/api/projects"))
+            .bearer_auth(token)
+            .json(&json!({"title":"chat queue","rootPath":root,"nodeId":"gateway"})),
+    )
+    .await;
+    assert_eq!(status, 201, "{project}");
+    let (status, session) = send_json(
+        client
+            .post(format!("{base}/api/sessions"))
+            .bearer_auth(token)
+            .json(&json!({"projectId":project["id"],"projectPath":root})),
+    )
+    .await;
+    assert_eq!(status, 201, "{session}");
+    session["id"].as_str().unwrap().to_owned()
+}
+
+/// The parsed `data:` events of a streamed answer.
+fn stream_events(body: &str) -> Vec<Value> {
+    body.lines()
+        .filter_map(|line| line.strip_prefix("data: "))
+        .map(|event| serde_json::from_str(event).unwrap())
+        .collect()
+}
+
+/// Sends one chat message and returns its status with the events of the answer.
+async fn chat_send(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    session: &str,
+    content: &str,
+) -> (u16, Vec<Value>) {
+    let response = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(token)
+        .json(&json!({"sessionId": session, "content": content}))
+        .send()
+        .await
+        .unwrap();
+    let status = response.status().as_u16();
+    (status, stream_events(&response.text().await.unwrap()))
+}
+
+async fn session_state(client: &reqwest::Client, base: &str, token: &str, id: &str) -> Value {
+    let (status, body) = send_json(
+        client
+            .get(format!("{base}/api/sessions/{id}/state"))
+            .bearer_auth(token),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    body
+}
+
+/// Polls the session transcript until it contains `text`.
+async fn wait_for_message(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    session: &str,
+    text: &str,
+) {
+    let deadline = tokio::time::Instant::now() + WAIT;
+    loop {
+        let messages = session_messages(client, base, token, session).await;
+        if messages.contains(text) {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the transcript never contained {text}: {messages}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// Polls the session state until the queue is cleared, and returns the state.
+async fn wait_for_empty_queue(
+    client: &reqwest::Client,
+    base: &str,
+    token: &str,
+    session: &str,
+) -> Value {
+    let deadline = tokio::time::Instant::now() + WAIT;
+    loop {
+        let state = session_state(client, base, token, session).await;
+        if state["queued_messages"].is_null() {
+            return state;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the queue never cleared: {state}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// A chat send during a running turn is queued (202) rather than refused, and the turn that ends
+/// starts the queued message as its own turn.
+#[tokio::test]
+async fn busy_chat_send_queues_and_the_finished_turn_starts_it_through_the_binary() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    configure_model(&client, &base, &owner, &model_base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+    let mut ws = WsClient::connect(&base, &owner).await;
+
+    // The first send starts a turn that waits for consent. Its event stream stays open meanwhile.
+    let first = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&owner)
+        .json(&json!({"sessionId": session, "content": "start the note"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.status(), 200);
+    let required = ws
+        .until("consent.required", WAIT)
+        .await
+        .expect("the owner's socket receives the consent prompt");
+    let consent_id = required["payload"]["id"].as_str().unwrap().to_owned();
+
+    // A send during the turn is queued: 202 with a queued event, then done.
+    let (status, events) = chat_send(&client, &base, &owner, &session, "follow up please").await;
+    assert_eq!(status, 202, "{events:?}");
+    assert_eq!(events[0]["type"], "queued", "{events:?}");
+    assert_eq!(
+        events[0]["message"]["content"], "follow up please",
+        "{events:?}"
+    );
+    assert_eq!(events[0]["queue_length"], 1, "{events:?}");
+    assert_eq!(events[1]["type"], "done", "{events:?}");
+    // The same text again joins the queued entry rather than adding a second one.
+    let (status, events) = chat_send(&client, &base, &owner, &session, "follow up please").await;
+    assert_eq!(status, 202, "{events:?}");
+    assert_eq!(events[0]["queue_length"], 1, "{events:?}");
+
+    let state = session_state(&client, &base, &owner, &session).await;
+    assert_eq!(
+        state["queued_messages"].as_array().map(Vec::len),
+        Some(1),
+        "{state}"
+    );
+    assert_eq!(
+        state["queued_messages"][0]["content"], "follow up please",
+        "{state}"
+    );
+    let update = ws
+        .until("ui.state-sync", WAIT)
+        .await
+        .expect("the owner's socket receives the queue");
+    assert_eq!(update["payload"]["key"], "queued_messages", "{update}");
+    assert_eq!(
+        update["payload"]["value"].as_array().map(Vec::len),
+        Some(1),
+        "{update}"
+    );
+
+    // Approving the consent finishes the first turn, and the queued message then runs.
+    let (status, body) = post_json(
+        &client,
+        &base,
+        &owner,
+        &format!("/api/consent/{consent_id}/approve"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    wait_for_message(&client, &base, &owner, &session, "Follow-up answered.").await;
+    assert_eq!(
+        std::fs::read_to_string(gateway.directory.join("thread-note.txt")).unwrap(),
+        "from thread\n",
+        "the approved write did not run; tool results: {}",
+        model.tool_results()
+    );
+    let state = wait_for_empty_queue(&client, &base, &owner, &session).await;
+    assert!(state["queued_messages"].is_null(), "{state}");
+    let update = ws
+        .until("ui.state-sync", WAIT)
+        .await
+        .expect("the owner's socket receives the cleared queue");
+    assert!(update["payload"]["value"].is_null(), "{update}");
+    let requests = model.requests.lock().unwrap().clone();
+    assert!(
+        requests.iter().any(|body| {
+            body["messages"]
+                .as_array()
+                .and_then(|messages| messages.last())
+                .is_some_and(|last| last["content"] == "follow up please")
+        }),
+        "the queued message must reach the model"
+    );
+    model_task.abort();
+}
+
+/// A PATCH that writes `queued_messages` starts the entry on an idle session. A stale snapshot that
+/// names the same entry again must not run it a second time.
+#[tokio::test]
+async fn patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    configure_model(&client, &base, &owner, &model_base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+    let snapshot = json!({"queued_messages": [
+        {"id": "q-patch-1", "content": "follow up please", "queuedAt": 1}
+    ]});
+
+    let (status, body) = send_json(
+        client
+            .patch(format!("{base}/api/sessions/{session}/state"))
+            .bearer_auth(&owner)
+            .json(&snapshot),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body, json!({"ok": true}));
+    wait_for_message(&client, &base, &owner, &session, "Follow-up answered.").await;
+    let state = wait_for_empty_queue(&client, &base, &owner, &session).await;
+    assert!(state["queued_messages"].is_null(), "{state}");
+    let runs = model.requests.lock().unwrap().len();
+    assert_eq!(runs, 1, "only the queued message should reach the model");
+
+    // A client that still holds the entry writes it back. The entry already ran, so it is dropped.
+    let (status, body) = send_json(
+        client
+            .patch(format!("{base}/api/sessions/{session}/state"))
+            .bearer_auth(&owner)
+            .json(&snapshot),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    wait_for_empty_queue(&client, &base, &owner, &session).await;
+    assert_eq!(
+        model.requests.lock().unwrap().len(),
+        runs,
+        "a stale snapshot must not send the entry again"
+    );
     model_task.abort();
 }

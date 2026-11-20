@@ -1,5 +1,53 @@
 # Native Rust gateway
 
+## Scheduled job triggers through the composed binary — 2026-11-20
+
+`POST /api/jobs/:id/trigger` runs the job's tool through `scheduled_tool_executor` in `runtime/tools_mount.rs`. The run
+uses the owner's own session: the stored session is used only when it belongs to the owner and is active, otherwise an
+active "Scheduled jobs" session is reused or created. The owner's disabled tools apply, and consent and path confinement
+work as in chat. Each run is recorded in `scheduled_job_runs`.
+
+Runnable tools are `file.read`, `file.write`, `file.list`, `file.patch` and `terminal.run`, the project tools that
+`project_tools_with_policy` builds with no question service. `user.ask` is not registered for scheduled runs, so a job
+that names it fails, as does any other unknown tool name.
+
+Tests: `jobs_routes_through_the_binary` in `tests/binary_jobs_routes.rs` checks owner scoping (another user gets 404 from
+GET, PATCH, DELETE, runs and trigger), PATCH validation, runs and the provider catalogue, a manual `file.list` trigger that
+completes and lists the fixture project, and an unknown tool that fails the run.
+
+Not done: the cron timer. `SchedulerService::start` is called only from tests, so scheduled jobs never fire on their own
+in production (see "Not mapped" below).
+
+Mapped as native-tested: `POST /api/jobs/:id/trigger`.
+
+## Queued chat messages through the composed binary — 2026-11-19
+
+A chat send that arrives while a chat turn runs is kept in the session's `queued_messages` state and answered as Node
+answers it: status 202, with an event stream of a `queued` event (the entry and `queue_length`) and `done`. A send whose
+text matches a queued entry after trimming joins that entry. The owner's sockets receive `ui.state-sync` with key
+`queued_messages` and the whole queue, or null once it is empty. When a turn ends, its lease is released first; then the
+head entry starts as a new turn. The entry leaves the queue, and its id joins the consumed-id record, which keeps the last
+100 ids. A `PATCH /api/sessions/:id/state` that writes `queued_messages` starts the head entry when the session is idle.
+A stale snapshot that names a consumed id has that entry dropped, so an entry never runs twice. A held head entry blocks
+the queue. If the new turn does not start (for example, its provider is not configured), the entry returns to the head.
+
+Code: `routes/chat_queue.rs` (parsing that follows Node's `parseQueuedChatMessages`, consumed ids, state storage);
+`routes/chat.rs` (`try_admit` and `AdmitError`, which lets only a running chat turn queue a send, while a thread turn or a
+device change still answers 409 `CHAT_BUSY`; `start_turn`; `queue_send`; `drain_queued_soon`, `drain_queued`,
+`restore_queued`, `publish_queue`); `routes/sessions.rs` (the PATCH trigger, through `SessionRuntime::drain_queued_chat`,
+which runs only after an owner-scoped write succeeds); `runtime/application.rs` (the adapter and the session-event sink on
+the WebSocket hub).
+
+Tests: `busy_chat_send_queues_and_the_finished_turn_starts_it_through_the_binary` in `tests/binary_thread_turns.rs` holds
+a turn at consent, sends a second message (202, `queue_length` 1), repeats its text (still one entry), approves the
+consent, and checks that the queued message runs as its own turn, that the model receives it, that `queued_messages` is
+cleared, and that the owner's socket receives both `ui.state-sync` frames.
+`patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice` covers the PATCH trigger and the stale snapshot:
+the model receives one request, and a second write of the same entry sends nothing. Four unit tests in `chat_queue.rs`
+cover parsing, text matching, consumed-id filtering and the id limit.
+
+Mapped as native-tested: `PATCH /api/sessions/:id/state` and the WebSocket `ui.state-sync` server frame.
+
 ## Thread turns through the composed binary — 2026-11-19
 
 `tests/binary_thread_turns.rs` drives the thread turn routes through the composed binary. The owner's OpenAI-compatible
@@ -47,17 +95,23 @@ Open parity questions, not changed in this batch:
 - A `start` or `send` that reads the thread before a stop and admits its turn after it can still start a running turn.
   `mark_interrupted` documents that starts must be serialized with stops, and the Rust path does not do that yet.
 - `stop` on a thread with a provider session still answers 409, because this gateway has no provider session control.
-- Queued chat messages are missing. Node keeps a `queued_messages` session state, answers a send made while a turn runs
-  with 202 and the queued id, drains the queue when the turn ends, and drains again on `PATCH /api/sessions/:id/state`
-  when its body carries `queued_messages` (`packages/gateway/src/routes/chat.ts`, `routes/sessions.ts`). The web UI relies
-  on this (`apps/web/src/hooks/useChat.ts`, `App.tsx`). Rust answers the same send with 409 `CHAT_BUSY`
-  (`routes/chat.rs`) and has no queue and no drain. Until this is ported, `PATCH /api/sessions/:id/state` stays
-  native-untested, and a web-UI chat cannot queue a message while a turn is running.
+- Queued chat sends are native (see the queue section above). Still open, not ported: `POST /api/sessions/:id/cancel`
+  with `queuedMessageId`, the "send now" action. Node moves that entry to the front, clears its hold and cancels the
+  running turn, while the Rust route answers 400 `INVALID_CANCEL_REQUEST` to any non-empty body. Also open: a send that
+  carries `queuedMessageId` (Rust answers 400 `UNSUPPORTED_CHAT_OPTION`, and Node's `queue-already-consumed` answer is
+  missing); Node's removal of a queued entry with the same text when that text is sent directly; and the inbound
+  WebSocket `ui.state-sync` write in `packages/gateway/src/index.ts`, which Rust does not read. If a thread turn holds the
+  session when a chat turn ends, the head entry waits for the next queue write or PATCH.
+- A web-UI send that includes `provider`, `model`, `mode`, `runtimeMode`, `responseStyle`, `reasoningEffort`,
+  `attachments`, `displaySegments` or `personaAgentId` is refused with 400 `UNSUPPORTED_CHAT_OPTION`. The Rust turn takes
+  its provider and model from the owner's saved settings (`runtime/chat_settings.rs`), so a web-UI chat with a chosen
+  provider is not served yet. This is the next blocker for criterion 2, a full chat turn from the web UI.
 - `create-pr` is still missing. It belongs to the git PR and forge batch. ACP threads are covered only by the halt test
   in `binary_thread_routes.rs`.
 
-Inventory: 260 of 607 native-tested (42.83%). HTTP has 228 native-tested, 66 native-untested and 154 missing. WebSocket
-has 32 of 151 (42 native-untested, 77 missing), and background services have 0 of 8, all missing.
+Inventory: 270 of 607 native-tested (44.48%). HTTP has 237 native-tested, 58 native-untested and 153 missing. WebSocket
+has 33 of 151 (42 native-untested, 76 missing), and background services have 0 of 8, all missing.
+`node packages/gateway-rust/tooling/api-inventory.mjs --check` passes on this snapshot.
 
 Changes since the WebSocket checkpoint (243 of 607, 40.03%):
 - `POST /api/consent/:id/approve-all` is driven by `consent_approve_all_resolves_the_pending_request_through_the_binary`
@@ -78,9 +132,9 @@ Not mapped, and why:
 - `tests/application_mounts.rs` drives `PATCH /api/skills/:id`, `POST /api/chat/prewarm` and the session plan routes in
   process through `Application`, not through the spawned binary. The manifest counts binary tests only, so these stay
   unmapped.
-- Scheduler. `runtime/application.rs` builds `SchedulerService` for the job CRUD routes only. Its executor refuses every
-  run ("Scheduled tool execution is not available in the Rust gateway yet"), and `SchedulerService::start` is called only
-  from tests in `scheduler/service.rs`, so the timer never starts in production. It stays missing.
+- Scheduler timer. The job CRUD routes and the manual trigger are native (see the scheduled job section at the top).
+  `SchedulerService::start` is called only from tests in `scheduler/service.rs`, so the cron timer never starts in
+  production and scheduled jobs never fire on their own. The timer stays missing.
 - Session plan execute and reject, and `PATCH /api/sessions/:id/state`, are asserted only as 404 (no pending plan, or a
   non-owner). They are not mapped.
 

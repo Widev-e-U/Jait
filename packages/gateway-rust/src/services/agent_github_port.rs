@@ -442,6 +442,11 @@ mod expiry_tests {
         (port, worker, clock)
     }
     async fn revoked(worker: &DatabaseWorker) -> i64 {
+        try_revoked(worker).await.unwrap()
+    }
+    // The cleanup task shares this worker's one-slot mailbox, so a read can be
+    // refused while a periodic sweep is queued ahead of it.
+    async fn try_revoked(worker: &DatabaseWorker) -> Result<i64, DatabaseError> {
         worker
             .run(|db| {
                 Ok(db.query_row(
@@ -451,7 +456,6 @@ mod expiry_tests {
                 )?)
             })
             .await
-            .unwrap()
     }
     async fn wait_for_revoked(worker: &DatabaseWorker, expected: i64) {
         for _ in 0..100 {
@@ -635,8 +639,11 @@ mod expiry_tests {
         assert_eq!(queued.await.unwrap(), 0);
         tokio::time::timeout(Duration::from_secs(5), async {
             loop {
-                if revoked(&worker).await == 1 {
-                    break;
+                match try_revoked(&worker).await {
+                    Ok(1) => break,
+                    // Busy means the periodic sweep holds the slot; poll again.
+                    Ok(_) | Err(DatabaseError::Busy) => {}
+                    Err(error) => panic!("revoked count failed: {error:?}"),
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }

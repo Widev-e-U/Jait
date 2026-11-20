@@ -41,6 +41,110 @@ pub fn tools_routes(auth: &AuthState, consent: ConsentManager, project_root: Pat
         })
 }
 
+/// Name of the per-user session scheduled runs use, so their consent prompts are owner-scoped.
+const SCHEDULED_SESSION_NAME: &str = "Scheduled jobs";
+
+/// Runs a scheduled job's tool through the chat's consent executor. The job's stored session id
+/// (the shared "default") is never trusted: the run uses the owner's own session, creating a
+/// "Scheduled jobs" one on demand. Only the tools the gateway can really run are available;
+/// anything else fails the run. Consent, disabled tools and path confinement are unchanged.
+pub fn scheduled_tool_executor(
+    auth: AuthState,
+    consent: ConsentManager,
+    project_root: PathBuf,
+) -> crate::scheduler::service::ExecuteTool {
+    std::sync::Arc::new(move |execution: Value| {
+        let (auth, consent, gateway_root) = (auth.clone(), consent.clone(), project_root.clone());
+        Box::pin(async move {
+            let Some(user_id) = execution["userId"]
+                .as_str()
+                .filter(|u| !u.is_empty())
+                .map(str::to_owned)
+            else {
+                return Err("Scheduled tool execution needs an owning user".to_string());
+            };
+            let tool = execution["toolName"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            let requested = execution["sessionId"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            let (owner, wanted) = (user_id.clone(), requested);
+            let (session_id, project_path, disabled) = auth
+                .with_database(move |db| {
+                    let sessions = SessionService::new(db);
+                    let session = match sessions
+                        .get(&wanted, Some(&owner))?
+                        .filter(|s| s.status.as_deref() == Some("active"))
+                    {
+                        Some(session) => session,
+                        None => {
+                            let existing = sessions
+                                .list(crate::services::sessions::SessionFilter {
+                                    user_id: Some(&owner),
+                                    ..Default::default()
+                                })?
+                                .into_iter()
+                                .find(|s| {
+                                    s.status.as_deref() == Some("active")
+                                        && s.name.as_deref() == Some(SCHEDULED_SESSION_NAME)
+                                });
+                            match existing {
+                                Some(session) => session,
+                                None => {
+                                    sessions.create(crate::services::sessions::CreateSession {
+                                        user_id: Some(owner.clone()),
+                                        name: Some(SCHEDULED_SESSION_NAME.into()),
+                                        ..Default::default()
+                                    })?
+                                }
+                            }
+                        }
+                    };
+                    let disabled: Vec<String> =
+                        UserService::new(db).get_settings(&owner)?.disabled_tools;
+                    Ok((session.id.clone(), session.project_path.clone(), disabled))
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+            let root = project_path
+                .map(PathBuf::from)
+                .unwrap_or(gateway_root.clone());
+            if !root.is_absolute() {
+                return Err("Scheduled session project root is invalid".into());
+            }
+            let (_, mut executor) = chat_tools::project_tools_with_policy(
+                &user_id,
+                &session_id,
+                consent,
+                None,
+                disabled.into_iter().collect(),
+            )?;
+            chat_tools::enforce_session_authority(&mut executor, auth, gateway_root);
+            let context = ToolExecutionContext {
+                user_id,
+                session_id,
+                action_id: format!("sched-{}", uuid::Uuid::new_v4()),
+                project_root: root,
+                origin: ExecutionOrigin::Scheduler,
+                runtime_mode: RuntimeMode::Guarded,
+                cancellation: ProcessCancellation::default(),
+                on_output: None,
+            };
+            let mut input = execution["input"].clone();
+            if let Some(map) = input.as_object_mut() {
+                map.remove("__jaitJobMeta");
+            }
+            let result = executor
+                .execute(&tool, &input, &context, ExecuteOptions::default())
+                .await?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        })
+    })
+}
+
 async fn list_tools(State(state): State<ToolsState>, request: Request) -> Response {
     if let Err(response) = auth::require_user(&state.auth, request.headers()).await {
         return *response;

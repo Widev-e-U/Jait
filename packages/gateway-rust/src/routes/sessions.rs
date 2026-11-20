@@ -53,6 +53,9 @@ pub trait SessionRuntime: Send + Sync {
         Box::pin(async { Err("Title transport unavailable".into()) })
     }
     fn title_warning(&self, _session: &str, _model: Option<&str>, _error: &str) {}
+    /// The owner wrote `queued_messages` to a session. The chat runtime starts the next queued
+    /// message when the session is idle; a busy session keeps it for the end of its turn.
+    fn drain_queued_chat(&self, _owner: &str, _session: &str) {}
 }
 struct NoRuntime;
 impl SessionRuntime for NoRuntime {}
@@ -84,6 +87,7 @@ impl SessionRoutes {
         let mut router = Router::new()
             .route("/api/sessions", get(handle).post(handle))
             .route("/api/sessions/last-active", get(handle))
+            .route("/api/sessions/unread-count", get(handle))
             .route(
                 "/api/sessions/{id}",
                 get(handle).patch(handle).delete(handle),
@@ -224,15 +228,42 @@ async fn handle(State(state): State<SessionRoutes>, request: Request) -> Respons
             .into_owned();
         return title(state, user, id, body).await;
     }
+    let queued = queue_write_session(&method, &path, &body);
+    let owner = user.id.clone();
     let worker = state.clone();
     match state
         .auth
         .with_database(move |db| dispatch(&worker, db, &user, method, &path, query, body))
         .await
     {
-        Ok(r) => r,
+        Ok(r) => {
+            // The write is owner-scoped by `dispatch`; only a write that succeeded reaches the drain.
+            if let Some(session) = queued
+                && r.status().is_success()
+            {
+                state.runtime.drain_queued_chat(&owner, &session);
+            }
+            r
+        }
         Err(e) => session_error(&e),
     }
+}
+/// The session a PATCH that writes `queued_messages` names, so the chat runtime can drain it.
+fn queue_write_session(method: &Method, path: &str, body: &Value) -> Option<String> {
+    let writes_queue = body
+        .as_object()
+        .is_some_and(|entries| entries.contains_key("queued_messages"));
+    if *method != Method::PATCH || !writes_queue {
+        return None;
+    }
+    let encoded = path
+        .strip_prefix("/api/sessions/")?
+        .strip_suffix("/state")?;
+    Some(
+        percent_encoding::percent_decode_str(encoded)
+            .decode_utf8_lossy()
+            .into_owned(),
+    )
 }
 fn dispatch(
     state: &SessionRoutes,
@@ -324,6 +355,12 @@ fn dispatch(
         return Ok(response(
             200,
             json!({"session":sessions.last_active(owner)?}),
+        ));
+    }
+    if path == "/api/sessions/unread-count" {
+        return Ok(response(
+            200,
+            json!({"count":sessions.count_unread(&user.id)?}),
         ));
     }
     let remainder = path.trim_start_matches("/api/sessions/");

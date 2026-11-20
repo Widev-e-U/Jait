@@ -7,33 +7,33 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 ```json
 {
   "httpTotal": 448,
-  "missing": 40,
+  "missing": 39,
   "mounted-fail-closed": 107,
-  "native-tested": 228,
-  "native-untested": 66,
+  "native-tested": 237,
+  "native-untested": 58,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 65.6,
-  "nativeTested": 260,
+  "nativeRouteReferencePct": 65.8,
+  "nativeTested": 270,
   "nativeTestedDenominator": 607,
-  "nativeTestedPct": 42.83,
+  "nativeTestedPct": 44.48,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
-  "wsWithoutDirectionalRustReference": 77,
+  "wsWithoutDirectionalRustReference": 76,
   "clientPathCandidates": 259,
   "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 13,
   "backgroundServices": 8,
   "backgroundServicesMissing": 8,
   "httpRustStatus": {
-    "native-tested": 228,
-    "native-untested": 66,
-    "missing": 154
+    "native-tested": 237,
+    "native-untested": 58,
+    "missing": 153
   },
   "wsRustStatus": {
-    "native-tested": 32,
+    "native-tested": 33,
     "native-untested": 42,
-    "missing": 77
+    "missing": 76
   },
   "serviceRustStatus": {
     "native-tested": 0,
@@ -217,7 +217,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | GET | `/api/sessions/:sessionId/trajectory` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/last-active` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/streaming` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
-| GET | `/api/sessions/unread-count` | missing | missing |  | routes/sessions.ts |
+| GET | `/api/sessions/unread-count` | native-tested | native-tested | `tests/session_unread_count.rs::unread_count_is_owner_scoped_and_clears_when_viewed` | routes/sessions.ts |
 | GET | `/api/skills` | native-tested | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/skills.ts |
 | GET | `/api/store/packages` | native-untested | native-untested |  | routes/store.ts |
 | GET | `/api/store/skills` | native-untested | native-untested |  | routes/store.ts |
@@ -268,7 +268,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | PATCH | `/api/repos/:id` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | PATCH | `/api/repos/:id/pull-requests/:number` | native-untested | native-untested |  | routes/pull-requests.ts |
 | PATCH | `/api/sessions/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
-| PATCH | `/api/sessions/:id/state` | native-untested | native-untested |  | routes/sessions.ts |
+| PATCH | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_thread_turns.rs::patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice` | routes/sessions.ts |
 | PATCH | `/api/skills/:id` | native-untested | native-untested |  | routes/skills.ts |
 | PATCH | `/api/threads/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | PATCH | `/api/voice/state/:sessionId` | native-tested | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
@@ -334,7 +334,7 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/git/sync` | native-untested | native-untested |  | routes/git.ts |
 | POST | `/api/git/unstage` | native-tested | native-tested | `tests/binary_git_routes.rs::git_routes_operate_on_owned_repositories_through_the_binary` | routes/git.ts |
 | POST | `/api/jobs` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
-| POST | `/api/jobs/:id/trigger` | native-untested | native-untested |  | routes/jobs.ts |
+| POST | `/api/jobs/:id/trigger` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | POST | `/api/maintenance/run` | missing | mounted-fail-closed |  | routes/maintenance.ts |
 | POST | `/api/messenger` | missing | missing |  | routes/messenger.ts |
 | POST | `/api/messenger/bridge-reauth/teams` | missing | missing |  | routes/messenger.ts |
@@ -344,8 +344,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/messenger/media` | missing | missing |  | routes/messenger.ts |
 | POST | `/api/messenger/notification-avatar` | missing | missing |  | routes/messenger.ts |
 | POST | `/api/messenger/notification-image` | missing | missing |  | routes/messenger.ts |
-| POST | `/api/mobile/consent/:id/approve` | native-untested | native-untested |  | routes/mobile.ts |
-| POST | `/api/mobile/consent/:id/reject` | native-untested | native-untested |  | routes/mobile.ts |
+| POST | `/api/mobile/consent/:id/approve` | native-tested | native-tested | `tests/mobile_consent_decisions.rs::mobile_decisions_resolve_pending_consent_for_the_session_owner_only` | routes/mobile.ts |
+| POST | `/api/mobile/consent/:id/reject` | native-tested | native-tested | `tests/mobile_consent_decisions.rs::mobile_decisions_resolve_pending_consent_for_the_session_owner_only` | routes/mobile.ts |
 | POST | `/api/mobile/devices/:deviceId/heartbeat` | native-tested | native-tested | `tests/binary_mobile_routes.rs::mobile_routes_through_the_binary` | routes/mobile.ts |
 | POST | `/api/mobile/devices/register` | missing | mounted-incomplete |  | routes/mobile.ts |
 | POST | `/api/mobile/push-devices/test` | missing | mounted-fail-closed |  | routes/mobile.ts |
@@ -425,8 +425,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/screen-share/stop` | missing | mounted-fail-closed |  | routes/screen-share.ts |
 | POST | `/api/screen-share/transfer-control` | missing | mounted-fail-closed |  | routes/screen-share.ts |
 | POST | `/api/secrets` | native-tested | native-tested | `tests/binary_secrets_routes.rs::secrets_routes_through_the_binary` | routes/secrets.ts |
-| POST | `/api/secrets/requests/:id/cancel` | native-untested | native-untested |  | routes/secrets.ts |
-| POST | `/api/secrets/requests/:id/submit` | native-untested | native-untested |  | routes/secrets.ts |
+| POST | `/api/secrets/requests/:id/cancel` | native-tested | native-tested | `tests/secret_input_requests.rs::secret_prompts_are_answered_and_cancelled_by_their_owner_only` | routes/secrets.ts |
+| POST | `/api/secrets/requests/:id/submit` | native-tested | native-tested | `tests/secret_input_requests.rs::secret_prompts_are_answered_and_cancelled_by_their_owner_only` | routes/secrets.ts |
 | POST | `/api/security/assessments` | native-untested | native-untested |  | routes/security-assessments.ts |
 | POST | `/api/security/assessments/:id/cancel` | native-untested | native-untested |  | routes/security-assessments.ts |
 | POST | `/api/security/checks` | missing | mounted-fail-closed |  | routes/security-workbench.ts |
@@ -471,8 +471,8 @@ HTTP routes, WS messages and background services are heuristic candidates, not a
 | POST | `/api/trust/levels/:actionType/reset` | native-tested | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/trust.ts |
 | POST | `/api/update/apply` | native-untested | native-untested |  | routes/update.ts |
 | POST | `/api/update/nodes/:nodeId/apply` | missing | missing |  | routes/update.ts |
-| POST | `/api/user-questions/requests/:id/cancel` | native-untested | native-untested |  | routes/user-questions.ts |
-| POST | `/api/user-questions/requests/:id/submit` | native-untested | native-untested |  | routes/user-questions.ts |
+| POST | `/api/user-questions/requests/:id/cancel` | native-tested | native-tested | `tests/user_question_requests.rs::pending_questions_are_answered_and_cancelled_by_their_owner_only` | routes/user-questions.ts |
+| POST | `/api/user-questions/requests/:id/submit` | native-tested | native-tested | `tests/user_question_requests.rs::pending_questions_are_answered_and_cancelled_by_their_owner_only` | routes/user-questions.ts |
 | POST | `/api/voice/speak` | native-tested | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
 | POST | `/api/voice/transcribe` | native-tested | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
 | POST | `/api/voice/transcribe-audio` | native-tested | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
@@ -647,7 +647,7 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/project/undo` — POST /api/project/undo — apps/web/src/hooks/useChat.ts
 - `/api/project/undo-all` — POST /api/project/undo-all — apps/web/src/hooks/useChat.ts
 - `/api/project/write` — POST /api/project/write — apps/web/src/components/project/detached-tab-view.tsx, apps/web/src/components/project/project-panel.tsx
-- `/api/projects` — GET /api/projects, POST /api/projects — apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects` — GET /api/projects, POST /api/projects — apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/e2e-fixtures/session-selector-show-more.tsx, apps/web/src/hooks/useProjects.ts
 - `/api/projects/:id` — DELETE /api/projects/:id, GET /api/projects/:id, PATCH /api/projects/:id — apps/web/src/hooks/useProjects.ts
 - `/api/projects/{}` — DELETE /api/projects/:id, DELETE /api/projects/archived, GET /api/projects/:id, GET /api/projects/archived, GET /api/projects/last-active, GET /api/projects/search, PATCH /api/projects/:id, POST /api/projects/select — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
 - `/api/projects/{}/move` — POST /api/projects/:id/move — apps/web/src/hooks/useProjects.ts
@@ -656,7 +656,7 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/projects/{}/sessions` — GET /api/projects/:id/sessions, POST /api/projects/:id/sessions — apps/web/src/hooks/useProjects.ts
 - `/api/projects/{}/subtree` — GET /api/projects/:id/subtree — apps/web/src/hooks/useProjects.ts
 - `/api/projects/archived` — DELETE /api/projects/:id, DELETE /api/projects/archived, GET /api/projects/:id, GET /api/projects/archived, PATCH /api/projects/:id — apps/web/src/hooks/useProjects.ts
-- `/api/projects/last-active` — DELETE /api/projects/:id, GET /api/projects/:id, GET /api/projects/last-active, PATCH /api/projects/:id — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects/last-active` — DELETE /api/projects/:id, GET /api/projects/:id, GET /api/projects/last-active, PATCH /api/projects/:id — apps/web/src/App.tsx, apps/web/src/e2e-fixtures/session-selector-show-more.tsx, apps/web/src/hooks/useProjects.ts
 - `/api/projects/search` — DELETE /api/projects/:id, GET /api/projects/:id, GET /api/projects/search, PATCH /api/projects/:id — apps/web/src/hooks/useProjects.ts
 - `/api/projects/select` — DELETE /api/projects/:id, GET /api/projects/:id, PATCH /api/projects/:id, POST /api/projects/select — apps/web/src/hooks/useProjects.ts
 - `/api/provider-accounts` — GET /api/provider-accounts, POST /api/provider-accounts — apps/web/src/components/settings/UsageSettings.tsx, apps/web/src/lib/agents-api.ts
@@ -710,7 +710,7 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/security/monitors` — POST /api/security/monitors — packages/api-client/src/client.ts
 - `/api/security/scopes` — POST /api/security/scopes — apps/web/src/components/network/service-checks.tsx, packages/api-client/src/client.ts
 - `/api/security/workbench` — GET /api/security/workbench — packages/api-client/src/client.ts
-- `/api/sessions` — GET /api/sessions, POST /api/sessions — apps/web/src/components/manager/agents-page.tsx, apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/hooks/useProjects.ts, apps/web/src/repro/use-chat-resume-repro.tsx
+- `/api/sessions` — GET /api/sessions, POST /api/sessions — apps/web/src/components/manager/agents-page.tsx, apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/e2e-fixtures/session-selector-show-more.tsx, apps/web/src/hooks/useProjects.ts, apps/web/src/repro/use-chat-resume-repro.tsx
 - `/api/sessions/:id/events` — GET /api/sessions/:sessionId/events — apps/web/src/lib/session-event-subscription.ts
 - `/api/sessions/:id/runtime` — GET /api/sessions/:sessionId/runtime — apps/web/src/lib/agent-activity-chip.ts, apps/web/src/lib/agent-activity-source.ts
 - `/api/sessions/{}` — DELETE /api/sessions/:id, GET /api/sessions/:id, GET /api/sessions/last-active, GET /api/sessions/streaming, GET /api/sessions/unread-count, PATCH /api/sessions/:id — apps/web/src/App.tsx, apps/web/src/components/chat/prompt-input.tsx, apps/web/src/hooks/usePersonalChatNode.ts, apps/web/src/hooks/useProjects.ts
@@ -922,7 +922,7 @@ Client-to-server candidates come from the case arms of the Node hub and of the v
 - server-to-client-candidate: `turn.started` — native-untested — no binary test
 - server-to-client-candidate: `ui.command` — missing — no binary test
 - server-to-client-candidate: `ui.full-state` — missing — no binary test
-- server-to-client-candidate: `ui.state-sync` — missing — no binary test
+- server-to-client-candidate: `ui.state-sync` — native-tested — `tests/binary_thread_turns.rs::busy_chat_send_queues_and_the_finished_turn_starts_it_through_the_binary`
 - server-to-client-candidate: `user-question.pending-snapshot` — native-untested — no binary test
 - server-to-client-candidate: `user-question.requested` — native-untested — no binary test
 - server-to-client-candidate: `user-question.resolved` — native-untested — no binary test
