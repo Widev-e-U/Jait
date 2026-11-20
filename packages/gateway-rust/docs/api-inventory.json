@@ -3734,6 +3734,18 @@
         {
           "file": "tests/binary_agent_tool_policy.rs",
           "name": "reenabled_tool_is_advertised_and_executed_in_new_chat"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "refused_web_choices_start_no_turn_through_the_binary"
+        },
+        {
+          "file": "tests/binary_thread_turns.rs",
+          "name": "web_shaped_acp_turn_runs_the_registered_provider_through_the_binary"
         }
       ],
       "rustStatus": "native-tested"

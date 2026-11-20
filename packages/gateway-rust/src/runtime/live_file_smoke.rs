@@ -53,7 +53,8 @@ impl ChatFactory for SmokeFactory {
         &self,
         user: AuthUser,
         session: SessionRecord,
-    ) -> BoxFuture<'_, Result<PreparedChat, String>> {
+        _selection: crate::routes::chat::TurnSelection,
+    ) -> BoxFuture<'_, Result<PreparedChat, crate::routes::chat::PrepareError>> {
         Box::pin(async move {
             let scope = Arc::new(ScopedFileRoot::open(&self.root).map_err(|e| e.to_string())?);
             let root = self.root.clone();

@@ -22,6 +22,11 @@ struct Gateway {
 
 impl Gateway {
     fn start() -> Self {
+        Self::start_with(&[])
+    }
+
+    /// Starts the binary with extra environment entries on top of the isolated base.
+    fn start_with(extra: &[(&str, String)]) -> Self {
         let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../.jait/artifacts/binary-thread-turns-tests")
             .join(uuid::Uuid::new_v4().to_string());
@@ -38,6 +43,7 @@ impl Gateway {
             .env("JAIT_RUST_PROJECT_ROOT", &directory)
             .env("JAIT_RUST_DB", directory.join("gateway.sqlite"))
             .env("JWT_SECRET", "isolated-thread-turns-secret")
+            .envs(extra.iter().map(|(key, value)| (*key, value.as_str())))
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
@@ -1192,5 +1198,206 @@ async fn patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twic
         runs,
         "a stale snapshot must not send the entry again"
     );
+    model_task.abort();
+}
+
+/// The first message of a transcript whose `role` and `content` match, or `null`.
+fn find_message(messages: &str, role: &str, content: &str) -> Value {
+    let body: Value = serde_json::from_str(messages).unwrap();
+    let list = body.get("messages").cloned().unwrap_or(body);
+    list.as_array()
+        .expect("the transcript is a list of messages")
+        .iter()
+        .find(|message| message["role"] == role && message["content"] == content)
+        .cloned()
+        .unwrap_or(Value::Null)
+}
+
+/// The web client's body for a supervised turn runs through the binary. The turn's model and effort
+/// reach the provider request, and the display segments stay on the user message.
+#[tokio::test]
+async fn web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    configure_model(&client, &base, &owner, &model_base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+    let segments = json!([{"type": "text", "text": "follow up please"}]);
+
+    let response = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&owner)
+        .json(&json!({
+            "content": "follow up please",
+            "sessionId": session,
+            "clientMessageId": "user-webshape1",
+            "mode": "agent",
+            "provider": "jait",
+            "runtimeMode": "supervised",
+            "reasoningEffort": "high",
+            "model": "turn-model",
+            "displaySegments": segments,
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let events = stream_events(&response.text().await.unwrap());
+    assert_eq!(events.last().unwrap()["type"], "done", "{events:?}");
+
+    // The provider request names the turn's model and effort, not the saved model.
+    let requests = model.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 1, "{requests:?}");
+    assert_eq!(requests[0]["model"], "turn-model", "{requests:?}");
+    assert_eq!(requests[0]["reasoning_effort"], "high", "{requests:?}");
+    // The user message keeps the client's id and the display segments, and the reply follows it.
+    let messages = session_messages(&client, &base, &owner, &session).await;
+    let user = find_message(&messages, "user", "follow up please");
+    assert_eq!(user["segments"], segments, "{messages}");
+    assert!(messages.contains("Follow-up answered."), "{messages}");
+    // The transcript numbers its rows by position, so the client's id is checked through the route:
+    // a second send with the same id is refused rather than stored twice.
+    let (status, body) = send_json(
+        client
+            .post(format!("{base}/api/chat"))
+            .bearer_auth(&owner)
+            .json(&json!({"content": "again", "sessionId": session, "clientMessageId": "user-webshape1"})),
+    )
+    .await;
+    assert_eq!(status, 409, "{body}");
+    assert_eq!(body["error"], "MESSAGE_ID_ALREADY_EXISTS", "{body}");
+    model_task.abort();
+}
+
+/// A fake ACP agent: it answers the handshake and session creation, and streams one reply per prompt.
+const FAKE_ACP_AGENT: &str = r#"while IFS= read -r line; do id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p'); case "$line" in *'"method":"initialize"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":1}}\n' "$id";; *'"method":"session/new"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"sessionId":"agent"}}\n' "$id";; *'"method":"session/prompt"'*) printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"agent","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"ACP answered."}}}}\n'; printf '{"jsonrpc":"2.0","id":%s,"result":{"stopReason":"end_turn"}}\n' "$id";; esac; done"#;
+
+/// A chat turn on an ACP provider the operator defined runs through the binary. The provider is
+/// chosen by its id, its reply reaches the transcript, and a model from the client is refused.
+#[tokio::test]
+async fn web_shaped_acp_turn_runs_the_registered_provider_through_the_binary() {
+    let providers = json!([{
+        "id": "fake-acp",
+        "name": "Fake ACP",
+        "command": "/bin/sh",
+        "args": ["-c", FAKE_ACP_AGENT],
+        "providerType": "fake-acp",
+    }]);
+    let gateway = Gateway::start_with(&[("JAIT_ACP_PROVIDERS", providers.to_string())]);
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+
+    // An ACP agent chooses its own model, which this gateway does not send yet, so a model is refused.
+    let (status, body) = send_json(
+        client
+            .post(format!("{base}/api/chat"))
+            .bearer_auth(&owner)
+            .json(&json!({"content": "hi", "sessionId": session, "provider": "fake-acp", "model": "x"})),
+    )
+    .await;
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(
+        body["error"], "CHAT_OPTION_UNSUPPORTED_FOR_PROVIDER",
+        "{body}"
+    );
+
+    let segments = json!([{"type": "text", "text": "hello agent"}]);
+    let response = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&owner)
+        .json(&json!({
+            "content": "hello agent",
+            "sessionId": session,
+            "clientMessageId": "user-acpturn01",
+            "mode": "agent",
+            "provider": "fake-acp",
+            "runtimeMode": "supervised",
+            "reasoningEffort": null,
+            "displaySegments": segments,
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let events = stream_events(&response.text().await.unwrap());
+    assert_eq!(events.last().unwrap()["type"], "done", "{events:?}");
+    assert!(
+        events
+            .iter()
+            .any(|event| event.to_string().contains("ACP answered.")),
+        "{events:?}"
+    );
+    let messages = session_messages(&client, &base, &owner, &session).await;
+    let user = find_message(&messages, "user", "hello agent");
+    assert_eq!(user["segments"], segments, "{messages}");
+    assert!(messages.contains("ACP answered."), "{messages}");
+    let (status, body) = send_json(
+        client
+            .post(format!("{base}/api/chat"))
+            .bearer_auth(&owner)
+            .json(&json!({"content": "again", "sessionId": session, "clientMessageId": "user-acpturn01"})),
+    )
+    .await;
+    assert_eq!(status, 409, "{body}");
+    assert_eq!(body["error"], "MESSAGE_ID_ALREADY_EXISTS", "{body}");
+}
+
+/// Choices the owner cannot honor are refused before a turn starts: nothing reaches the model and
+/// nothing is stored. The session still runs a valid turn afterwards.
+#[tokio::test]
+async fn refused_web_choices_start_no_turn_through_the_binary() {
+    let model = Model::default();
+    let (model_base, model_task) = serve_model(model.clone()).await;
+    let gateway = Gateway::start();
+    let client = client();
+    let base = gateway.base.clone();
+    let owner = register(&client, &base).await;
+    configure_model(&client, &base, &owner, &model_base).await;
+    let session = new_chat_session(&client, &base, &owner, &gateway.directory).await;
+    for (extra, status, error) in [
+        (
+            json!({"provider": "not-registered"}),
+            400,
+            "PROVIDER_NOT_CONFIGURED",
+        ),
+        (
+            json!({"runtimeMode": "full-access"}),
+            400,
+            "RUNTIME_MODE_UNSUPPORTED",
+        ),
+        (
+            json!({"reasoningEffort": "not valid"}),
+            400,
+            "INVALID_CHAT_REQUEST",
+        ),
+    ] {
+        let mut payload = json!({"content": "should not run", "sessionId": session});
+        for (key, value) in extra.as_object().unwrap() {
+            payload[key] = value.clone();
+        }
+        let response = client
+            .post(format!("{base}/api/chat"))
+            .bearer_auth(&owner)
+            .json(&payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status, "{extra}");
+        let body: Value = response.json().await.unwrap();
+        assert_eq!(body["error"], error, "{extra}");
+    }
+    assert!(model.requests.lock().unwrap().is_empty());
+    let messages = session_messages(&client, &base, &owner, &session).await;
+    assert!(!messages.contains("should not run"), "{messages}");
+
+    let (status, events) = chat_send(&client, &base, &owner, &session, "follow up please").await;
+    assert_eq!(status, 200, "{events:?}");
+    assert_eq!(events.last().unwrap()["type"], "done", "{events:?}");
+    assert_eq!(model.requests.lock().unwrap().len(), 1);
     model_task.abort();
 }

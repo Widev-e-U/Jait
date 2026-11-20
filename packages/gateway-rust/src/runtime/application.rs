@@ -521,7 +521,7 @@ impl Application {
         let provider_directory = Arc::new(crate::providers::db_accounts::DbProviderDirectory::new(
             &auth,
             provider_registry.clone(),
-            acp_definitions,
+            acp_definitions.clone(),
             &state_dir,
         )?);
         if let Err(error) =
@@ -571,6 +571,7 @@ impl Application {
                     config.project_root.clone(),
                 )
                 .with_acp(super::chat_settings::SettingsChatFactory::acp_from_env())
+                .with_registered_acp(provider_registry.clone(), acp_definitions.clone())
                 .with_questions(questions.clone()),
             ) as Arc<dyn ChatFactory>),
             (None, false) => None,
@@ -1389,8 +1390,12 @@ mod ownership_tests {
                 &self,
                 _: AuthUser,
                 _: SessionRecord,
-            ) -> futures_util::future::BoxFuture<'_, Result<PreparedChat, String>> {
-                Box::pin(async { Err("unused".into()) })
+                _: crate::routes::chat::TurnSelection,
+            ) -> futures_util::future::BoxFuture<
+                '_,
+                Result<PreparedChat, crate::routes::chat::PrepareError>,
+            > {
+                Box::pin(async { Err(crate::routes::chat::PrepareError::Unavailable) })
             }
         }
         for poll in [false, true] {
@@ -1456,8 +1461,12 @@ mod ownership_tests {
                 &self,
                 _: AuthUser,
                 _: SessionRecord,
-            ) -> futures_util::future::BoxFuture<'_, Result<PreparedChat, String>> {
-                Box::pin(async { Err("unused".into()) })
+                _: crate::routes::chat::TurnSelection,
+            ) -> futures_util::future::BoxFuture<
+                '_,
+                Result<PreparedChat, crate::routes::chat::PrepareError>,
+            > {
+                Box::pin(async { Err(crate::routes::chat::PrepareError::Unavailable) })
             }
         }
         let path = fixture();

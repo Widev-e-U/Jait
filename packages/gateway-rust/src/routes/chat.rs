@@ -57,15 +57,48 @@ pub struct PreparedChat {
     pub provider: Arc<dyn TurnProvider>,
     pub tools: Arc<dyn TurnTools>,
 }
-/// Server-owned configuration only. Preparation must be read-only and must not
-/// execute tools or discover ambient credentials. Request fields never select
-/// provider URLs, credentials, tools, roots, ownership or execution modes.
+/// The per-turn choices a web client sends with a message. Each field names something the owner
+/// has already configured (a registered provider, or a model and effort the owner's backend
+/// accepts). None of them can supply a URL, credential, tool, root, ownership or execution mode.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TurnSelection {
+    /// The provider the user picked. `None` is the native OpenAI-compatible path.
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+}
+/// Why a turn cannot start. `Refused` is a choice the server will not honor, and its status and
+/// code go back to the client unchanged. `Unavailable` is the generic configuration failure.
+#[derive(Debug)]
+pub enum PrepareError {
+    Unavailable,
+    Refused { status: u16, code: &'static str },
+}
+impl PrepareError {
+    pub fn refused(status: u16, code: &'static str) -> Self {
+        Self::Refused { status, code }
+    }
+}
+impl From<String> for PrepareError {
+    fn from(_: String) -> Self {
+        Self::Unavailable
+    }
+}
+impl From<&str> for PrepareError {
+    fn from(_: &str) -> Self {
+        Self::Unavailable
+    }
+}
+/// Server-owned configuration only. Preparation must be read-only and must not execute tools or
+/// discover ambient credentials. The selection is checked against the owner's configuration, and
+/// an unknown or unconfigured choice is refused rather than replaced with a default.
 pub trait ChatFactory: Send + Sync {
     fn prepare(
         &self,
         user: AuthUser,
         session: SessionRecord,
-    ) -> BoxFuture<'_, Result<PreparedChat, String>>;
+        selection: TurnSelection,
+    ) -> BoxFuture<'_, Result<PreparedChat, PrepareError>>;
 }
 #[derive(Clone, Debug)]
 pub struct ChatLimits {
@@ -508,6 +541,11 @@ struct ChatBody {
     // Like the Node route, anything but a well-formed string is ignored.
     #[serde(rename = "clientMessageId", default)]
     client_message_id: Option<Value>,
+    // Filled from the web options by `parse_chat_request`, never read from the body itself.
+    #[serde(skip)]
+    selection: TurnSelection,
+    #[serde(skip)]
+    display_segments: Option<String>,
 }
 fn client_message_id(input: &ChatBody) -> Option<String> {
     let id = input.client_message_id.as_ref()?.as_str()?;
@@ -597,19 +635,14 @@ async fn local_turn_session(
         Err(_) => Err(Box::new(auth::internal_error())),
     }
 }
-// These fields carry semantics that the native turn does not yet implement.
-// Reject their presence, including null or empty values: omission can select a
-// server default while an explicit value can express provider or security intent.
+// These fields carry semantics the native turn does not implement yet. Reject their presence,
+// including null or empty values: omission can select a server default while an explicit value can
+// express provider or security intent. Persona, attachment, queue-drain and response-style options
+// stay here until the native turn can apply them.
 const UNSUPPORTED_CHAT_OPTIONS: &[&str] = &[
     "personaAgentId",
     "queuedMessageId",
-    "mode",
-    "provider",
-    "runtimeMode",
     "responseStyle",
-    "model",
-    "reasoningEffort",
-    "displaySegments",
     "attachments",
     "_queuedDrain",
     "_queuedMessageId",
@@ -619,7 +652,13 @@ const UNSUPPORTED_CHAT_OPTIONS: &[&str] = &[
     "_loopRevision",
 ];
 
-fn parse_chat_request(value: Value) -> Result<ChatBody, Box<Response>> {
+fn invalid_chat_request() -> Box<Response> {
+    Box::new(response(400, json!({"error":"INVALID_CHAT_REQUEST"})))
+}
+
+/// Parses a request. The web options the native turn applies are read here and removed from the
+/// body, so `deny_unknown_fields` still rejects every other key.
+fn parse_chat_request(mut value: Value) -> Result<ChatBody, Box<Response>> {
     if let Some(object) = value.as_object()
         && let Some(option) = UNSUPPORTED_CHAT_OPTIONS
             .iter()
@@ -632,8 +671,119 @@ fn parse_chat_request(value: Value) -> Result<ChatBody, Box<Response>> {
             }),
         )));
     }
-    serde_json::from_value(value)
-        .map_err(|_| Box::new(response(400, json!({"error":"INVALID_CHAT_REQUEST"}))))
+    let (selection, display_segments) = chat_selection(&mut value)?;
+    let mut body: ChatBody = serde_json::from_value(value).map_err(|_| invalid_chat_request())?;
+    body.selection = selection;
+    body.display_segments = display_segments;
+    Ok(body)
+}
+
+/// Reads the web options out of the body. A malformed value is refused rather than replaced with a
+/// default, because a silent default would run a provider, model or posture the user did not ask for.
+fn chat_selection(value: &mut Value) -> Result<(TurnSelection, Option<String>), Box<Response>> {
+    let Some(object) = value.as_object_mut() else {
+        return Ok((TurnSelection::default(), None));
+    };
+    // `null` means the same as an omitted key for every option read here.
+    let mut take = |key: &str| object.remove(key).filter(|v| !v.is_null());
+    match take("mode") {
+        None => {}
+        Some(Value::String(mode)) if mode == "agent" => {}
+        Some(_) => {
+            return Err(Box::new(response(
+                400,
+                json!({"error":"UNSUPPORTED_CHAT_OPTION","option":"mode"}),
+            )));
+        }
+    }
+    match take("runtimeMode") {
+        None => {}
+        // The native turn always runs the guarded posture, which the wire calls `supervised`.
+        Some(Value::String(mode)) if mode == "supervised" => {}
+        Some(Value::String(mode)) if mode == "full-access" => {
+            return Err(Box::new(response(
+                400,
+                json!({"error":"RUNTIME_MODE_UNSUPPORTED","runtimeMode":"full-access"}),
+            )));
+        }
+        Some(_) => return Err(invalid_chat_request()),
+    }
+    let provider = option_text(take("provider"))?.filter(|id| id != "jait");
+    if provider
+        .as_deref()
+        .is_some_and(|id| id.len() > 128 || id.chars().any(char::is_control))
+    {
+        return Err(invalid_chat_request());
+    }
+    let model = option_text(take("model"))?;
+    if model
+        .as_deref()
+        .is_some_and(|id| id.len() > 256 || id.chars().any(char::is_control))
+    {
+        return Err(invalid_chat_request());
+    }
+    let reasoning_effort = match option_text(take("reasoningEffort"))? {
+        None => None,
+        Some(effort) if valid_reasoning_effort(&effort) => Some(effort),
+        Some(_) => return Err(invalid_chat_request()),
+    };
+    let display_segments = display_segments(take("displaySegments"))?;
+    Ok((
+        TurnSelection {
+            provider,
+            model,
+            reasoning_effort,
+        },
+        display_segments,
+    ))
+}
+
+fn option_text(value: Option<Value>) -> Result<Option<String>, Box<Response>> {
+    match value {
+        None => Ok(None),
+        Some(Value::String(text)) => {
+            let text = text.trim();
+            Ok((!text.is_empty()).then(|| text.to_owned()))
+        }
+        Some(_) => Err(invalid_chat_request()),
+    }
+}
+
+/// The Node gateway's effort pattern: one alphanumeric character, then up to 63 of `[a-z0-9._-]`.
+fn valid_reasoning_effort(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    (1..=64).contains(&bytes.len())
+        && bytes[0].is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+/// Display segments are stored as given on the user message. Each one must be an object with a
+/// short string `type`, and the whole list is bounded.
+fn display_segments(value: Option<Value>) -> Result<Option<String>, Box<Response>> {
+    const MAX_SEGMENTS: usize = 64;
+    const MAX_BYTES: usize = 256 * 1024;
+    match value {
+        None => Ok(None),
+        Some(Value::Array(segments)) if segments.is_empty() => Ok(None),
+        Some(Value::Array(segments))
+            if segments.len() <= MAX_SEGMENTS
+                && segments.iter().all(|segment| {
+                    segment
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .is_some_and(|kind| (1..=32).contains(&kind.len()))
+                }) =>
+        {
+            let encoded = serde_json::to_string(&segments).map_err(|_| invalid_chat_request())?;
+            if encoded.len() > MAX_BYTES {
+                return Err(invalid_chat_request());
+            }
+            Ok(Some(encoded))
+        }
+        Some(_) => Err(invalid_chat_request()),
+    }
 }
 async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     let user = match auth::require_user(&state.auth, request.headers()).await {
@@ -713,8 +863,13 @@ async fn start_turn(
     let cancellation = lease.cancellation.clone();
     let prepared = tokio::select! {biased;
         _=cancellation.wait_cancelled()=>return response(409,json!({"error":"CHAT_CANCELLED"})),
-        result=tokio::time::timeout(Duration::from_secs(10),state.factory.prepare(user.clone(),session))=>match result{Ok(Ok(prepared))=>prepared,_=>return response(503,json!({"error":"CHAT_CONFIGURATION_UNAVAILABLE"}))},
+        result=tokio::time::timeout(Duration::from_secs(10),state.factory.prepare(user.clone(),session,input.selection.clone()))=>match result{
+            Ok(Ok(prepared))=>prepared,
+            Ok(Err(PrepareError::Refused{status,code}))=>return response(status,json!({"error":code})),
+            _=>return response(503,json!({"error":"CHAT_CONFIGURATION_UNAVAILABLE"})),
+        },
     };
+    let display_segments = input.display_segments.clone();
     let store = match SqliteTurnStore::new(
         state.auth.clone(),
         user.id.clone(),
@@ -725,6 +880,7 @@ async fn start_turn(
             .with_events(state.events.clone())
             .with_database_owner(state.active.database_owner.clone())
             .with_client_message_id(client_id)
+            .with_display_segments(display_segments)
             .with_turn()
     }) {
         Ok(store) => store,
@@ -977,6 +1133,8 @@ impl ChatRoutes {
             session_id: session.to_owned(),
             content,
             client_message_id: None,
+            selection: TurnSelection::default(),
+            display_segments: None,
         };
         let started = start_turn(self, user, input, lease).await;
         if !started.status().is_success() {
@@ -1408,7 +1566,11 @@ async fn thread_turn(
     let cancellation = lease.cancellation.clone();
     let prepared = tokio::select! {biased;
         _=cancellation.wait_cancelled()=>return response(409,json!({"error":"CHAT_CANCELLED"})),
-        result=tokio::time::timeout(Duration::from_secs(10),state.factory.prepare(user.clone(),session))=>match result{Ok(Ok(prepared))=>prepared,_=>return response(503,json!({"error":"CHAT_CONFIGURATION_UNAVAILABLE"}))},
+        result=tokio::time::timeout(Duration::from_secs(10),state.factory.prepare(user.clone(),session,TurnSelection::default()))=>match result{
+            Ok(Ok(prepared))=>prepared,
+            Ok(Err(PrepareError::Refused{status,code}))=>return response(status,json!({"error":code})),
+            _=>return response(503,json!({"error":"CHAT_CONFIGURATION_UNAVAILABLE"})),
+        },
     };
     let store = match SqliteTurnStore::new(state.auth.clone(), user.id.clone(), session_id.clone())
         .map(|store| {

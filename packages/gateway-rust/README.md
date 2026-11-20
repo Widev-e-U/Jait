@@ -1,5 +1,41 @@
 # Native Rust gateway
 
+## Web chat options through the composed binary — 2026-11-20
+
+The web client sends a few options with each chat message. The binary now honors them against the
+owner's own configuration, and refuses any choice it cannot honor. It never substitutes a default.
+
+- `model`: the turn uses this model instead of the saved one. The Jait backend resolves it as before.
+  An unconfigured backend instance or a missing key returns `MODEL_NOT_CONFIGURED` (400). Any other
+  string is sent upstream, and an upstream refusal is the turn's error.
+- `reasoningEffort`: null, or a token of 1 to 64 characters (`[a-z0-9._-]`, alphanumeric first).
+  It is sent as `reasoning_effort` to OpenAI-compatible backends, but not to Ollama, as the Node
+  gateway does. A malformed value returns `INVALID_CHAT_REQUEST`.
+- `provider`: absent or `jait` is the native path. Any other id must be an ACP agent the operator
+  defined in `JAIT_ACP_PROVIDERS` (or the built-in defaults), visible to the owner and available now.
+  Otherwise `PROVIDER_NOT_CONFIGURED` (400) or `PROVIDER_UNAVAILABLE` (409). A request cannot supply a
+  command. ACP agents choose their own model and effort, and the gateway does not send those options
+  yet, so a non-empty `model` or a non-null `reasoningEffort` for an ACP provider returns
+  `CHAT_OPTION_UNSUPPORTED_FOR_PROVIDER`.
+- `runtimeMode`: `supervised` is accepted. It is the native guarded posture, in which tool writes ask
+  for consent. `full-access` returns `RUNTIME_MODE_UNSUPPORTED`, because the native turn never runs
+  without consent. Any other value returns `INVALID_CHAT_REQUEST`.
+- `displaySegments`: an array of up to 64 objects, each with a short string `type`. It is stored on the
+  user message's `segments`, the field the Node gateway uses. Storage is in `rust_chat_user_segments`.
+- `mode`: `agent` only. Any other mode returns `UNSUPPORTED_CHAT_OPTION` with `option: "mode"`.
+
+Still refused with `UNSUPPORTED_CHAT_OPTION`: `personaAgentId`, `responseStyle`, `attachments`,
+`queuedMessageId`, and the internal `_` keys. A refused option starts no turn, and the model receives
+no request.
+
+Evidence: `chat_tests::web_options_are_validated_before_preparation` and
+`chat_tests::web_options_are_explicitly_rejected_before_preparation` (lib, `src/routes/chat_tests.rs`).
+In `tests/binary_thread_turns.rs`:
+`web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments`,
+`refused_web_choices_start_no_turn_through_the_binary` and
+`web_shaped_acp_turn_runs_the_registered_provider_through_the_binary`, which runs a fake ACP agent
+through `JAIT_ACP_PROVIDERS`.
+
 ## Scheduled job triggers through the composed binary — 2026-11-20
 
 `POST /api/jobs/:id/trigger` runs the job's tool through `scheduled_tool_executor` in `runtime/tools_mount.rs`. The run

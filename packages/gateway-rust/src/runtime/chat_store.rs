@@ -128,6 +128,7 @@ pub struct SqliteTurnStore {
     turn_id: Option<String>,
     database_owner: Option<Arc<std::fs::File>>,
     client_message_id: Option<String>,
+    display_segments: Option<String>,
 }
 impl SqliteTurnStore {
     pub fn new(auth: AuthState, owner: String, session: String) -> Result<Self, String> {
@@ -142,12 +143,19 @@ impl SqliteTurnStore {
             turn_id: None,
             database_owner: None,
             client_message_id: None,
+            display_segments: None,
         })
     }
 
     /// Persist this ID as the user message ID of the turn's request. Callers validate the format.
     pub(crate) fn with_client_message_id(mut self, id: Option<String>) -> Self {
         self.client_message_id = id;
+        self
+    }
+
+    /// The display segments JSON the user message shows. Callers validate the shape.
+    pub(crate) fn with_display_segments(mut self, segments: Option<String>) -> Self {
+        self.display_segments = segments;
         self
     }
 
@@ -346,6 +354,12 @@ impl SqliteTurnStore {
         } else {
             None
         };
+        // The turn's first entry is the user message, so only the starting append carries segments.
+        let segments = if start.is_some() {
+            self.display_segments.clone()
+        } else {
+            None
+        };
         self.with_database(move |db| {
             let tx = db.unchecked_transaction()?;
             require_owner(&tx, &owner, &session)?;
@@ -385,6 +399,10 @@ impl SqliteTurnStore {
                 let taken: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM messages WHERE id=?1) OR EXISTS(SELECT 1 FROM rust_chat_client_ids WHERE client_id=?1)", [client_id], |row| row.get(0))?;
                 if taken { return Err("Client message ID already exists".into()); }
                 tx.execute("INSERT INTO rust_chat_client_ids(client_id,session_id,log_id) VALUES(?,?,?)", params![client_id,session,next])?;
+            }
+            if let Some(segments) = &segments {
+                tx.execute_batch(super::chat_projection::USER_SEGMENTS_SCHEMA)?;
+                tx.execute("INSERT INTO rust_chat_user_segments(session_id,log_id,segments) VALUES(?,?,?)", params![session,next,segments])?;
             }
             tx.execute("UPDATE sessions SET last_active_at=? WHERE id=? AND user_id=?", params![now.to_rfc3339_opts(chrono::SecondsFormat::Millis,true),session,owner])?;
             super::chat_projection::project_log(&tx,&session)?;

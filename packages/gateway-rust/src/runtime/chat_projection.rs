@@ -13,6 +13,17 @@ fn prefix(session: &str) -> String {
 }
 
 pub(crate) const CLIENT_IDS_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS rust_chat_client_ids (client_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, log_id INTEGER NOT NULL)";
+/// The display segments a user turn was sent with, keyed by the turn's user log entry. They are the
+/// user message's `segments`, which the Node gateway stores the same way.
+pub(crate) const USER_SEGMENTS_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS rust_chat_user_segments (session_id TEXT NOT NULL, log_id INTEGER NOT NULL, segments TEXT NOT NULL, PRIMARY KEY (session_id, log_id))";
+
+fn has_user_segments(db: &Connection) -> Result<bool, Error> {
+    Ok(db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='rust_chat_user_segments')",
+        [],
+        |row| row.get(0),
+    )?)
+}
 
 fn has_client_ids(db: &Connection) -> Result<bool, Error> {
     Ok(db.query_row(
@@ -254,6 +265,7 @@ fn next_stamp(now: i64, last: &mut Option<i64>) -> Result<String, Error> {
 pub(crate) fn project_log(db: &Connection, session: &str) -> Result<(), Error> {
     require_native_history(db, session)?;
     let client_ids = has_client_ids(db)?;
+    let user_segments = has_user_segments(db)?;
     let mut projected: Vec<Projected> = vec![];
     let mut assistant: Option<usize> = None;
     let mut user_log: Option<i64> = None;
@@ -290,6 +302,18 @@ pub(crate) fn project_log(db: &Connection, session: &str) -> Result<(), Error> {
                     next_stamp(now, &mut last_visible_stamp)?,
                 );
                 row.content = content;
+                if user_segments {
+                    let stored: Option<String> = db
+                        .query_row(
+                            "SELECT segments FROM rust_chat_user_segments WHERE session_id=? AND log_id=?",
+                            params![session, log],
+                            |r| r.get(0),
+                        )
+                        .optional()?;
+                    if let Some(stored) = stored {
+                        row.segments = serde_json::from_str(&stored)?;
+                    }
+                }
                 if client_ids {
                     row.client_id = db
                         .query_row(

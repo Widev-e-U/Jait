@@ -70,10 +70,26 @@ impl ChatFactory for TestFactory {
         &self,
         user: AuthUser,
         session: SessionRecord,
-    ) -> BoxFuture<'_, Result<PreparedChat, String>> {
+        selection: super::TurnSelection,
+    ) -> BoxFuture<'_, Result<PreparedChat, super::PrepareError>> {
         assert_eq!(user.id, "owner");
         assert_eq!(session.user_id.as_deref(), Some("owner"));
         self.calls.fetch_add(1, Ordering::SeqCst);
+        // Like the settings factory, a choice this fixture cannot honor is refused, not replaced.
+        if selection.provider.is_some() {
+            return Box::pin(async {
+                Err(super::PrepareError::refused(400, "PROVIDER_NOT_CONFIGURED"))
+            });
+        }
+        if selection
+            .model
+            .as_deref()
+            .is_some_and(|model| model != "configured-model")
+        {
+            return Box::pin(async {
+                Err(super::PrepareError::refused(400, "MODEL_NOT_CONFIGURED"))
+            });
+        }
         Box::pin(async {
             Ok(PreparedChat {
                 config: TurnConfig {
@@ -358,13 +374,7 @@ async fn web_options_are_explicitly_rejected_before_preparation() {
     for (option, value) in [
         ("personaAgentId", json!("agent")),
         ("queuedMessageId", json!("queue")),
-        ("mode", json!("ask")),
-        ("provider", json!("codex")),
-        ("runtimeMode", json!("supervised")),
         ("responseStyle", json!("concise")),
-        ("model", json!("model")),
-        ("reasoningEffort", Value::Null),
-        ("displaySegments", json!([{"type":"text","text":"hi"}])),
         ("attachments", json!([])),
         ("_queuedDrain", json!(true)),
         ("_queuedMessageId", json!("queue")),
@@ -405,19 +415,139 @@ async fn web_options_are_explicitly_rejected_before_preparation() {
 }
 
 #[tokio::test]
+async fn web_options_are_validated_before_preparation() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    // Malformed values and postures the native turn does not run are refused by the route itself.
+    for (option, value, expected) in [
+        (
+            "mode",
+            json!("ask"),
+            json!({"error":"UNSUPPORTED_CHAT_OPTION","option":"mode"}),
+        ),
+        (
+            "runtimeMode",
+            json!("full-access"),
+            json!({"error":"RUNTIME_MODE_UNSUPPORTED","runtimeMode":"full-access"}),
+        ),
+        (
+            "runtimeMode",
+            json!("guarded"),
+            json!({"error":"INVALID_CHAT_REQUEST"}),
+        ),
+        (
+            "runtimeMode",
+            json!(1),
+            json!({"error":"INVALID_CHAT_REQUEST"}),
+        ),
+        (
+            "reasoningEffort",
+            json!("high power"),
+            json!({"error":"INVALID_CHAT_REQUEST"}),
+        ),
+        (
+            "reasoningEffort",
+            json!(3),
+            json!({"error":"INVALID_CHAT_REQUEST"}),
+        ),
+        ("model", json!(7), json!({"error":"INVALID_CHAT_REQUEST"})),
+        (
+            "provider",
+            json!(false),
+            json!({"error":"INVALID_CHAT_REQUEST"}),
+        ),
+        (
+            "displaySegments",
+            json!({"type":"text"}),
+            json!({"error":"INVALID_CHAT_REQUEST"}),
+        ),
+        (
+            "displaySegments",
+            json!([{"text":"no type"}]),
+            json!({"error":"INVALID_CHAT_REQUEST"}),
+        ),
+    ] {
+        let mut payload = json!({"sessionId":"session","content":"hi"});
+        payload[option] = value;
+        let response = fixture
+            .post("/api/chat")
+            .json(&payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 400, "{option}");
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            expected,
+            "{option}"
+        );
+    }
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 0);
+    assert!(fixture.events().await.is_empty());
+    // Choices the owner's configuration decides on reach the factory, and it refuses them itself.
+    for (option, value, expected) in [
+        (
+            "provider",
+            json!("untrusted"),
+            json!({"error":"PROVIDER_NOT_CONFIGURED"}),
+        ),
+        (
+            "model",
+            json!("other-model"),
+            json!({"error":"MODEL_NOT_CONFIGURED"}),
+        ),
+    ] {
+        let mut payload = json!({"sessionId":"session","content":"hi"});
+        payload[option] = value;
+        let response = fixture
+            .post("/api/chat")
+            .json(&payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 400, "{option}");
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            expected,
+            "{option}"
+        );
+    }
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 2);
+    assert!(fixture.events().await.is_empty());
+    // The web client's shape for a supervised turn is accepted and runs.
+    let response = fixture
+        .post("/api/chat")
+        .json(&json!({
+            "sessionId": "session",
+            "content": "hi",
+            "clientMessageId": "user-abcdefgh",
+            "mode": "agent",
+            "runtimeMode": "supervised",
+            "reasoningEffort": null,
+            "model": "configured-model",
+            "displaySegments": [{"type": "text", "text": "hi"}]
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        frames(&response.text().await.unwrap()).last().unwrap()["type"],
+        "done"
+    );
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 3);
+    fixture.finish().await;
+}
+
+#[tokio::test]
 async fn request_limits_and_execution_configuration_fields_are_rejected() {
     let limits = ChatLimits {
         body_bytes: 1024,
         ..ChatLimits::default()
     };
     let fixture = Fixture::new(false, 1, limits).await;
-    for field in [
-        "runtimeMode",
-        "projectRoot",
-        "provider",
-        "openaiBaseUrl",
-        "userId",
-    ] {
+    // `provider` is a choice the factory checks against the owner's configuration, so it is covered by
+    // web_options_are_validated_before_preparation instead of this list of refused-before-preparation fields.
+    for field in ["runtimeMode", "projectRoot", "openaiBaseUrl", "userId"] {
         let mut input = json!({"sessionId":"session","content":"hi"});
         input[field] = json!("untrusted");
         assert_eq!(

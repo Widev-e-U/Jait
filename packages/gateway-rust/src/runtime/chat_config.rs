@@ -97,8 +97,29 @@ impl ChatFactory for ChatConfiguration {
         &self,
         _user: AuthUser,
         session: SessionRecord,
-    ) -> BoxFuture<'_, Result<PreparedChat, String>> {
+        selection: crate::routes::chat::TurnSelection,
+    ) -> BoxFuture<'_, Result<PreparedChat, crate::routes::chat::PrepareError>> {
         Box::pin(async move {
+            // This configuration has one fixed model and no provider registry, so a request can only
+            // name that model. Anything else is refused rather than run on the fixed one.
+            if selection.provider.is_some() {
+                return Err(crate::routes::chat::PrepareError::refused(
+                    400,
+                    "PROVIDER_NOT_CONFIGURED",
+                ));
+            }
+            if selection.model.as_deref().is_some_and(|m| m != self.model) {
+                return Err(crate::routes::chat::PrepareError::refused(
+                    400,
+                    "MODEL_NOT_CONFIGURED",
+                ));
+            }
+            if selection.reasoning_effort.is_some() {
+                return Err(crate::routes::chat::PrepareError::refused(
+                    400,
+                    "CHAT_OPTION_UNSUPPORTED_FOR_PROVIDER",
+                ));
+            }
             let provider = ConfiguredModel {
                 http: OpenAiHttp::configured(&self.base_url, &self.api_key, &session.id)?,
                 prompt: self.prompt.clone(),
