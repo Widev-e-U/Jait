@@ -43,7 +43,7 @@ What JAIT already had when this work started, and what was decided about it.
 
 Missing, and built here: dependency-ordered runs, bounded resource-aware dispatch, validated agent reports, deterministic gates before advancement, scoped worktrees with reviewable integration, restart recovery that never re-runs blind, and owner-scoped HTTP and chat controls.
 
-Risks that shaped the design: a worktree isolates git state but is not a sandbox, so consent and path checks still apply; the Rust migration pins migration 79 and the reviewed tool profiles, so neither was changed here and nothing in this work claims that migration is done; and one gateway process per database is assumed.
+Risks that shaped the design: a worktree isolates git state but is not a sandbox, so consent and path checks still apply; the Rust migration pins migration 79 and the reviewed tool profiles, so neither was changed here and nothing in this work claims that migration is done; and two gateway processes on one database, such as a redeploy canary that inherits the state directory, must not both recover or pause the live owner's runs. The owner lease under [Persistence and recovery](#persistence-and-recovery) prevents that on one host.
 
 ## Model
 
@@ -178,6 +178,9 @@ A task with `"worker": { "kind": "acp", "providerId": "claude-code" }` runs its 
 
 - Migration 79 (`plan_orchestration_runs`) holds `orchestration_runs`, `orchestration_task_runs` and `orchestration_attempts`. No new migration was added, because the Rust gateway's reviewed contract corpus pins migration 79. Workspace identity is deterministic (run id and task id), so the existing `worktree_ref` columns hold the path and git holds the branches.
 - After a restart, `recoverAfterRestart` interrupts unfinished attempts and pauses unfinished runs. Nothing re-runs on its own. Operators inspect the task, then retry or fail it.
+- **One owner per database.** Only the process holding the owner lease recovers, dispatches, pauses runs and releases claims. The lease is `orchestration.lease.json` beside the database file (`process-lease.ts`). It records the holder's pid and a random token, and it is written atomically. A holder whose pid no longer exists frees it, and so does a process that restarts under the same pid. An in-memory database has no lease, because no other process can share it.
+- **Standby.** A gateway that finds a live owner stands by. It still serves reads, but it refuses to create, resume or cancel runs and to recover (HTTP 409 or a failed chat tool result). It retries the lease every 5 seconds. When it takes over, it recovers the previous owner's unfinished work before it dispatches anything, so nothing is re-run blindly. A redeploy canary that shares the state directory is a standby, so its startup and shutdown cannot touch a live owner's runs.
+- The owner releases the lease only after its workers settle. A process that exits without closing (a crash, or a `systemctl` restart that ends the process) leaves a lease whose pid is gone, so the next gateway takes it over.
 - A worker that was still running at the restart cannot overwrite the recovered state, because its attempt id is no longer current.
 - Owners only see their own runs. Cross-owner access returns not found.
 
@@ -240,7 +243,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 - **Process-level limits.** A zombie executor that ignores abort keeps its slot until it settles or the gateway restarts. Command gates stop their terminal, but worker tools that spawn processes outside a gate are not covered. The in-process worker has no such tool.
 - **Provider limits beyond concurrency.** The cap counts attempts. Quota windows reported by provider accounts are not read, and the in-process Jait backend reports none.
 - **Tests that agents weaken, beyond what the plan protects.** Command gates come from the approved plan, so an agent cannot swap them, and `resources.protects` makes named tests untouchable. The engine still cannot tell a weakened test from a fixed one by itself, so a test inside a writer's `writes` that the plan did not protect can be edited or removed. Deletions are listed in the scope evidence. Files that change which tests run, such as a test runner's config, are protected only when the plan lists them. Review changed tests in the integration branch.
-- **Single writer assumption.** One gateway process per database. Recovery is not safe against a second live process.
+- **Single host.** The owner lease is a file beside the database, so it coordinates processes on one host only. A database shared over a network is not coordinated. A live process that hangs without exiting keeps the lease until it exits, so a standby waits rather than risk a second owner.
 - **Pre-existing:** ordinary sub-agents still call the tool registry directly and do not pass through the consent executor. This change does not alter that path.
 
 ## Extension points

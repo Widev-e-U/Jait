@@ -103,6 +103,7 @@ import { createInProcessWorkflowWorker } from "./services/orchestration/in-proce
 import { createAcpWorkflowWorker } from "./services/orchestration/acp-worker.js";
 import { routeWorkers } from "./services/orchestration/worker-router.js";
 import { OrchestrationService } from "./services/orchestration/orchestrator.js";
+import { FileOrchestrationLease, leasePathForDatabase } from "./services/orchestration/process-lease.js";
 import { createPlanRunTools } from "./tools/plan-run-tools.js";
 import { WorkflowWorkspaces } from "./services/orchestration/workspace.js";
 import type { RepositoryService } from "./services/repositories.js";
@@ -347,9 +348,13 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       consentManager: deps.consentManager,
     })
     : undefined;
+  // One gateway process owns plan state per database file. A second process on the same file stands by.
+  const orchestrationLeasePath = deps.sqlite ? leasePathForDatabase(deps.sqlite) : undefined;
   const orchestration: OrchestrationService | undefined = deps.db && agentControl
     ? new OrchestrationService({
       db: deps.db,
+      lease: orchestrationLeasePath ? new FileOrchestrationLease(orchestrationLeasePath) : undefined,
+      onOwnership: (event) => app.log.warn({ ...event }, "plan orchestration ownership changed"),
       executor: new SubAgentTaskExecutor(routeWorkers({ jait: workflowWorker ?? unboundSubAgentRunner, acp: acpWorker })),
       verifier: deps.repoService
         ? createWorkflowVerifier({ repositories: deps.repoService, toolExecutor: deps.toolExecutor })
@@ -371,11 +376,17 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     : undefined;
   let recoveredOrchestration: OrchestrationService | undefined;
   if (orchestration) {
-    // Attempts left in flight by a restart become interrupted. Nothing re-runs them.
+    app.addHook("onClose", async () => { await orchestration.close(); });
+    // Only the lease owner recovers and dispatches. Attempts left in flight by a restart become
+    // interrupted, and nothing re-runs them. A standby process changes nothing until it takes over.
     try {
-      const interrupted = orchestration.recoverAfterRestart();
+      if (orchestration.acquireOwnership()) {
+        const interrupted = orchestration.recoverAfterRestart();
+        if (interrupted > 0) app.log.warn({ interrupted }, "plan attempts interrupted by restart; an operator must decide");
+      } else {
+        app.log.warn("plan orchestration stands by: another live gateway process owns this database");
+      }
       recoveredOrchestration = orchestration;
-      if (interrupted > 0) app.log.warn({ interrupted }, "plan attempts interrupted by restart; an operator must decide");
     } catch (error) {
       app.log.error({ error }, "plan orchestration recovery failed");
     }

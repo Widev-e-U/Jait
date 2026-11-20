@@ -25,6 +25,7 @@ import { uuidv7 } from "../../db/uuidv7.js";
 import { AgentHaltedError } from "../agent-control.js";
 import { boundText, parseAgentTaskReport, redactSecrets } from "./agent-report.js";
 import { type NormalizedPlanTask, type PlanGraphIssue, validatePlanGraph } from "./dag.js";
+import type { OrchestrationLease } from "./process-lease.js";
 import type { ResourceClaims } from "./resources.js";
 import { computeDependencyChanges, type SchedulableTask, selectDispatch } from "./scheduler.js";
 import { type AttemptOutcome, type NewTask, OrchestrationStore, type RunRow, type TaskRow } from "./store.js";
@@ -130,7 +131,25 @@ export interface OrchestrationServiceOptions {
   /** Provider key of the owner's workers, e.g. the in-process Jait backend. Defaults to one shared key. */
   providerKeyFor?: (userId: string) => string;
   now?: () => Date;
+  /**
+   * Single-owner lease for this database. Without one this process owns the plan
+   * state. With one, a process that does not hold it changes nothing and retries.
+   */
+  lease?: OrchestrationLease;
+  /** How often a standby process retries the lease. Zero disables the retry, which tests drive directly. */
+  leaseRetryMs?: number;
+  /** Reports ownership changes, for logs. */
+  onOwnership?: (event: OwnershipEvent) => void;
 }
+
+export interface OwnershipEvent {
+  owner: boolean;
+  reason: string;
+  /** Attempts a takeover interrupted, when this process just became owner. */
+  interrupted?: number;
+}
+
+const DEFAULT_LEASE_RETRY_MS = 5_000;
 
 export interface CreateRunInput {
   planId?: string;
@@ -324,8 +343,15 @@ export class OrchestrationService {
   private readonly workspaces: WorkspaceProvider;
   /** Tail of the workspace and integration work queue for each run. Git merges in one run never interleave. */
   private readonly serialChains = new Map<string, Promise<void>>();
+  /** Lease for this database, when one is configured. */
+  private readonly lease: OrchestrationLease | undefined;
+  /** Whether this process owns the database's plan state. A standby process only reads it. */
+  private owns: boolean;
+  private standbyTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly options: OrchestrationServiceOptions) {
+    this.lease = options.lease;
+    this.owns = options.lease === undefined;
     this.store = new OrchestrationStore(options.db);
     this.workspaces = options.workspaces ?? new WorkflowWorkspaces();
     this.verifier = options.verifier ?? refusingVerificationRunner;
@@ -340,6 +366,7 @@ export class OrchestrationService {
   // ── Public operations ──────────────────────────────────────────────
 
   createRun(userId: string, input: CreateRunInput): OrchestrationRunView {
+    this.assertOwnership();
     this.assertNotHalted(userId);
     const source = this.resolveSource(userId, input);
     const graph = validatePlanGraph(source.tasks);
@@ -412,6 +439,7 @@ export class OrchestrationService {
    * after inspecting the workspace; nothing restarts without one.
    */
   resumeRun(userId: string, runId: string, decisions: readonly InspectionDecision[] = []): OrchestrationRunView {
+    this.assertOwnership();
     const run = this.requireRunRow(userId, runId);
     this.assertNotHalted(userId);
     if (run.status !== "running" && run.status !== "interrupted") {
@@ -491,6 +519,7 @@ export class OrchestrationService {
   }
 
   cancelRun(userId: string, runId: string, reason = "cancelled by operator"): OrchestrationRunView {
+    this.assertOwnership();
     this.requireRunRow(userId, runId);
     const result = this.store.cancelRun({ runId, reason, now: this.nowIso() });
     const run = this.requireRunRow(userId, runId);
@@ -517,8 +546,10 @@ export class OrchestrationService {
   /**
    * Call once at process start, before any dispatch. Unknown outcomes become
    * interrupted and every unfinished run pauses until an operator resumes it.
+   * Only the owner recovers, because a standby process would interrupt live work.
    */
   recoverAfterRestart(): number {
+    this.assertOwnership();
     if (this.active.size > 0) throw new OrchestrationConflictError("recovery must run before any attempt is started");
     const now = this.nowIso();
     const recovered = this.store.recoverActiveAttempts({ reason: RESTART_REASON, now });
@@ -526,14 +557,92 @@ export class OrchestrationService {
     return recovered.length;
   }
 
-  /** Stop dispatch and drain workers before their backing database is closed. */
+  /** Whether this process owns the database's plan state. A standby process can read runs but cannot change them. */
+  isOwner(): boolean {
+    return this.owns;
+  }
+
+  /**
+   * Takes the database's lease when it is free. When another live gateway process
+   * holds it, this process stands by and retries in the background.
+   */
+  acquireOwnership(): boolean {
+    if (this.owns) return true;
+    if (this.closing) return false;
+    if (this.lease?.acquire()) {
+      this.becomeOwner();
+      return true;
+    }
+    this.options.onOwnership?.({ owner: false, reason: "another live gateway process owns this database" });
+    this.startStandby();
+    return false;
+  }
+
+  /**
+   * Standby retry: takes the lease once its holder is gone, then recovers what
+   * the previous owner left unfinished. Returns whether this process now owns it.
+   */
+  takeOverIfFree(): boolean {
+    if (this.owns || this.closing || !this.lease) return this.owns;
+    if (!this.lease.acquire()) return false;
+    this.becomeOwner();
+    const interrupted = this.recoverAfterRestart();
+    this.options.onOwnership?.({ owner: true, reason: "lease acquired", interrupted });
+    return true;
+  }
+
+  /**
+   * Stop dispatch and drain workers before their backing database is closed.
+   * The owner pauses its runs and releases the lease once its workers settle.
+   * A standby process changes nothing.
+   */
   async close(): Promise<void> {
     if (!this.closing) {
       this.closing = true;
-      this.store.pauseNonFinalRuns(this.nowIso());
-      for (const attempt of this.active.values()) this.abortAttempt(attempt, "shutdown");
+      this.stopStandby();
+      if (this.owns) {
+        this.store.pauseNonFinalRuns(this.nowIso());
+        for (const attempt of this.active.values()) this.abortAttempt(attempt, "shutdown");
+      }
     }
     await this.settle();
+    if (this.owns) {
+      this.owns = false;
+      this.lease?.release();
+    }
+  }
+
+  private becomeOwner(): void {
+    this.owns = true;
+    this.stopStandby();
+  }
+
+  private startStandby(): void {
+    if (this.standbyTimer || !this.lease || this.closing) return;
+    const retryMs = this.options.leaseRetryMs ?? DEFAULT_LEASE_RETRY_MS;
+    if (retryMs <= 0) return;
+    this.standbyTimer = setInterval(() => {
+      try {
+        this.takeOverIfFree();
+      } catch (error) {
+        this.options.onOwnership?.({ owner: false, reason: `takeover failed: ${errorMessage(error)}` });
+      }
+    }, retryMs);
+    this.standbyTimer.unref?.();
+  }
+
+  private stopStandby(): void {
+    if (!this.standbyTimer) return;
+    clearInterval(this.standbyTimer);
+    this.standbyTimer = undefined;
+  }
+
+  private assertOwnership(): void {
+    if (!this.owns) {
+      throw new OrchestrationConflictError(
+        "plan runs on this database belong to another live gateway process; this process can only read them",
+      );
+    }
   }
 
   /** Resolves once no attempt is in flight. Intended for tests and shutdown. */
@@ -547,7 +656,7 @@ export class OrchestrationService {
   // ── Dispatch ───────────────────────────────────────────────────────
 
   private pump(runId: string): void {
-    if (this.closing) return;
+    if (this.closing || !this.owns) return;
     const run = this.store.getRun(runId);
     if (!run || run.status !== "running" || run.paused) return;
     const definition = parseDefinition(run.definition);
