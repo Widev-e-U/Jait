@@ -811,6 +811,7 @@ describe("adversarial: end-to-end through the tool wrapper", () => {
       "context_flow",
       "thinking",
       "persona",
+      "author_user_id",
     ]);
 
     const projection = await t.execute({ sql: "SELECT id, content FROM messages WHERE 1 = 0" });

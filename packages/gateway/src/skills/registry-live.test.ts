@@ -1,8 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SKILL_RESCAN_INTERVAL_MS, SkillRegistry } from "./index.js";
+
+const artifactDir = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../.jait/artifacts/skill-registry-tests");
+mkdirSync(artifactDir, { recursive: true });
 
 function writeSkill(root: string, id: string, description = "does things") {
   mkdirSync(join(root, id), { recursive: true });
@@ -11,7 +14,7 @@ function writeSkill(root: string, id: string, description = "does things") {
 
 describe("SkillRegistry live rescan", () => {
   test("picks up added and removed skills without a restart and keeps enabled choices", async () => {
-    const root = mkdtempSync(join(tmpdir(), "jait-skills-"));
+    const root = mkdtempSync(join(artifactDir, "jait-skills-"));
     try {
       writeSkill(root, "first");
       const registry = new SkillRegistry();
@@ -40,7 +43,7 @@ describe("SkillRegistry live rescan", () => {
   });
 
   test("keeps plugin-added skills across rescans", async () => {
-    const root = mkdtempSync(join(tmpdir(), "jait-skills-"));
+    const root = mkdtempSync(join(artifactDir, "jait-skills-"));
     try {
       const registry = new SkillRegistry();
       await registry.discover([{ path: root, source: "user" }]);
