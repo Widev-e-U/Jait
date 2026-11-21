@@ -872,7 +872,8 @@ function App() {
     token,
     onLoginRequired,
     activeProject?.surfaceId ?? null,
-    activeSessionRecord?.lastActiveAt ?? null
+    activeSessionRecord?.lastActiveAt ?? null,
+    activeSessionRecord?.canManageShare === false
   )
   const handleLatestContentViewed = useCallback(() => {
     if (activeSessionId && viewedActivityAt) void markSessionViewed(activeSessionId, viewedActivityAt)
@@ -2873,6 +2874,10 @@ function App() {
     const session = knownSession ?? (await loadSession(sessionId))
     if (!session) {
       toast.error('Failed to open chat panel.')
+      return
+    }
+    if (session.canManageShare === false) {
+      toast.info('Shared chats are available in the main panel in read-only mode.')
       return
     }
 
@@ -5716,6 +5721,7 @@ function App() {
                   !showMobileTerminalFullscreen &&
                   (<>
                       <DeveloperChatWorkspace
+                        readOnly={activeSessionRecord?.canManageShare === false}
                         newChatContext={
                           <NewChatContextSelector
                             projects={projects}
@@ -6004,13 +6010,17 @@ function App() {
         <ProjectContextDialog
           open={contextDialogTarget !== null}
           onOpenChange={(open) => {
-            if (!open) setContextDialogTarget(null)
+            if (!open) {
+              setContextDialogTarget(null)
+              void fetchProjects()
+            }
           }}
           project={contextDialogProject}
           mode={contextDialogTarget?.mode ?? 'edit'}
           ancestors={contextDialogAncestors}
           repositories={automation.repositories}
           onSave={handleSaveProjectContext}
+          token={token}
         />
 
         <AuthOverlays requiresAuthGate={requiresAuthGate} isDesktop={isDesktop} showLoginDialog={showLoginDialog} onShowLoginDialogChange={setShowLoginDialog} authFormProps={authFormProps} />

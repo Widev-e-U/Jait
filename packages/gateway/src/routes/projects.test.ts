@@ -86,6 +86,36 @@ describe("project routes", () => {
     }
   });
 
+  it("requires explicit sharing for member reads and revokes it immediately", async () => {
+    const owner = userService.createUser("share-owner", "password123");
+    const member = userService.createUser("share-member", "password123");
+    const stranger = userService.createUser("share-stranger", "password123");
+    const ownerHeaders = await authHeaders(owner.id, owner.username, testConfig.jwtSecret);
+    const memberHeaders = await authHeaders(member.id, member.username, testConfig.jwtSecret);
+    const strangerHeaders = await authHeaders(stranger.id, stranger.username, testConfig.jwtSecret);
+    const project = (await app.inject({ method: "POST", url: "/api/projects", headers: ownerHeaders, payload: { title: "Team" } })).json() as { id: string };
+    const shared = (await app.inject({ method: "POST", url: `/api/projects/${project.id}/sessions`, headers: ownerHeaders, payload: { name: "Shared needle" } })).json() as { id: string };
+    const privateChat = (await app.inject({ method: "POST", url: `/api/projects/${project.id}/sessions`, headers: ownerHeaders, payload: { name: "Private needle" } })).json() as { id: string };
+    expect((await app.inject({ method: "POST", url: `/api/projects/${project.id}/members`, headers: ownerHeaders, payload: { username: member.username } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: memberHeaders })).statusCode).toBe(404);
+    expect((await app.inject({ method: "PATCH", url: `/api/sessions/${shared.id}/share`, headers: memberHeaders, payload: { sharedWithProject: true } })).statusCode).toBe(404);
+    expect((await app.inject({ method: "PATCH", url: `/api/sessions/${shared.id}/share`, headers: ownerHeaders, payload: { sharedWithProject: true } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: memberHeaders })).statusCode).toBe(200);
+    sqlite.prepare("INSERT INTO messages (id, session_id, role, content, tool_calls, segments, thinking, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run("share-test-message", shared.id, "assistant", "Visible answer", '[{"secret":"tool-secret"}]', '[{"secret":"segment-secret"}]', "thinking-secret", new Date().toISOString());
+    sqlite.prepare("INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)").run("share-test-system", shared.id, "system", "system-secret", new Date().toISOString());
+    const messagesResponse = await app.inject({ method: "GET", url: `/api/sessions/${shared.id}/messages`, headers: memberHeaders });
+    expect(messagesResponse.statusCode).toBe(200);
+    expect(messagesResponse.body).toContain("Visible answer");
+    expect(messagesResponse.body).not.toMatch(/tool-secret|segment-secret|thinking-secret|system-secret/);
+    expect((await app.inject({ method: "GET", url: `/api/sessions/${privateChat.id}`, headers: memberHeaders })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: strangerHeaders })).statusCode).toBe(404);
+    const listed = (await app.inject({ method: "GET", url: `/api/projects/${project.id}/sessions`, headers: memberHeaders })).json() as { sessions: Array<{ id: string }> };
+    expect(listed.sessions.map(row => row.id)).toEqual([shared.id]);
+    expect((await app.inject({ method: "DELETE", url: `/api/projects/${project.id}/members/${member.id}`, headers: ownerHeaders })).statusCode).toBe(204);
+    expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: memberHeaders })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}/messages`, headers: memberHeaders })).statusCode).toBe(404);
+  });
+
   it("creates project-less sessions and groups explicit project sessions", async () => {
     const user = userService.createUser("project-user", "password123");
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);

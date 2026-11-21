@@ -443,6 +443,7 @@ export interface LlmContextFlow {
 }
 
 export interface ChatMessage {
+  authorUserId?: string
   clientMessageId?: string
   persona?: ChatPersona
   id: string
@@ -492,6 +493,7 @@ export interface ChatMessage {
 }
 
 type RawSnapshotMessage = {
+  authorUserId?: string | null
   clientMessageId?: string
   persona?: ChatPersona
   id: string
@@ -535,7 +537,7 @@ export function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStrea
     if (m.role === 'system') {
       return { id: m.id, role: 'user', kind: 'system-notice', content: safeContent }
     }
-    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking, persona: parseChatPersona(m.persona), ...(m.clientMessageId ? { clientMessageId: m.clientMessageId } : {}) }
+    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking, persona: parseChatPersona(m.persona), ...(m.clientMessageId ? { clientMessageId: m.clientMessageId } : {}), ...(m.authorUserId ? { authorUserId: m.authorUserId } : {}) }
     if (m.hasContextFlow) msg.hasContextFlow = true
     if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
     if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
@@ -780,6 +782,7 @@ export function useChat(
   onLoginRequired?: () => void,
   projectSurfaceId?: string | null,
   sessionLastActiveAt?: string | null,
+  sharedReadOnly = false,
 ) {
   const sessionLastActiveAtRef = useRef(sessionLastActiveAt)
   sessionLastActiveAtRef.current = sessionLastActiveAt
@@ -836,6 +839,7 @@ export function useChat(
 
   // `undefined` = "re-run the session effect"; `null` = deliberately no chat (a new-chat draft).
   const prevSessionIdRef = useRef<string | null | undefined>(undefined)
+  const prevSharedReadOnlyRef = useRef(sharedReadOnly)
   const subscriptionRunIdRef = useRef(0)
   const requestVersionRef = useRef(0)
   /**
@@ -925,7 +929,8 @@ export function useChat(
   // copy of the same events off it. That is what removes the whole
   // two-consumers-on-one-turn problem the direct stream used to create.
   useLayoutEffect(() => {
-    if (sessionId === prevSessionIdRef.current) return
+    if (sessionId === prevSessionIdRef.current && sharedReadOnly === prevSharedReadOnlyRef.current) return
+    prevSharedReadOnlyRef.current = sharedReadOnly
     const preserveExistingMessages = preserveMessagesOnNextResumeRef.current
     preserveMessagesOnNextResumeRef.current = false
     requestVersionRef.current += 1
@@ -1191,6 +1196,7 @@ export function useChat(
             ? {
                 id: createOptimisticMessageId('user'),
                 role: 'user',
+                ...(typeof data.authorUserId === 'string' ? { authorUserId: data.authorUserId } : {}),
                 content: drainedItem.content,
                 optimistic: true,
                 ...(drainedItem.displayContent ? { displayContent: drainedItem.displayContent } : {}),
@@ -1201,6 +1207,7 @@ export function useChat(
             : {
                 id: createOptimisticMessageId('user'),
                 role: 'user',
+                ...(typeof data.authorUserId === 'string' ? { authorUserId: data.authorUserId } : {}),
                 content: data.content as string,
                 displayContent: data.content as string,
                 optimistic: true,
@@ -1603,7 +1610,27 @@ export function useChat(
       })
     }
 
-    void (async () => {
+    if (sharedReadOnly) {
+      subscriptionRef.current = openSessionEventSubscription({
+        url: `${API_URL}/api/sessions/${sessionId}/shared-stream`,
+        headers: authHeaders(authToken),
+        onEvent: (data) => {
+          if (!isCurrent()) return
+          if (data.type === 'snapshot') applySnapshot(data as SnapshotResponse)
+          else handleEvent(data)
+        },
+        onFatal: (reason) => {
+          if (!isCurrent()) return
+          if (reason === 'unauthorized') onLoginRequired?.()
+          if (reason === 'not-found') {
+            void deleteCachedChatHistory(cacheScope, sessionId)
+            setState(prev => ({ ...prev, messages: [], isLoading: false, isLoadingHistory: false, hasMore: false, totalMessages: 0 }))
+          } else if (reason !== 'unauthorized') {
+            setState(prev => ({ ...prev, isLoading: false, isLoadingHistory: false, error: TRANSIENT_CONNECTION_MESSAGE }))
+          }
+        },
+      })
+    } else void (async () => {
       for (let attempt = 0; ; attempt += 1) {
         if (!isCurrent()) return
         try {
@@ -1663,7 +1690,7 @@ export function useChat(
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = undefined
     }
-  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger, updateQueue])
+  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger, sharedReadOnly, updateQueue])
 
   /** WS lifecycle signals validate persisted state without rebuilding a healthy stream. */
   const refreshMessages = useCallback((options?: { lifecycle?: 'started' | 'complete' }) => {

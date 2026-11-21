@@ -611,6 +611,9 @@ export function SessionSelector({
 
   const openSessionContextMenu = (x: number, y: number, sessionId: string, projectId: string | null) => {
     if (!hasSessionContextMenu) return
+    const session = projects.flatMap((project) => project.sessions).find((item) => item.id === sessionId)
+      ?? personalSessions.find((item) => item.id === sessionId)
+    if (session?.canManageShare === false) return
     const menuHeight = getSessionContextMenuHeight({
       showRename: Boolean(onRenameSession),
       showMoveToTop: true,

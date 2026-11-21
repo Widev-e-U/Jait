@@ -1,8 +1,9 @@
 //! Differential contract against the live TypeScript thread router.
 //! Requires Bun and the repository source tree; no network or persistent state.
 use jait_gateway::services::thread_router::{
-    RoutingSkill, format_routing_plan_for_prompt, match_explicit_skill_invocations, match_skills,
-    route_thread,
+    MIN_TURN_SKILL_SCORE, RoutingSkill, format_routing_plan_for_prompt,
+    match_explicit_skill_invocations, match_skills, route_thread, select_turn_skills,
+    turn_skill_shortlist,
 };
 use serde_json::{Value, json};
 use std::{path::Path, process::Command};
@@ -21,6 +22,9 @@ fn typescript_and_rust_thread_routing_contract() {
     let long = format!("implement and {}", "😀".repeat(145));
     let cases = vec![
         ("hello", vec![], false, None),
+        ("Debugging Code Review", vec![], false, None),
+        ("diagnose crashes", vec![], false, None),
+        ("Search Apple Notes and Deep Research", vec![], false, None),
         ("spec", vec![], false, Some(200)),
         ("fix bug and create feature", vec![], false, Some(199)),
         (
@@ -70,12 +74,14 @@ fn typescript_and_rust_thread_routing_contract() {
         })
         .collect();
     let script = r#"
-import { routeThread, matchSkills, matchExplicitSkillInvocations, formatRoutingPlanForPrompt } from './packages/gateway/src/services/thread-router.ts';
-const { cases, skills } = JSON.parse(process.argv[1]);
+import { routeThread, matchSkills, matchExplicitSkillInvocations, formatRoutingPlanForPrompt, MIN_TURN_SKILL_SCORE } from './packages/gateway/src/services/thread-router.ts';
+const { cases, skills, minTurnScore } = JSON.parse(process.argv[1]);
+if (minTurnScore !== MIN_TURN_SKILL_SCORE) throw new Error(`MIN_TURN_SKILL_SCORE drift: ts=${MIN_TURN_SKILL_SCORE} rust=${minTurnScore}`);
 const result = cases.map(c => {
   const plan = routeThread({ message: c.message, availableSkills: skills, pinnedSkillIds: c.pinned, kind: c.delegation ? 'delegation' : 'delivery' });
   plan.routedAt = '2026-01-02T03:04:05.000Z';
-  return { explicit: matchExplicitSkillInvocations(c.message, skills), matched: matchSkills(c.message, skills), plan, prompt: formatRoutingPlanForPrompt(plan, c.length ?? undefined) };
+  return { explicit: matchExplicitSkillInvocations(c.message, skills), matched: matchSkills(c.message, skills), turn: matchSkills(c.message, skills, MIN_TURN_SKILL_SCORE),
+    shortlist: skills.filter(skill => !matchExplicitSkillInvocations(c.message, skills).includes(skill.id) && matchSkills(c.message, [skill], 1).includes(skill.id)).map(skill => skill.id), plan, prompt: formatRoutingPlanForPrompt(plan, c.length ?? undefined) };
 });
 console.log(JSON.stringify(result));
 "#;
@@ -89,7 +95,8 @@ console.log(JSON.stringify(result));
         .args([
             "-e",
             script,
-            &json!({"cases": inputs, "skills": skills}).to_string(),
+            &json!({"cases": inputs, "skills": skills, "minTurnScore": MIN_TURN_SKILL_SCORE})
+                .to_string(),
         ])
         .output()
         .expect("Bun is required for the TypeScript router contract");
@@ -107,6 +114,8 @@ console.log(JSON.stringify(result));
         let actual = json!({
             "explicit": match_explicit_skill_invocations(message, &skills),
             "matched": match_skills(message, &skills),
+            "turn": select_turn_skills(message, &skills, None),
+            "shortlist": turn_skill_shortlist(message, &skills),
             "prompt": format_routing_plan_for_prompt(&plan, *length),
             "plan": plan,
         });

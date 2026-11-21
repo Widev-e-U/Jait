@@ -146,6 +146,11 @@ function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retr
               Free reset availability: <a className="text-primary underline" href="https://claude.ai/settings/usage" target="_blank" rel="noopener noreferrer">Check in Claude</a>
             </p>
           )}
+          {profile.providerType === 'codex' && (
+            <p className="text-xs text-muted-foreground">
+              Reset availability: <a className="text-primary underline" href="https://chatgpt.com/codex/settings/usage" target="_blank" rel="noopener noreferrer">Check in Codex</a>
+            </p>
+          )}
           {resetCredits && (
             <TooltipHint content={`${resetCredits.title}\nSpend a reset in the provider's app to clear your limits immediately.`}>
               <p

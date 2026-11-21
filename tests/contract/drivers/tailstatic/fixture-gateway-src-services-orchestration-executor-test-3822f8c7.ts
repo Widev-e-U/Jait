@@ -59,7 +59,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_48_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_50_3": {
 
 
 const USER = "user-1";
@@ -76,6 +76,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -135,7 +137,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_57_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_59_3": {
 
 
 const USER = "user-1";
@@ -152,6 +154,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -210,7 +214,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_65_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_67_3": {
 
 
 const USER = "user-1";
@@ -227,6 +231,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -288,7 +294,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_76_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_78_3": {
 
 
 const USER = "user-1";
@@ -305,6 +311,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -368,7 +376,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_89_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_91_3": {
 
 
 const USER = "user-1";
@@ -385,6 +393,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -448,7 +458,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_102_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_104_3": {
 
 
 const USER = "user-1";
@@ -465,6 +475,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -532,7 +544,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_121_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_123_3": {
 
 
 const USER = "user-1";
@@ -549,6 +561,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -605,7 +619,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_127_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_129_3": {
 
 
 const USER = "user-1";
@@ -622,6 +636,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -680,7 +696,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_137_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_139_3": {
 
 
 const USER = "user-1";
@@ -697,6 +713,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -772,7 +790,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_170_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_172_3": {
 
 
 const USER = "user-1";
@@ -789,6 +807,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -848,7 +868,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_234_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_236_3": {
 
 
 const USER = "user-1";
@@ -865,6 +885,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -908,16 +930,16 @@ let sqlite: SqliteDatabase;
 let db: JaitDB;
 const passingVerifier: VerificationRunner = { run: async () => ({ passed: true, detail: "ok" }) };
 const task = { id: "A", title: "Write", description: "", dependsOn: [], verification: [gate()] };
-const __jait_hook_8667 = async () => {
+const __jait_hook_8718 = async () => {
     const opened = await openDatabase(":memory:");
     sqlite = opened.sqlite;
     db = opened.db;
     migrateDatabase(sqlite);
   };
-const __jait_hook_8829 = () => {
+const __jait_hook_8880 = () => {
     sqlite.close();
   };
-await __jait_hook_8667();
+await __jait_hook_8718();
 try {
 await (async()=>{
 
@@ -947,13 +969,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8829();
+await __jait_hook_8880();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_259_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_261_3": {
 
 
 const USER = "user-1";
@@ -970,6 +992,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -1013,16 +1037,16 @@ let sqlite: SqliteDatabase;
 let db: JaitDB;
 const passingVerifier: VerificationRunner = { run: async () => ({ passed: true, detail: "ok" }) };
 const task = { id: "A", title: "Write", description: "", dependsOn: [], verification: [gate()] };
-const __jait_hook_8667 = async () => {
+const __jait_hook_8718 = async () => {
     const opened = await openDatabase(":memory:");
     sqlite = opened.sqlite;
     db = opened.db;
     migrateDatabase(sqlite);
   };
-const __jait_hook_8829 = () => {
+const __jait_hook_8880 = () => {
     sqlite.close();
   };
-await __jait_hook_8667();
+await __jait_hook_8718();
 try {
 await (async()=>{
 
@@ -1044,13 +1068,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8829();
+await __jait_hook_8880();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_276_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_278_3": {
 
 
 const USER = "user-1";
@@ -1067,6 +1091,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -1110,16 +1136,16 @@ let sqlite: SqliteDatabase;
 let db: JaitDB;
 const passingVerifier: VerificationRunner = { run: async () => ({ passed: true, detail: "ok" }) };
 const task = { id: "A", title: "Write", description: "", dependsOn: [], verification: [gate()] };
-const __jait_hook_8667 = async () => {
+const __jait_hook_8718 = async () => {
     const opened = await openDatabase(":memory:");
     sqlite = opened.sqlite;
     db = opened.db;
     migrateDatabase(sqlite);
   };
-const __jait_hook_8829 = () => {
+const __jait_hook_8880 = () => {
     sqlite.close();
   };
-await __jait_hook_8667();
+await __jait_hook_8718();
 try {
 await (async()=>{
 
@@ -1138,13 +1164,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8829();
+await __jait_hook_8880();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_290_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_292_3": {
 
 
 const USER = "user-1";
@@ -1161,6 +1187,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -1204,16 +1232,16 @@ let sqlite: SqliteDatabase;
 let db: JaitDB;
 const passingVerifier: VerificationRunner = { run: async () => ({ passed: true, detail: "ok" }) };
 const task = { id: "A", title: "Write", description: "", dependsOn: [], verification: [gate()] };
-const __jait_hook_8667 = async () => {
+const __jait_hook_8718 = async () => {
     const opened = await openDatabase(":memory:");
     sqlite = opened.sqlite;
     db = opened.db;
     migrateDatabase(sqlite);
   };
-const __jait_hook_8829 = () => {
+const __jait_hook_8880 = () => {
     sqlite.close();
   };
-await __jait_hook_8667();
+await __jait_hook_8718();
 try {
 await (async()=>{
 
@@ -1256,13 +1284,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8829();
+await __jait_hook_8880();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_328_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_330_3": {
 
 
 const USER = "user-1";
@@ -1279,6 +1307,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -1322,16 +1352,16 @@ let sqlite: SqliteDatabase;
 let db: JaitDB;
 const passingVerifier: VerificationRunner = { run: async () => ({ passed: true, detail: "ok" }) };
 const task = { id: "A", title: "Write", description: "", dependsOn: [], verification: [gate()] };
-const __jait_hook_8667 = async () => {
+const __jait_hook_8718 = async () => {
     const opened = await openDatabase(":memory:");
     sqlite = opened.sqlite;
     db = opened.db;
     migrateDatabase(sqlite);
   };
-const __jait_hook_8829 = () => {
+const __jait_hook_8880 = () => {
     sqlite.close();
   };
-await __jait_hook_8667();
+await __jait_hook_8718();
 try {
 await (async()=>{
 
@@ -1369,13 +1399,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8829();
+await __jait_hook_8880();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_361_3": {
+case "tailstatic_packages_gateway_src_services_orchestration_executor_test_ts_363_3": {
 
 
 const USER = "user-1";
@@ -1392,6 +1422,8 @@ function input(overrides: Partial<TaskExecutionInput> = {}): TaskExecutionInput 
     title: "Write the report",
     description: "Summarise the findings in out/result.txt.",
     claims: { reads: [], writes: ["."] },
+    worker: { kind: "jait" },
+    workspace: null,
     verification: [gate()],
     dependencyResults: [],
     previousAttempt: null,
@@ -1435,16 +1467,16 @@ let sqlite: SqliteDatabase;
 let db: JaitDB;
 const passingVerifier: VerificationRunner = { run: async () => ({ passed: true, detail: "ok" }) };
 const task = { id: "A", title: "Write", description: "", dependsOn: [], verification: [gate()] };
-const __jait_hook_8667 = async () => {
+const __jait_hook_8718 = async () => {
     const opened = await openDatabase(":memory:");
     sqlite = opened.sqlite;
     db = opened.db;
     migrateDatabase(sqlite);
   };
-const __jait_hook_8829 = () => {
+const __jait_hook_8880 = () => {
     sqlite.close();
   };
-await __jait_hook_8667();
+await __jait_hook_8718();
 try {
 await (async()=>{
 
@@ -1480,7 +1512,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8829();
+await __jait_hook_8880();
 }
 }
 

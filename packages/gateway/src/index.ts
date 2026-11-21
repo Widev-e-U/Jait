@@ -1334,7 +1334,10 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   };
 
   // UI state sync (client → server → DB → other clients)
-  ws.canAccessSession = (sid, userId) => Boolean(userId && sessionService.getById(sid, userId));
+  ws.canAccessSession = (sid, userId) => {
+    const session = userId ? sessionService.getById(sid, userId) : null;
+    return Boolean(session && session.status !== "deleted");
+  };
   ws.onChatNotificationRead = (state, userId) => {
     void mobilePush.sendChatNotificationRead(userId, state).catch(() => { /* best effort */ });
   };

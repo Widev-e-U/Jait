@@ -24,6 +24,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { ProjectMembers } from '@/components/project/project-members'
+import { ProjectChatSharing } from '@/components/project/project-chat-sharing'
 import { ProjectColorPicker } from '@/components/project/project-color-picker'
 import { FolderPickerDialog } from '@/components/project/folder-picker-dialog'
 import { getProjectRepository, getProjectRepositoryId } from '@/lib/project-repositories'
@@ -77,6 +79,7 @@ interface ProjectContextDialogProps {
   /** Known repositories, offered as working directories. */
   repositories?: AutomationRepository[]
   /** Return false to keep the dialog open — the draft survives a failed save. */
+  token?: string | null
   onSave: (draft: ProjectContextDraft) => Promise<boolean> | boolean
 }
 
@@ -88,6 +91,7 @@ export function ProjectContextDialog({
   ancestors,
   repositories = [],
   onSave,
+  token = null,
 }: ProjectContextDialogProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -186,12 +190,13 @@ export function ProjectContextDialog({
 
   const overBudget = instructions.length > MAX_INSTRUCTION_CHARS
   const isCreate = mode === 'create'
+  const readOnly = !isCreate && project?.canManageProject === false
   // "Folder" is not a separate thing to create — it is simply what a row is
   // called while it has no directory. The label follows the field live.
   const isFolder = !rootPath
 
   const handleSave = async () => {
-    if (overBudget || (!isCreate && !project)) return
+    if (readOnly || overBudget || (!isCreate && !project)) return
     setSaving(true)
     try {
       const ok = await onSave({
@@ -225,6 +230,8 @@ export function ProjectContextDialog({
 
         <ScrollArea className="max-h-[60vh] pl-1 pr-3">
           <div className="space-y-4">
+            {readOnly && <p role="status" className="text-sm text-muted-foreground">Only the project owner can change these settings.</p>}
+            <fieldset disabled={readOnly} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="project-title">Name</Label>
               <Input
@@ -369,19 +376,24 @@ export function ProjectContextDialog({
                 {overBudget && ' — too long, trim it before saving'}
               </p>
             </div>
+            </fieldset>
+            {!isCreate && project && open && token && <>
+              <ProjectMembers projectId={project.id} token={token} />
+              <ProjectChatSharing sessions={project.sessions} token={token} />
+            </>}
           </div>
         </ScrollArea>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
+            {readOnly ? 'Close' : 'Cancel'}
           </Button>
-          <Button
+          {!readOnly && <Button
             onClick={() => { void handleSave() }}
             disabled={saving || overBudget || (!isCreate && !project)}
           >
             {saving ? (isCreate ? 'Creating…' : 'Saving…') : isCreate ? 'Create' : 'Save'}
-          </Button>
+          </Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

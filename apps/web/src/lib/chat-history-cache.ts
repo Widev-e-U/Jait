@@ -269,6 +269,7 @@ export function reuseUnchangedMessages(next: ChatMessage[], prev: ChatMessage[])
   const merged = next.map((message, index) => {
     const prior = prevById.get(message.id)
     if (!prior) return message
+    if (prior.authorUserId !== message.authorUserId) return message
     if (index < tailStart) return prior
     return chatMessageContentEqual(prior, message) ? prior : message
   })

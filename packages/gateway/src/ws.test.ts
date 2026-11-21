@@ -796,6 +796,26 @@ describe("WsControlPlane", () => {
       ws.close();
     });
 
+    it("stops session broadcasts immediately when access is revoked", async () => {
+      const token = await createToken("revoked-owner");
+      let allowed = true;
+      plane.canAccessSession = () => allowed;
+      const { ws, collector } = openWs(port, { token });
+      await waitForOpen(ws);
+      await collector.next();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      ws.send(JSON.stringify({ type: "subscribe", sessionId: "revoked-session" }));
+      await collector.next();
+      const event = { type: "session.updated", sessionId: "revoked-session", timestamp: new Date().toISOString(), payload: {} } as never;
+      plane.broadcast("revoked-session", event);
+      expect((await collector.next()).type).toBe("session.updated");
+      allowed = false;
+      plane.broadcast("revoked-session", event);
+      plane.broadcastExcluding("revoked-session", "another-client", event);
+      expect(await collector.maybeNext(200)).toBeNull();
+      ws.close();
+    });
+
     it("replays terminal buffer on subscription and only streams to subscribed clients", async () => {
       const token = await createToken("user-terminal-sync");
       plane.onTerminalReplay = (terminalId) => (terminalId === "term-sync" ? "buffered prompt>" : null);

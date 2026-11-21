@@ -55,6 +55,7 @@ const FLOATING_CHAT_INDICATORS_MIN_WIDTH = 480
 const GIT_DIFF_INDICATOR_LEFT_INSET_PX = 8
 
 interface DeveloperChatWorkspaceProps {
+  readOnly?: boolean
   newChatContext?: ReactNode
   activeProject: any
   activeProjectId: string | null
@@ -176,6 +177,7 @@ interface DeveloperChatWorkspaceProps {
 }
 
 export function DeveloperChatWorkspace({
+  readOnly = false,
   newChatContext,
   activeProject,
   activeProjectId,
@@ -510,7 +512,7 @@ export function DeveloperChatWorkspace({
   // control row moves above it for as long as the keyboard is up.
   const controlRowAboveComposer = shouldPlaceControlRowAboveComposer(isMobile, keyboardInset)
 
-  if (!hasMessages) {
+  if (!hasMessages && !readOnly) {
     return (
       <div
         ref={setNewChatScrollElement}
@@ -646,7 +648,7 @@ export function DeveloperChatWorkspace({
         ? handleErrorRetry : undefined
       const isMessageContinuing = Boolean(onTryContinue && retryDisabled)
       const cached = cache.get(msg.id)
-      const renderInputs = [
+      const renderInputs = [readOnly,
         sharedRenderVersionRef.current,
         idx,
         messages.length - 1 - idx,
@@ -707,11 +709,11 @@ export function DeveloperChatWorkspace({
           preferLlmUi
           provider={chatProvider}
           threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
-          onOpenTerminal={onOpenTerminalFromToolCall}
-          renderInlineSecretPrompt={renderInlineSecretPrompt}
-          onApprovalResponse={onApprovalResponse}
-          onEditMessage={onEditPreviousMessage}
-          onTryContinue={onTryContinue}
+          onOpenTerminal={readOnly ? undefined : onOpenTerminalFromToolCall}
+          renderInlineSecretPrompt={readOnly ? undefined : renderInlineSecretPrompt}
+          onApprovalResponse={readOnly ? undefined : onApprovalResponse}
+          onEditMessage={readOnly ? undefined : onEditPreviousMessage}
+          onTryContinue={readOnly ? undefined : onTryContinue}
           isContinuing={isMessageContinuing}
           editing={editingMessageId === msg.id}
           onEditingChange={handleMessageEditingChange}
@@ -764,7 +766,7 @@ export function DeveloperChatWorkspace({
               />
             </div>
           )}
-          {!showDebugPanel && loop && activeSessionId && (
+          {!readOnly && !showDebugPanel && loop && activeSessionId && (
             // Keep the card above the composer and allow more room for text on mobile.
             <div
               data-testid="chat-goal-overlay"
@@ -805,13 +807,13 @@ export function DeveloperChatWorkspace({
                 messageEstimateInputs={messages}
                 hasMore={hasMoreMessages}
                 onLoadMore={loadOlderMessages}
-                onEditPreviousUserMessage={handleEditPreviousUserMessage}
+                onEditPreviousUserMessage={readOnly ? undefined : handleEditPreviousUserMessage}
                 scrollToMessageId={scrollToUserMessageId}
                 showMinimap={!isMobile}
                 elevatedMessageId={messages.find(message => message.id === editingMessageId)?.renderId ?? editingMessageId}
               >
                 {messageElements}
-                {messageQueue.length > 0 && (
+                {!readOnly && messageQueue.length > 0 && (
                   <MessageQueue
                     items={messageQueue}
                     onEditingChange={setEditingQueue}
@@ -830,7 +832,8 @@ export function DeveloperChatWorkspace({
             </ErrorBoundary>
           )}
 
-          {showNormalComposer && (
+          {readOnly && <p className="border-t px-4 py-3 text-center text-sm text-muted-foreground" role="status">Shared chat · Read-only. Only the owner can send messages or run tools.</p>}
+          {showNormalComposer && !readOnly && (
             <div ref={setComposerDockElement} data-chat-composer-dock className={getChatComposerBoundaryClassName(isMobile)}>
             <div className={getChatColumnClassName('space-y-1.5')}>
               {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (

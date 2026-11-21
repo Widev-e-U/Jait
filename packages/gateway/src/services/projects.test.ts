@@ -25,6 +25,51 @@ describe("ProjectService", () => {
     sqlite.close();
   });
 
+  it("restricts membership to explicitly shared active projects and revokes it immediately", () => {
+    const memberId = users.createUser("colleague", "password123").id;
+    const strangerId = users.createUser("stranger", "password123").id;
+    const project = projects.create({ userId, title: "Shared" });
+    expect(projects.isMember(project.id, memberId)).toBe(false);
+    expect(projects.addMember(project.id, "unknown")).toBe(false);
+    expect(projects.addMember(project.id, "colleague")).toBe(true);
+    expect(projects.isMember(project.id, memberId)).toBe(true);
+    expect(projects.isMember(project.id, strangerId)).toBe(false);
+    expect(projects.getById(project.id, memberId)).toBeUndefined();
+    expect(projects.listAccessible("active", memberId).map(row => row.id)).toContain(project.id);
+    expect(projects.list("active", memberId)).toEqual([]);
+    projects.removeMember(project.id, memberId);
+    expect(projects.isMember(project.id, memberId)).toBe(false);
+    expect(projects.getAccessibleById(project.id, memberId)).toBeUndefined();
+    expect(projects.listAccessible("active", memberId)).toEqual([]);
+  });
+
+  it("exposes only explicitly shared chats to members and revokes access on removal or move", () => {
+    const member = users.createUser("chat-member", "password123").id;
+    const stranger = users.createUser("chat-stranger", "password123").id;
+    const project = projects.create({ userId, title: "Shared" });
+    const other = projects.create({ userId, title: "Other" });
+    const shared = sessions.create({ userId, projectId: project.id, name: "shared needle" });
+    const privateChat = sessions.create({ userId, projectId: project.id, name: "private needle" });
+    projects.addMember(project.id, "chat-member");
+    expect(projects.canAccessSession(shared.id, member)).toBe(false);
+    expect(projects.setSessionSharing(shared.id, member, true)).toBe(false);
+    expect(projects.setSessionSharing(shared.id, userId, true)).toBe(true);
+    expect(projects.canAccessSession(shared.id, member)).toBe(true);
+    expect(projects.canAccessSession(shared.id, stranger)).toBe(false);
+    expect(projects.canAccessSession(privateChat.id, member)).toBe(false);
+    expect(projects.listVisibleSessions(project.id, member).map(row => row.id)).toEqual([shared.id]);
+    expect(projects.listWithSessions(member).projects[0]?.sessions.map(row => row.id)).toEqual([shared.id]);
+    expect(projects.searchWithSessions(member, "needle").projects[0]?.sessions.map(row => row.id)).toEqual([shared.id]);
+    projects.removeMember(project.id, member);
+    expect(projects.canAccessSession(shared.id, member)).toBe(false);
+    expect(projects.listVisibleSessions(project.id, member)).toEqual([]);
+    expect(projects.searchWithSessions(member, "needle").projects).toEqual([]);
+    projects.addMember(project.id, "chat-member");
+    sessions.moveToProject(shared.id, other.id, null, userId);
+    expect(projects.canAccessSession(shared.id, member)).toBe(false);
+    expect(sessions.getById(shared.id)?.sharedWithProject).toBe(false);
+  });
+
   it("reuses a remote Windows project when an agent requests the same root as gateway", () => {
     const remote = projects.create({
       userId,

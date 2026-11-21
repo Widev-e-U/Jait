@@ -12,7 +12,9 @@ import { rankSystemOne, systemOneEnabled, SYSTEM_ONE_PROMPT } from "../services/
 import { getPersonalChatNodeId, chatNotificationLink, notificationPreview, notificationAgentContext, notificationTitleWithAgent, notificationBodyWithAgent } from "@jait/shared";
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { hostname } from "node:os";
+import { dirname } from "node:path";
 import { cliSessionIdle } from "../providers/session-idle.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { inferContextWindow, type AppConfig } from "../config.js";
@@ -70,7 +72,7 @@ import {
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
 import { buildBackgroundCommandContinuationPayload, LoopSelectionRequiredError } from "../services/background-command-continuation.js";
-import { matchSkills } from "../services/thread-router.js";
+import { matchExplicitSkillInvocations, matchSkills, MIN_TURN_SKILL_SCORE } from "../services/thread-router.js";
 import {
   type ChatMode,
   type PlannedAction,
@@ -435,6 +437,15 @@ export function canUseGatewayProviderForProject(projectNodeId: string | null | u
   return !projectNodeId || projectNodeId === "gateway";
 }
 
+/** A project or explicit personal device owns execution; incidental surfaces do not override it. */
+export function resolveChatProviderNode(
+  projectNodeId: string | null | undefined,
+  personalNodeId: string | null | undefined,
+  remoteSurfaceNodeId: string | null | undefined,
+): string | undefined {
+  return projectNodeId?.trim() || personalNodeId?.trim() || remoteSurfaceNodeId?.trim() || undefined;
+}
+
 export function buildCliProviderSystemPrompt(
   _provider: ProviderId,
   _model: string | undefined,
@@ -752,6 +763,52 @@ interface PersistedToolCall {
     | { type: "thinking"; content: string }
     | { type: "toolGroup"; callIds: string[] }
   >;
+}
+
+const TURN_SKILL_MIN_RELEVANCE = 0.7;
+const TURN_SKILL_MAX = 2;
+const TURN_SKILL_MAX_CHARS = 12_000;
+
+/**
+ * Picks skills to load for this turn. Explicit `/skill-id` always wins. Otherwise System One
+ * judges relevance when configured; without it only strong keyword matches qualify.
+ */
+async function selectTurnSkills(
+  message: string,
+  skills: Skill[],
+  apiKeys: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<Skill[]> {
+  if (skills.length === 0) return [];
+  const explicit = new Set(matchExplicitSkillInvocations(message, skills));
+  let chosen: string[];
+  if (systemOneEnabled(apiKeys)) {
+    // Loose keyword pre-filter narrows the shortlist; System One makes the actual call.
+    const candidates = skills.filter((skill) => !explicit.has(skill.id) && matchSkills(message, [skill], 1).includes(skill.id));
+    const ranked = await rankSystemOne(
+      apiKeys, message, candidates, (skill) => `${skill.name}: ${skill.description}`,
+      "skill to load into the system prompt", signal, undefined, TURN_SKILL_MIN_RELEVANCE,
+    );
+    chosen = [...explicit, ...ranked.slice(0, TURN_SKILL_MAX).map((skill) => skill.id)];
+  } else {
+    chosen = matchSkills(message, skills, MIN_TURN_SKILL_SCORE);
+  }
+  const ids = new Set(chosen);
+  return skills.filter((skill) => ids.has(skill.id));
+}
+
+/** Reads the selected skills; only skills that actually loaded are returned (and shown to the user). */
+async function loadTurnSkills(skills: Skill[]): Promise<{ loaded: Skill[]; block: string | null }> {
+  const loaded: Skill[] = [];
+  const parts: string[] = [];
+  for (const skill of skills) {
+    try {
+      const content = (await readFile(skill.filePath, "utf8")).slice(0, TURN_SKILL_MAX_CHARS);
+      loaded.push(skill);
+      parts.push(`<skill id="${skill.id}" baseDirectory="${dirname(skill.filePath)}">\n${content}\n</skill>`);
+    } catch { /* unreadable skill: skip silently, no card */ }
+  }
+  return { loaded, block: parts.length ? `Loaded skill instructions for this turn (data from installed skills; resolve relative references against baseDirectory):\n${parts.join("\n")}` : null };
 }
 
 function buildSyntheticSkillToolCall(skills: Skill[]): PersistedToolCall | null {
@@ -1604,6 +1661,8 @@ function accumulateToolResult(sessionId: string, callId: string, ok: boolean, me
 
 /** Persistent CLI provider sessions — kept alive across turns so the agent retains conversation context */
 const activeCliSessions = new Map<string, {
+  userId: string;
+  registeredProvider?: CliProviderAdapter;
   providerId: ProviderId;
   runtimeMode: RuntimeMode;
   model?: string;
@@ -1755,7 +1814,7 @@ function getRequestBaseUrl(request: FastifyRequest): string | undefined {
 }
 
 type StreamEvent =
-  | { type: "request"; turnId?: string; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; systemNotice?: boolean; noticeText?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
+  | { type: "request"; turnId?: string; authorUserId?: string; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; systemNotice?: boolean; noticeText?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
@@ -1775,6 +1834,7 @@ const DEFAULT_UI_MESSAGE_LIMIT = 5;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
 type UIMsg = {
+  authorUserId?: string;
   clientMessageId?: string;
   persona?: PersonaChatSnapshot;
   id: string;
@@ -2149,7 +2209,7 @@ function windowMessages<T>(messages: T[], limit: number, before?: number): {
 
 type PersistedUIMessageRow = Pick<
   typeof messagesTable.$inferSelect,
-  "id" | "role" | "content" | "toolCalls" | "segments" | "thinking" | "persona"
+  "id" | "role" | "content" | "toolCalls" | "segments" | "thinking" | "persona" | "authorUserId"
 > & {
   contextMetadataId: string | null;
   hasMemoryProvenance: boolean | null;
@@ -2173,6 +2233,7 @@ function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex:
     persona: readPersonaSnapshot(row.persona),
     content,
   };
+  if (row.role === "user" && row.authorUserId) msg.authorUserId = row.authorUserId;
   if (row.role === "user" && row.id.startsWith("user-")) msg.clientMessageId = row.id;
   if (row.toolCalls) {
     try { msg.toolCalls = JSON.parse(row.toolCalls); } catch { /* ignore */ }
@@ -2263,6 +2324,7 @@ function persistedMessageWindow(
         segments: messagesTable.segments,
         thinking: messagesTable.thinking,
         persona: messagesTable.persona,
+        authorUserId: messagesTable.authorUserId,
         contextMetadataId: messageContextMetadataTable.messageId,
         hasMemoryProvenance: messageContextMetadataTable.hasMemoryProvenance,
       })
@@ -3464,7 +3526,7 @@ export function registerChatRoutes(
     }
   }
 
-  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string, persona?: PersonaChatSnapshot, clientMessageId?: string): void {
+  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string, persona?: PersonaChatSnapshot, clientMessageId?: string, authorUserId?: string): void {
     if (!db) return;
     try {
       const messageId = clientMessageId ?? randomUUID();
@@ -3476,6 +3538,7 @@ export function registerChatRoutes(
           role,
           content,
           persona: persona ? JSON.stringify(persona) : null,
+          authorUserId: role === "user" ? authorUserId ?? null : null,
           toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
           segments: segments ?? null,
           contextFlow: contextFlow ?? null,
@@ -3622,25 +3685,25 @@ export function registerChatRoutes(
     if (personalNodeId && personalNodeId !== "gateway" && !ws?.canAccessNode?.(personalNodeId, authUser.id)) {
       return reply.status(403).send({ error: "NODE_FORBIDDEN", details: "The selected node does not belong to this user" });
     }
-    const wsRoot = personalNodeId
+    const wsRoot = projectRecord?.nodeId?.trim() === "gateway"
+      ? (projectRootPath?.trim() || process.cwd())
+      : personalNodeId
       ? personalNodeId === "gateway" ? process.cwd() : "."
       : surfaceRegistry
       ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
       : (projectRootPath?.trim() || process.cwd());
 
     // Only the gateway's own providers are pre-warmed (see route comment).
-    const projectNodeId = projectRecord?.nodeId?.trim() ?? getPersonalChatNodeId(sessionRecord);
-    const remoteSurfaceNodeId = getPersonalChatNodeId(sessionRecord)
-          ? undefined
-          : surfaceRegistry?.getBySession(sessionId)
+    const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
       .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
       .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
       ?.nodeId as string | undefined;
-    if (!canUseGatewayProviderForProject(projectNodeId) || remoteSurfaceNodeId) {
+    const providerNodeId = resolveChatProviderNode(projectRecord?.nodeId, personalNodeId, remoteSurfaceNodeId);
+    if (!canUseGatewayProviderForProject(providerNodeId)) {
       return reply.send({ status: "skipped", reason: "remote-project" });
     }
     const cliProvider = providerRegistry.getForUser(requestProvider, authUser.id) ?? null;
-    if (!cliProvider) {
+    if (!cliProvider || !canUseGatewayProviderForProject(cliProvider.executionNodeId)) {
       return reply.send({ status: "skipped", reason: "provider-unavailable" });
     }
 
@@ -3667,7 +3730,9 @@ export function registerChatRoutes(
       // `workingDirectory` is only set by this route, so a session started by a
       // turn never counts as "warm" — but it is a real conversation, so it is
       // left alone either way.
-      const matches = cached.providerId === requestProvider
+      const matches = cached.userId === authUser.id
+        && cached.registeredProvider === cliProvider
+        && cached.providerId === requestProvider
         && cached.runtimeMode === runtimeMode
         && cached.model === model
         && cached.reasoningEffort === reasoningEffort
@@ -3699,6 +3764,8 @@ export function registerChatRoutes(
         mcpServers,
       });
       activeCliSessions.set(sessionId, {
+        userId: authUser.id,
+        registeredProvider: cliProvider,
         providerId: requestProvider,
         runtimeMode,
         model,
@@ -4105,7 +4172,9 @@ export function registerChatRoutes(
     const projectRootPath = projectService?.effectiveRootPath(projectRecord, authUser.id)
       ?? sessionRecord?.projectPath;
     const personalNodeId = getPersonalChatNodeId(sessionRecord);
-    const wsRoot = personalNodeId
+    const wsRoot = projectRecord?.nodeId?.trim() === "gateway"
+      ? (projectRootPath?.trim() || process.cwd())
+      : personalNodeId
       ? personalNodeId === "gateway" ? process.cwd() : "."
       : surfaceRegistry
       ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
@@ -4216,10 +4285,10 @@ export function registerChatRoutes(
         }
       }
       history.push({ role: "user", content: contentParts as unknown as string, segments: displaySegments, persona });
-      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson, undefined, undefined, persona, clientMessageId);
+      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson, undefined, undefined, persona, clientMessageId, authUser.id);
     } else {
       history.push({ role: "user", content, segments: displaySegments, persona });
-      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson, undefined, undefined, persona, clientMessageId);
+      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson, undefined, undefined, persona, clientMessageId, authUser.id);
     }
     if (!systemNotification && getConsumedQueueIds(sessionId).size > 0) {
       // Only save the receipt once the user turn has been recorded.
@@ -4456,6 +4525,7 @@ export function registerChatRoutes(
     const requestEvent: StreamEvent = {
       type: "request",
       turnId: activeTurnId,
+      ...(!systemNotification ? { authorUserId: authUser.id } : {}),
       ...(persona ? { persona } : {}),
       content,
       // A continuation turn has no prompt of its own, so `content` is empty and
@@ -4480,8 +4550,11 @@ export function registerChatRoutes(
 
     // Include turn preparation in the cancellation and error handling path.
     try {
-    const matchedSkillIds = new Set(matchSkills(content, promptCtx.skills ?? []));
-    const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
+    const selectedSkills = await waitForCliProviderRequest(
+      () => selectTurnSkills(content, promptCtx.skills ?? [], userApiKeys, streamAbort.signal),
+      streamAbort.signal,
+    );
+    const { loaded: matchedSkills, block: skillBlock } = await loadTurnSkills(selectedSkills);
     const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
     emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
     const relevantMemory = await waitForCliProviderRequest(
@@ -4504,7 +4577,7 @@ export function registerChatRoutes(
       );
     }
     const memoryFlow = relevantMemory?.flow;
-    const memoryBlock = relevantMemory?.block;
+    const memoryBlock = [skillBlock, relevantMemory?.block].filter(Boolean).join("\n\n") || undefined;
     const syntheticToolCalls = [turnSkillToolCall, memoryToolCall].filter((call): call is PersistedToolCall => !!call);
 
     // Create steering controller for this session
@@ -4524,7 +4597,9 @@ export function registerChatRoutes(
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {
         const personalRemoteNode = getPersonalChatNodeId(sessionRecord);
-        const cliWsRoot = personalRemoteNode
+        const cliWsRoot = projectRecord?.nodeId?.trim() === "gateway"
+          ? (projectRootPath?.trim() || process.cwd())
+          : personalRemoteNode
           ? personalRemoteNode !== "gateway" ? "." : process.cwd()
           : surfaceRegistry
           ? resolveProjectRoot(surfaceRegistry, sessionId, projectRootPath)
@@ -4534,16 +4609,12 @@ export function registerChatRoutes(
         let isRemote = false;
         let remoteNodeInfo: { nodeId: string; nodeName: string; platform: string } | null = null;
         let remoteNodeClientId: string | undefined;
-        const projectNodeId = projectRecord?.nodeId?.trim() ?? getPersonalChatNodeId(sessionRecord);
-        const remoteSurfaceNodeId = getPersonalChatNodeId(sessionRecord)
-          ? undefined
-          : surfaceRegistry?.getBySession(sessionId)
+        const remoteSurfaceNodeId = surfaceRegistry?.getBySession(sessionId)
           .map((surface) => surface.snapshot().metadata as Record<string, unknown> | undefined)
           .find((metadata) => metadata?.remote === true && typeof metadata.nodeId === "string")
           ?.nodeId as string | undefined;
-        const remoteOwnerNodeId = projectNodeId && projectNodeId !== "gateway"
-          ? projectNodeId
-          : remoteSurfaceNodeId;
+        const providerNodeId = resolveChatProviderNode(projectRecord?.nodeId, personalRemoteNode, remoteSurfaceNodeId);
+        const remoteOwnerNodeId = providerNodeId && providerNodeId !== "gateway" ? providerNodeId : undefined;
 
         if (remoteOwnerNodeId && ws) {
           const registeredProvider = providerRegistry.getForUser(requestProvider, authUser.id);
@@ -4562,8 +4633,11 @@ export function registerChatRoutes(
           }
         }
 
-        if (!cliProvider && canUseGatewayProviderForProject(projectNodeId) && !remoteSurfaceNodeId) {
-          cliProvider = providerRegistry.getForUser(requestProvider, authUser.id) ?? null;
+        if (!cliProvider && canUseGatewayProviderForProject(providerNodeId)) {
+          const registeredProvider = providerRegistry.getForUser(requestProvider, authUser.id);
+          if (registeredProvider && canUseGatewayProviderForProject(registeredProvider.executionNodeId)) {
+            cliProvider = registeredProvider;
+          }
         }
 
         if (!cliProvider) {
@@ -4656,6 +4730,8 @@ export function registerChatRoutes(
 
         if (
           cachedCliSession
+          && cachedCliSession.userId === authUser.id
+          && cachedCliSession.registeredProvider === providerRegistry.getForUser(requestProvider, authUser.id)
           && cachedCliSession.provider.hasSession?.(cachedCliSession.providerSessionId) !== false
           && (cachedCliSession.awaitingFirstTurn || cachedCliSession.personaFingerprint === personaFingerprint)
           && cachedCliSession.providerId === requestProvider
@@ -4707,6 +4783,8 @@ export function registerChatRoutes(
           providerSessionId = sessionResult.id;
           isNewCliSession = true;
           activeCliSessions.set(sessionId, {
+            userId: authUser.id,
+            registeredProvider: providerRegistry.getForUser(requestProvider, authUser.id),
             providerId: requestProvider,
             personaFingerprint,
             runtimeMode,
@@ -5145,6 +5223,8 @@ export function registerChatRoutes(
           );
           providerSessionId = freshSessionResult.id;
           activeCliSessions.set(sessionId, {
+            userId: authUser.id,
+            registeredProvider: providerRegistry.getForUser(requestProvider, authUser.id),
             providerId: requestProvider,
             personaFingerprint,
             runtimeMode,
@@ -6281,11 +6361,12 @@ export function registerChatRoutes(
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
     if (sessionService) {
-      const session = sessionService.getById(sessionId, authUser.id);
-      if (!session) {
+      const session = sessionService.getById(sessionId);
+      if (!session || !(session.userId === authUser.id || projectService?.canAccessSession(sessionId, authUser.id))) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
     }
+    const isOwner = !sessionService || sessionService.getById(sessionId)?.userId === authUser.id;
     const query = request.query as { limit?: number | string; before?: number | string };
     const limit = parseMessageLimit(query?.limit);
     const before = typeof query?.before === "number"
@@ -6314,11 +6395,15 @@ export function registerChatRoutes(
       sessionId,
       streaming,
       seq: sessionEventCounter.get(sessionId) ?? 0,
-      lastActiveAt: sessionService?.getById(sessionId, authUser.id)?.lastActiveAt,
+      lastActiveAt: sessionService?.getById(sessionId)?.lastActiveAt,
       total: windowed.total,
       hasMore: windowed.hasMore,
       limit,
-      messages: windowed.messages,
+      // Sharing exposes the conversational text, not tool arguments/results,
+      // reasoning, system notices or context and memory metadata.
+      messages: isOwner ? windowed.messages : windowed.messages
+        .filter(message => message.role === "user" || message.role === "assistant")
+        .map(message => ({ id: message.id, role: message.role, content: message.content, ...(message.authorUserId ? { authorUserId: message.authorUserId } : {}) })),
     };
   });
 
@@ -6429,13 +6514,70 @@ export function registerChatRoutes(
 
   // SSE stream-resume: join an in-progress session's token stream
   // Client receives a snapshot of current content, then live tokens until done.
+  // Read-only projection for project members. Never forward the raw stream: it
+  // includes provider details, tool inputs/results and approval requests.
+  app.get("/api/sessions/:sessionId/shared-stream", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    const canRead = () => projectService?.canAccessSession(sessionId, authUser.id) === true;
+    if (!canRead() || !db) return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+
+    writeSseHead(reply, {
+      "Access-Control-Allow-Origin": String(request.headers.origin ?? "*"),
+      "Access-Control-Allow-Credentials": "true",
+    });
+    const isStreaming = activeStreams.has(sessionId);
+    const window = isStreaming
+      ? persistedStreamingMessageWindow(db, sessionId, DEFAULT_UI_MESSAGE_LIMIT)
+      : persistedMessageWindow(db, sessionId, DEFAULT_UI_MESSAGE_LIMIT);
+    const messages = window.messages
+      .filter((message) => (message.role === "user" || message.role === "assistant") && !message.systemNotice)
+      .map(({ id, role, content, authorUserId }) => ({ id, role, content, ...(authorUserId ? { authorUserId } : {}) }));
+    writeSseChunk(reply, `data: ${JSON.stringify({ type: "snapshot", messages, streaming: isStreaming })}\n\n`);
+
+    let closed = false;
+    let unsubscribe = () => {};
+    let accessTimer: ReturnType<typeof setInterval> | null = null;
+    const closeStream = () => {
+      if (closed) return;
+      closed = true;
+      if (accessTimer) clearInterval(accessTimer);
+      unsubscribe();
+      try { reply.raw.end(); } catch { /* already closed */ }
+    };
+    const checkAccess = () => {
+      if (!canRead()) { closeStream(); return false; }
+      return true;
+    };
+    let idleTicks = 0;
+    accessTimer = setInterval(() => {
+      if (!checkAccess()) return;
+      if (++idleTicks % 15 === 0) {
+        try { writeSseChunk(reply, `: keepalive\n\n`); } catch { closeStream(); }
+      }
+    }, 1_000);
+    reply.raw.on("close", closeStream);
+    request.raw.on("close", closeStream);
+    unsubscribe = subscribe(sessionId, sessionStreamSeq.get(sessionId) ?? 0, (event) => {
+      if (closed || !checkAccess()) return;
+      let visible: { type: string; content?: string; authorUserId?: string } | undefined;
+      if (event.type === "token") visible = { type: "token", content: event.content };
+      else if (event.type === "request" && !event.systemNotice) visible = { type: "request", content: event.content, ...(event.authorUserId ? { authorUserId: event.authorUserId } : {}) };
+      else if (event.type === "done") visible = { type: "done" };
+      if (visible) {
+        try { writeSseChunk(reply, `data: ${JSON.stringify(visible)}\n\n`); } catch { closeStream(); }
+      }
+    });
+  });
+
   app.get("/api/sessions/:sessionId/stream", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
     if (sessionService) {
       const session = sessionService.getById(sessionId, authUser.id);
-      if (!session) {
+      if (!session || session.status === "deleted") {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
     }
@@ -6506,14 +6648,24 @@ export function registerChatRoutes(
     const snapshotSeq = sessionStreamSeq.get(sessionId) ?? 0;
     let closed = false;
     let unsubscribe = () => {};
+    let accessTimer: ReturnType<typeof setInterval> | null = null;
     let keepalive: ReturnType<typeof setInterval> | null = null;
     const closeStream = () => {
       if (closed) return;
       closed = true;
+      if (accessTimer) clearInterval(accessTimer);
       if (keepalive) clearInterval(keepalive);
       unsubscribe();
       try { reply.raw.end(); } catch { /* already closed */ }
     };
+
+    const checkAccess = () => {
+      const currentSession = sessionService?.getById(sessionId, authUser.id);
+      const allowed = !sessionService || Boolean(currentSession && currentSession.status !== "deleted");
+      if (!allowed) closeStream();
+      return allowed;
+    };
+    accessTimer = setInterval(checkAccess, 1_000);
 
     reply.raw.on("close", () => {
       closeStream();
@@ -6527,7 +6679,7 @@ export function registerChatRoutes(
     }, 15_000);
 
     unsubscribe = subscribe(sessionId, snapshotSeq, (event) => {
-      if (closed) return;
+      if (closed || !checkAccess()) return;
       try {
         writeSseChunk(reply, `data: ${JSON.stringify(event)}\n\n`);
         if (event.type === "done" || event.type === "error") {
@@ -6560,7 +6712,7 @@ export function registerChatRoutes(
     const { sessionId } = request.params as { sessionId: string };
     if (sessionService) {
       const session = sessionService.getById(sessionId, authUser.id);
-      if (!session) {
+      if (!session || session.status === "deleted") {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
     }
@@ -6593,14 +6745,24 @@ export function registerChatRoutes(
 
     let closed = false;
     let unsubscribe = () => {};
+    let accessTimer: ReturnType<typeof setInterval> | null = null;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
     const closeStream = () => {
       if (closed) return;
       closed = true;
+      if (accessTimer) clearInterval(accessTimer);
       if (heartbeat) clearInterval(heartbeat);
       unsubscribe();
       try { reply.raw.end(); } catch { /* already closed */ }
     };
+    const checkAccess = () => {
+      const currentSession = sessionService?.getById(sessionId, authUser.id);
+      const allowed = !sessionService || Boolean(currentSession && currentSession.status !== "deleted");
+      if (!allowed) closeStream();
+      return allowed;
+    };
+    accessTimer = setInterval(checkAccess, 1_000);
+
     reply.raw.on("close", () => closeStream());
     request.raw.on("close", () => closeStream());
 
@@ -6641,7 +6803,7 @@ export function registerChatRoutes(
     }, 15_000);
 
     unsubscribe = subscribe(sessionId, 0, (event) => {
-      if (closed) return;
+      if (closed || !checkAccess()) return;
       // Only forward events not already covered by the replay above. The log
       // counter is advanced synchronously at emit time, so a delivered event's
       // counter value is its true log id.
@@ -6668,7 +6830,7 @@ export function registerChatRoutes(
     const { sessionId } = request.params as { sessionId: string };
     if (sessionService) {
       const session = sessionService.getById(sessionId, authUser.id);
-      if (!session) {
+      if (!session || session.status === "deleted") {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
     }
@@ -6680,14 +6842,24 @@ export function registerChatRoutes(
 
     let closed = false;
     let unsubscribe = () => {};
+    let accessTimer: ReturnType<typeof setInterval> | null = null;
     let keepalive: ReturnType<typeof setInterval> | null = null;
     const closeStream = () => {
       if (closed) return;
       closed = true;
+      if (accessTimer) clearInterval(accessTimer);
       if (keepalive) clearInterval(keepalive);
       unsubscribe();
       try { reply.raw.end(); } catch { /* already closed */ }
     };
+    const checkAccess = () => {
+      const currentSession = sessionService?.getById(sessionId, authUser.id);
+      const allowed = !sessionService || Boolean(currentSession && currentSession.status !== "deleted");
+      if (!allowed) closeStream();
+      return allowed;
+    };
+    accessTimer = setInterval(checkAccess, 1_000);
+
     reply.raw.on("close", () => closeStream());
     request.raw.on("close", () => closeStream());
 
@@ -6719,7 +6891,7 @@ export function registerChatRoutes(
     }, 15_000);
 
     unsubscribe = subscribe(sessionId, 0, (event) => {
-      if (closed) return;
+      if (closed || !checkAccess()) return;
       // Only forward events not already covered by the replay above. Events
       // logged before this subscription registered were replayed; the counter
       // is advanced synchronously at emit time, so a delivered event's counter

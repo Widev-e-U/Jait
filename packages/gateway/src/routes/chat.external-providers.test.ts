@@ -15,6 +15,7 @@ import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
 import {
   canUseGatewayProviderForProject,
+  resolveChatProviderNode,
   buildCliProviderSystemPrompt,
   getExternalFileMutationPath,
   getProviderRequestErrorMessage,
@@ -56,6 +57,20 @@ describe("canUseGatewayProviderForProject", () => {
     expect(canUseGatewayProviderForProject("desktop-windows-node")).toBe(false);
     expect(canUseGatewayProviderForProject("gateway")).toBe(true);
     expect(canUseGatewayProviderForProject(null)).toBe(true);
+  });
+});
+
+describe("resolveChatProviderNode", () => {
+  it("keeps project and explicitly selected personal devices ahead of incidental remote surfaces", () => {
+    expect(resolveChatProviderNode("gateway", undefined, "windows-node")).toBe("gateway");
+    expect(resolveChatProviderNode("linux-node", undefined, "windows-node")).toBe("linux-node");
+    expect(resolveChatProviderNode(undefined, "gateway", "windows-node")).toBe("gateway");
+    expect(resolveChatProviderNode(undefined, "linux-node", "windows-node")).toBe("linux-node");
+  });
+
+  it("preserves the remote surface fallback for sessions without an owner", () => {
+    expect(resolveChatProviderNode(undefined, undefined, "windows-node")).toBe("windows-node");
+    expect(resolveChatProviderNode(undefined, undefined, undefined)).toBeUndefined();
   });
 });
 
@@ -343,6 +358,83 @@ async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promis
 }
 
 describe("chat external provider runtime mode selection", () => {
+  it("does not reuse a cached CLI after the authenticated session owner changes", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const first = userService.createUser("first-cli-user", "password123");
+    const second = userService.createUser("second-cli-user", "password123");
+    const session = sessionService.create({ userId: first.id });
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService, providerRegistry });
+    const firstToken = await signAuthToken({ id: first.id, username: first.username }, testConfig.jwtSecret);
+    const secondToken = await signAuthToken({ id: second.id, username: second.username }, testConfig.jwtSecret);
+    try {
+      const send = (token: string, content: string) => app.inject({ method: "POST", url: "/api/chat",
+        headers: { authorization: `Bearer ${token}` }, payload: { sessionId: session.id, content, provider: "codex" } });
+      expect((await send(firstToken, "First")).statusCode).toBe(200);
+      sqlite.prepare("UPDATE sessions SET user_id = ? WHERE id = ?").run(second.id, session.id);
+      expect((await send(secondToken, "Second")).statusCode).toBe(200);
+      expect(provider.stopSession).toHaveBeenCalledTimes(1);
+      expect(provider.startSession).toHaveBeenCalledTimes(2);
+      expect(provider.sendTurn.mock.calls[0]?.[0]).not.toBe(provider.sendTurn.mock.calls[1]?.[0]);
+    } finally { await app.close(); sqlite.close(); }
+  });
+  it("restarts a cached CLI when the selected provider adapter changes", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("adapter-owner", "password123");
+    const session = sessionService.create({ userId: user.id });
+    const providerRegistry = new ProviderRegistry();
+    const oldProvider = new MockChatProvider();
+    const newProvider = new MockChatProvider();
+    providerRegistry.register(oldProvider);
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService, providerRegistry });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    try {
+      const send = (content: string) => app.inject({ method: "POST", url: "/api/chat", headers,
+        payload: { sessionId: session.id, content, provider: "codex" } });
+      expect((await send("First")).statusCode).toBe(200);
+      providerRegistry.register(newProvider);
+      expect((await send("Second")).statusCode).toBe(200);
+      expect(oldProvider.stopSession).toHaveBeenCalled();
+      expect(oldProvider.sendTurn).toHaveBeenCalledTimes(1);
+      expect(newProvider.startSession).toHaveBeenCalledTimes(1);
+      expect(newProvider.sendTurn).toHaveBeenCalledTimes(1);
+    } finally { await app.close(); sqlite.close(); }
+  });
+  it("attributes a user message to the authenticated account, ignoring a claimed author", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("message-author", "password123");
+    const session = sessionService.create({ userId: user.id });
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockChatProvider());
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService, providerRegistry });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/chat", headers,
+        payload: { sessionId: session.id, content: "Hello", provider: "codex", authorUserId: "forged" } });
+      expect(response.statusCode).toBe(200);
+      const row = sqlite.prepare("SELECT author_user_id FROM messages WHERE session_id = ? AND role = 'user'").get(session.id) as { author_user_id: string };
+      expect(row.author_user_id).toBe(user.id);
+      const snapshot = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages`, headers });
+      expect(snapshot.statusCode).toBe(200);
+      expect(snapshot.json().messages.find((message: { role: string }) => message.role === "user").authorUserId).toBe(user.id);
+    } finally { await app.close(); sqlite.close(); }
+  });
   it.each(["error", "paused"] as const)("refreshes a %s goal in reused CLI sessions", async (status) => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -1442,5 +1534,56 @@ it.each([false, true])("keeps remote CLI startup on the selected device (persona
     await app.close();
     sqlite.close();
     for (const spy of spies) spy.mockRestore();
+  }
+});
+
+it("keeps a gateway project on the gateway when Windows surfaces are attached", async () => {
+  const { ProjectService } = await import("../services/projects.js");
+  const { SurfaceRegistry } = await import("../surfaces/registry.js");
+  const { FileSystemSurfaceFactory } = await import("../surfaces/filesystem.js");
+  const { RemoteTerminalSurface } = await import("../surfaces/remote-terminal.js");
+  const { RemoteFileSystemSurface } = await import("../surfaces/remote-filesystem.js");
+  const { RemoteCliProvider } = await import("../providers/remote-cli-provider.js");
+  const { db, sqlite } = await openDatabase(":memory:");
+  migrateDatabase(sqlite);
+  const userService = new UserService(db);
+  const user = userService.createUser("local-project-owner", "password123");
+  const projectService = new ProjectService(db);
+  const project = projectService.create({ userId: user.id, title: "Local", rootPath: process.cwd(), nodeId: "gateway" });
+  const sessionService = new SessionService(db);
+  const session = sessionService.create({ userId: user.id, projectId: project.id, projectPath: process.cwd() });
+  const node = { id: "windows-node", name: "Windows desktop", platform: "windows", clientId: "connected", providers: ["codex"] };
+  const ws = {
+    getFsNodes: () => [node], findNodeByDeviceId: () => node,
+    broadcast: vi.fn(), broadcastToUser: vi.fn(), registerGatewayFsNode: vi.fn(),
+    proxyTerminalOp: vi.fn(async () => ({ pid: 1, shell: "powershell" })),
+  } as unknown as import("../ws.js").WsControlPlane;
+  const surfaces = new SurfaceRegistry();
+  surfaces.register(new FileSystemSurfaceFactory());
+  const terminal = new RemoteTerminalSurface("windows-terminal", ws, node.id);
+  await terminal.start({ sessionId: session.id, projectRoot: "C:\\Users\\jakob" });
+  surfaces.registerInstance(terminal.id, terminal);
+  const remoteFiles = new RemoteFileSystemSurface("windows-files", ws);
+  await remoteFiles.start({ sessionId: session.id, projectRoot: "C:\\Users\\jakob", nodeId: node.id });
+  surfaces.registerInstance(remoteFiles.id, remoteFiles);
+  const provider = new MockChatProvider();
+  const registry = new ProviderRegistry();
+  registry.register(provider);
+  const remoteStart = vi.spyOn(RemoteCliProvider.prototype, "startSession");
+  const app = await createServer(testConfig, { db, sqlite, sessionService, projectService, userService, surfaceRegistry: surfaces, ws, providerRegistry: registry, audit: new AuditWriter(db) });
+  try {
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const prewarm = await app.inject({ method: "POST", url: "/api/chat/prewarm", headers, payload: { sessionId: session.id, provider: "codex" } });
+    expect(prewarm.json().reason).not.toBe("remote-project");
+    expect(provider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: process.cwd() }));
+    const response = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "hello", provider: "codex" } });
+    expect(response.body).toContain('"type":"done"');
+    expect(provider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: process.cwd() }));
+    expect(remoteStart).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+    sqlite.close();
+    remoteStart.mockRestore();
   }
 });

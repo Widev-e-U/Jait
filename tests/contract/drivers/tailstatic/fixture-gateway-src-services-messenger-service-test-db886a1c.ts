@@ -83,13 +83,12 @@ await (async()=>{
       restored.start = vi.fn(async (session: unknown) => { restored.session = session; });
       await restarted.resume('owner');
       __jait_capture(0, (restored.assistantAccess));
-      await restored.command({ action: 'assistantAccess', enabled: true });
-      __jait_capture(1, (restored.assistantAccess));
+      await restored.command({ action: 'assistantAccess', enabled: false });
       const next = new MessengerService('test-secret', directory);
       const nextConnection = (next as any).connection('owner');
       nextConnection.start = vi.fn(async (session: unknown) => { nextConnection.session = session; });
       await next.resume('owner');
-      __jait_capture(2, (nextConnection.assistantAccess));
+      __jait_capture(1, (nextConnection.assistantAccess));
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -103,7 +102,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_55_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_54_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -146,7 +145,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_71_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_70_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -190,7 +189,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_91_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_90_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -235,7 +234,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_110_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_109_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -282,7 +281,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_131_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_130_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -315,7 +314,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_137_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_136_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -353,7 +352,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_148_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_147_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -391,7 +390,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_159_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_158_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -424,7 +423,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_165_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_164_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -458,7 +457,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_172_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_171_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -492,7 +491,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_179_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_178_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -528,7 +527,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_188_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_187_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -564,7 +563,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_197_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_196_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -603,7 +602,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_209_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_208_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -655,7 +654,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_234_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_233_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -691,7 +690,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_243_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_242_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -727,7 +726,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_252_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_251_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -761,7 +760,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_262_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_261_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -803,7 +802,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_277_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_276_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -838,7 +837,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_288_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_287_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -870,7 +869,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_294_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_293_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -901,7 +900,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_299_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_298_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -932,7 +931,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_304_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_303_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -962,7 +961,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_308_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_307_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -995,7 +994,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_315_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_314_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1026,7 +1025,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_323_3_each0": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each0": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1084,7 +1083,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_323_3_each1": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_322_3_each1": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1142,7 +1141,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_356_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_355_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1177,7 +1176,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_364_3_each0": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_363_3_each0": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1231,7 +1230,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_364_3_each1": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_363_3_each1": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1285,7 +1284,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_388_3_each0": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_387_3_each0": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1326,7 +1325,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_388_3_each1": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_387_3_each1": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1367,7 +1366,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_388_3_each2": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_387_3_each2": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1408,7 +1407,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_388_3_each3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_387_3_each3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1449,7 +1448,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_403_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_402_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1528,7 +1527,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_456_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_455_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {
@@ -1567,7 +1566,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_469_3": {
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_468_3": {
 
 const { encryptAttachment } = await import((typeof Bun!=="undefined"?Bun.resolveSync("matrix-encrypt-attachment", __jait_original_dir):__jait_require.resolve("matrix-encrypt-attachment")));
 function setup() {

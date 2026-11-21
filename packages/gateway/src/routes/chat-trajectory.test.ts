@@ -91,7 +91,7 @@ async function collectEvents(
   return { chunks, abort: () => controller.abort() };
 }
 
-async function setup(): Promise<{ sessionId: string; token: string; url: string }> {
+async function setup(): Promise<{ sessionId: string; token: string; url: string; sessionService: SessionService; userId: string }> {
   const { db, sqlite } = await openDatabase(":memory:");
   migrateDatabase(sqlite);
   const sessionService = new SessionService(db);
@@ -104,7 +104,7 @@ async function setup(): Promise<{ sessionId: string; token: string; url: string 
   const address = app.server.address() as AddressInfo;
   const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
   const url = `http://127.0.0.1:${address.port}/api/sessions/${session.id}/trajectory`;
-  return { sessionId: session.id, token, url };
+  return { sessionId: session.id, token, url, sessionService, userId: user.id };
 }
 
 describe("session trajectory endpoint", () => {
@@ -134,6 +134,28 @@ describe("session trajectory endpoint", () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it.each(["trajectory", "events"])("closes the %s stream after the session is deleted even when idle", async (endpoint) => {
+    const { sessionId, token, url, sessionService, userId } = await setup();
+    seedTurn(sessionId);
+    const response = await fetch(url.replace(/trajectory$/, endpoint), {
+      headers: { authorization: `Bearer ${token}`, "last-event-id": "0" },
+    });
+    expect(response.status).toBe(200);
+    const reader = response.body!.getReader();
+    expect((await reader.read()).done).toBe(false);
+    sessionService.delete(sessionId, userId);
+    const deadline = Date.now() + 4_000;
+    let closed = false;
+    while (Date.now() < deadline) {
+      const result = await Promise.race([
+        reader.read(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("stream did not close")), 4_000)),
+      ]);
+      if (result.done) { closed = true; break; }
+    }
+    expect(closed).toBe(true);
   });
 
   it("replays the persisted event log then streams live events in log_id order", async () => {

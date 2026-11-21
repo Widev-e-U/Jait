@@ -37,11 +37,18 @@ export const projects = sqliteTable(
   ],
 );
 
+export const projectMembers = sqliteTable("project_members", {
+  projectId: text("project_id").notNull(),
+  userId: text("user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.projectId, table.userId] }), index("idx_project_members_user").on(table.userId)]);
+
 // ─── Sessions ────────────────────────────────────────────────────────
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(), // UUIDv7
   userId: text("user_id"),
   projectId: text("project_id"),
+  sharedWithProject: integer("shared_with_project", { mode: "boolean" }).notNull().default(false),
   name: text("name"),
   projectPath: text("project_path"),
   createdAt: text("created_at").notNull(),
@@ -348,6 +355,7 @@ export const messages = sqliteTable(
     toolCalls: text("tool_calls"), // JSON array of executed tool calls (nullable)
     segments: text("segments"), // JSON array of MessageSegment for interleaved rendering (nullable)
     persona: text("persona"), // JSON server-owned identity snapshot for this turn
+    authorUserId: text("author_user_id"), // Authenticated author of a user message
     contextFlow: text("context_flow"), // JSON snapshot of outbound LLM context for this assistant response
     thinking: text("thinking"), // Chain-of-thought / reasoning content (nullable)
     createdAt: text("created_at").notNull(),

@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { resolveCallNodeTarget } from "./remote-executor.js";
 
 describe("resolveCallNodeTarget", () => {
+  it.each(["node-windows", "gateway"])("preserves project.move destination %s", (nodeId) => {
+    const input = { projectId: "project-1", nodeId, rootPath: "C:\\project" };
+    expect(resolveCallNodeTarget("project.move", input)).toEqual({
+      nodeId: null,
+      forcesLocal: false,
+      input,
+    });
+  });
+
   it("leaves ordinary calls untouched", () => {
     const input = { command: "pwd" };
     expect(resolveCallNodeTarget("terminal.run", input)).toEqual({

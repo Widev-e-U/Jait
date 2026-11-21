@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
-import { sessions, projects } from "../db/schema.js";
+import { sessions, projects, projectMembers, users } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import {
   getProjectAncestors,
@@ -121,15 +121,22 @@ export class ProjectService {
     return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
   }
 
+  listAccessible(status: string, userId: string, limit?: number) {
+    const query = this.db.select().from(projects).where(and(eq(projects.status, status),
+      or(eq(projects.userId, userId), inArray(projects.id, this.db.select({ id: projectMembers.projectId })
+        .from(projectMembers).where(eq(projectMembers.userId, userId)))))).orderBy(desc(projects.lastActiveAt));
+    return limit ? query.limit(limit).all() : query.all();
+  }
+
   listWithSessions(userId?: string, status = "active", limit?: number) {
-    const projectRows = this.list(status, userId, typeof limit === "number" ? limit + 1 : undefined);
+    const projectRows = userId ? this.listAccessible(status, userId, typeof limit === "number" ? limit + 1 : undefined) : this.list(status, userId, typeof limit === "number" ? limit + 1 : undefined);
     let limitedRows = typeof limit === "number" ? projectRows.slice(0, limit) : projectRows;
 
     // Paging cuts the flat list by recency, which can slice a child away from
     // its parent. Pull any missing ancestors back in so the client always
     // receives a connected tree instead of orphans floating at the root.
     if (typeof limit === "number" && limitedRows.length > 0) {
-      const all = this.list(status, userId);
+      const all = userId ? this.listAccessible(status, userId) : this.list(status, userId);
       const byId = new Map(all.map((row) => [row.id, row]));
       const included = new Map(limitedRows.map((row) => [row.id, row]));
       for (const row of limitedRows) {
@@ -157,7 +164,7 @@ export class ProjectService {
             and(
               inArray(sessions.projectId, projectIds),
               eq(sessions.status, "active"),
-              userId ? eq(sessions.userId, userId) : sql`1 = 1`,
+              userId ? or(eq(sessions.userId, userId), eq(sessions.sharedWithProject, true)) : sql`1 = 1`,
             ),
           )
           .orderBy(desc(sessions.lastActiveAt))
@@ -173,7 +180,8 @@ export class ProjectService {
     return {
       projects: limitedRows.map((project) => ({
         ...project,
-        sessions: sessionMap.get(project.id) ?? [],
+        canManageProject: project.userId === userId,
+        sessions: (sessionMap.get(project.id) ?? []).map(session => ({ ...session, canManageShare: session.userId === userId })),
       })),
       hasMore: typeof limit === "number" ? projectRows.length > limit : false,
     };
@@ -183,15 +191,17 @@ export class ProjectService {
     const query = rawQuery.trim().toLowerCase();
     if (!query) return { projects: [], personalSessions: [] };
 
-    const projectRows = this.list("active", userId);
+    const projectRows = this.listAccessible("active", userId);
     const sessionRows = this.db
       .select()
       .from(sessions)
-      .where(and(eq(sessions.status, "active"), eq(sessions.userId, userId)))
+      .where(and(eq(sessions.status, "active"), or(eq(sessions.userId, userId), eq(sessions.sharedWithProject, true))))
       .orderBy(desc(sessions.lastActiveAt))
       .all();
+    const accessibleProjectIds = new Set(projectRows.map(project => project.id));
 
     const matchingSessions = sessionRows.filter((session) => (
+      (session.userId === userId || (!!session.projectId && accessibleProjectIds.has(session.projectId))) &&
       [session.name, session.projectPath]
         .some((value) => value?.toLowerCase().includes(query))
     ));
@@ -216,10 +226,74 @@ export class ProjectService {
         ))
         .map((project) => ({
           ...project,
-          sessions: sessionsByProject.get(project.id) ?? [],
+          canManageProject: project.userId === userId,
+          sessions: (sessionsByProject.get(project.id) ?? []).map(session => ({ ...session, canManageShare: session.userId === userId })),
         })),
       personalSessions,
     };
+  }
+
+  canAccessSession(sessionId: string, userId: string): boolean {
+    const session = this.db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
+    if (!session || session.status === "deleted") return false;
+    if (session.userId === userId) return true;
+    return !!session.sharedWithProject && !!session.projectId && this.isMember(session.projectId, userId);
+  }
+
+  listVisibleSessions(projectId: string, userId: string, status = "active") {
+    if (!this.getById(projectId, userId) && !this.isMember(projectId, userId)) return [];
+    return this.db.select().from(sessions).where(and(
+      eq(sessions.projectId, projectId), eq(sessions.status, status),
+      or(eq(sessions.userId, userId), eq(sessions.sharedWithProject, true)),
+    )).orderBy(desc(sessions.lastActiveAt)).all().map(session => ({
+      ...session, canManageShare: session.userId === userId,
+    }));
+  }
+
+  setSessionSharing(sessionId: string, userId: string, shared: boolean): boolean {
+    const session = this.db.select().from(sessions).where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId))).get();
+    if (!session || session.status === "deleted" || !session.projectId || !this.isMember(session.projectId, userId)) return false;
+    this.db.update(sessions).set({ sharedWithProject: shared }).where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId))).run();
+    return true;
+  }
+
+  isMember(projectId: string, userId: string): boolean {
+    const project = this.getById(projectId);
+    if (!project || project.status !== "active") return false;
+    return project.userId === userId || !!this.db.select().from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))).get();
+  }
+
+  getAccessibleById(projectId: string, userId: string) {
+    return this.getById(projectId, userId) ?? (this.isMember(projectId, userId) ? this.getById(projectId) : undefined);
+  }
+
+  listMemberUserIds(projectId: string): string[] {
+    const project = this.getById(projectId);
+    if (!project || project.status !== "active") return [];
+    return [project.userId, ...this.db.select({ userId: projectMembers.userId }).from(projectMembers)
+      .where(eq(projectMembers.projectId, projectId)).all().map(row => row.userId)].filter((id): id is string => !!id);
+  }
+
+  listMembers(projectId: string) {
+    const ids = this.listMemberUserIds(projectId);
+    if (!ids.length) return [];
+    const owner = this.getById(projectId)?.userId;
+    return this.db.select({ userId: users.id, username: users.username }).from(users)
+      .where(inArray(users.id, ids)).all().map(user => ({ ...user, displayName: user.username, role: user.userId === owner ? "owner" : "member" }));
+  }
+
+  addMember(projectId: string, username: string): boolean {
+    const user = this.db.select({ id: users.id }).from(users).where(eq(users.username, username)).get();
+    if (!user) return false;
+    if (this.getById(projectId)?.userId !== user.id) {
+      this.db.insert(projectMembers).values({ projectId, userId: user.id, createdAt: new Date().toISOString() }).onConflictDoNothing().run();
+    }
+    return true;
+  }
+
+  removeMember(projectId: string, userId: string) {
+    this.db.delete(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))).run();
   }
 
   getById(id: string, userId?: string) {

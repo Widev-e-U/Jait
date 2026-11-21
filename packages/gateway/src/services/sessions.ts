@@ -361,6 +361,7 @@ export class SessionService {
    * the project it just left.
    */
   moveToProject(id: string, projectId: string | null, projectPath: string | null, userId?: string) {
+    this.db.update(sessions).set({ sharedWithProject: false }).where(userId ? and(eq(sessions.id, id), eq(sessions.userId, userId)) : eq(sessions.id, id)).run();
     this.update(id, { projectId, projectPath }, userId);
     return this.getById(id, userId);
   }

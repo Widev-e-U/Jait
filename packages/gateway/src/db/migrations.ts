@@ -1777,4 +1777,18 @@ export const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_orchestration_attempts_run ON orchestration_attempts(run_id)");
     },
   },
+  {
+    id: 80, name: "project_members_and_shared_chats",
+    run(db) {
+      db.exec("CREATE TABLE IF NOT EXISTS project_members (project_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (project_id, user_id))");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id)");
+      db.exec("ALTER TABLE sessions ADD COLUMN shared_with_project INTEGER NOT NULL DEFAULT 0");
+    },
+  },
+  {
+    id: 81, name: "chat_message_author",
+    run(db) {
+      db.exec("ALTER TABLE messages ADD COLUMN author_user_id TEXT");
+    },
+  },
 ];

@@ -150,11 +150,22 @@ export function registerSessionRoutes(
     const { id } = request.params as { id: string };
     // Skip the /:sessionId/messages route (handled by chat.ts)
     if (id === "messages") return reply.callNotFound();
-    const session = sessionService.getById(id, authUser.id);
-    if (!session) {
+    const session = sessionService.getById(id);
+    if (!session || !(session.userId === authUser.id || projectService?.canAccessSession(id, authUser.id))) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
-    return session;
+    return { ...session, canManageShare: session.userId === authUser.id && !!session.projectId && !!projectService?.isMember(session.projectId, authUser.id) };
+  });
+
+  // Sharing is explicit and controlled by the chat owner.
+  app.patch("/api/sessions/:id/share", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (typeof body["sharedWithProject"] !== "boolean") return reply.status(400).send({ error: "VALIDATION_ERROR" });
+    if (!projectService?.setSessionSharing(id, authUser.id, body["sharedWithProject"])) return reply.status(404).send({ error: "NOT_FOUND" });
+    return { sharedWithProject: body["sharedWithProject"] };
   });
 
   // Update session

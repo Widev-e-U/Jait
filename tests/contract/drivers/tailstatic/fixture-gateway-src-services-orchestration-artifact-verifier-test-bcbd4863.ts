@@ -56,7 +56,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -66,7 +66,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -74,7 +74,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 /*__jait_scope_open__*/{
@@ -88,7 +88,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 }
@@ -106,7 +106,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -116,7 +116,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -124,7 +124,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 /*__jait_scope_open__*/{
@@ -138,7 +138,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 }
@@ -156,7 +156,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -166,7 +166,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -174,7 +174,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 /*__jait_scope_open__*/{
@@ -188,7 +188,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 }
@@ -206,7 +206,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -216,7 +216,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -224,7 +224,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 /*__jait_scope_open__*/{
@@ -238,7 +238,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 }
@@ -256,7 +256,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -266,7 +266,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -274,7 +274,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 /*__jait_scope_open__*/{
@@ -288,7 +288,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 }
@@ -306,7 +306,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -316,7 +316,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -324,7 +324,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 /*__jait_scope_open__*/{
@@ -338,7 +338,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 }
@@ -356,7 +356,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -366,7 +366,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -374,7 +374,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 /*__jait_scope_open__*/{
@@ -388,7 +388,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 }
@@ -406,7 +406,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -416,7 +416,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -424,7 +424,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 await __jait_hook_698();
@@ -439,7 +439,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 
@@ -456,7 +456,7 @@ const getById = vi.fn((id: string) => id === repository.id ? repository : undefi
 const verifier = createArtifactVerifier({ getById });
 function verify(path: string, overrides: Partial<VerificationRunInput> = {}) {
     return verifier.run({
-      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt",
+      userId: "owner", repoId: "repo", runId: "run", taskId: "task", attemptId: "attempt", workspacePath: null,
       check: { kind: "artifact", path }, signal: new AbortController().signal, ...overrides,
     });
   }
@@ -466,7 +466,7 @@ const __jait_hook_698 = async () => {
     const localPath = join(fixture, "repo");
     repository = {
       id: "repo", userId: "owner", deviceId: null, name: "repo", localPath,
-      defaultBranch: "main", githubUrl: null, createdAt: "", updatedAt: "",
+      defaultBranch: "main", githubUrl: null, strategy: null, createdAt: "", updatedAt: "",
     };
     await mkdir(localPath);
     await writeFile(join(localPath, "result.txt"), "result");
@@ -474,7 +474,7 @@ const __jait_hook_698 = async () => {
     await symlink(join(fixture, "outside.txt"), join(localPath, "escape.txt"));
     await symlink(join(localPath, "result.txt"), join(localPath, "alias.txt"));
   };
-const __jait_hook_1392 = async () => {
+const __jait_hook_1408 = async () => {
     await rm(fixture, { recursive: true, force: true });
   };
 await __jait_hook_698();
@@ -487,7 +487,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1392();
+await __jait_hook_1408();
 }
 }
 

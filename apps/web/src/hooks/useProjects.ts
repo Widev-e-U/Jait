@@ -22,9 +22,12 @@ export interface ProjectSession {
   lastActiveAt: string
   viewedAt: string | null
   metadata: string | null
+  sharedWithProject?: boolean
+  canManageShare?: boolean
 }
 
 export interface ProjectRecord {
+  canManageProject?: boolean
   id: string
   title: string | null
   rootPath: string | null

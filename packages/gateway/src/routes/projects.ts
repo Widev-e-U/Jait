@@ -301,7 +301,7 @@ export function registerProjectEntityRoutes(
     const projectId = typeof body["projectId"] === "string" ? body["projectId"] : null;
     const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : null;
     if (projectId) {
-      const project = projectService.getById(projectId, authUser.id);
+      const project = projectService.getAccessibleById(projectId, authUser.id);
       if (!project) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
       }
@@ -310,17 +310,51 @@ export function registerProjectEntityRoutes(
     return { ok: true };
   });
 
-  app.get("/api/projects/:id", async (request, reply) => {
+  app.get("/api/projects/:id/members", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const project = projectService.getAccessibleById(id, authUser.id);
+    if (!project) return reply.status(404).send({ error: "NOT_FOUND" });
+    return { members: projectService.listMembers(id), canManage: project.userId === authUser.id };
+  });
+
+  app.post("/api/projects/:id/members", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
     const project = projectService.getById(id, authUser.id);
+    if (!project || project.status !== "active") return reply.status(404).send({ error: "NOT_FOUND" });
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (typeof body["username"] !== "string" || !body["username"].trim() || body["username"].length > 200)
+      return reply.status(400).send({ error: "INVALID_USERNAME" });
+    if (!projectService.addMember(id, body["username"].trim())) return reply.status(404).send({ error: "USER_NOT_FOUND" });
+    return { members: projectService.listMembers(id), canManage: true };
+  });
+
+  app.delete("/api/projects/:id/members/:userId", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id, userId } = request.params as { id: string; userId: string };
+    const project = projectService.getById(id, authUser.id);
+    if (!project || project.status !== "active") return reply.status(404).send({ error: "NOT_FOUND" });
+    if (userId === authUser.id) return reply.status(400).send({ error: "CANNOT_REMOVE_OWNER" });
+    projectService.removeMember(id, userId);
+    return reply.status(204).send();
+  });
+
+  app.get("/api/projects/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const project = projectService.getAccessibleById(id, authUser.id);
     if (!project) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
     }
     return withProjectStatus({
       ...project,
-      sessions: sessionService.listByProject(id, "active", authUser.id),
+      canManageProject: project.userId === authUser.id,
+      sessions: projectService.listVisibleSessions(id, authUser.id),
     });
   });
 
@@ -509,13 +543,13 @@ export function registerProjectEntityRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const project = projectService.getById(id, authUser.id);
+    const project = projectService.getAccessibleById(id, authUser.id);
     if (!project) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
     }
     const query = request.query as Record<string, unknown>;
     const status = typeof query["status"] === "string" ? query["status"] : "active";
-    return { sessions: sessionService.listByProject(id, status, authUser.id) };
+    return { sessions: projectService.listVisibleSessions(id, authUser.id, status) };
   });
 
   app.post("/api/projects/:id/sessions", async (request, reply) => {

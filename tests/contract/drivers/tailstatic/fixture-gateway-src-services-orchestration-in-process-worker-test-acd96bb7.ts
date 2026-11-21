@@ -51,12 +51,12 @@ case "tailstatic_packages_gateway_src_services_orchestration_in_process_worker_t
 const request: SubAgentRunRequest = {
   userId: "workflow-owner", runId: "run", taskId: "task", attemptId: "attempt",
   prompt: "Summarize the supplied dependency result.", timeoutMs: 1000,
-  claims: { reads: [], writes: [] }, signal: new AbortController().signal,
+  claims: { reads: [], writes: [] }, worker: { kind: "jait" }, workspace: null, signal: new AbortController().signal,
 };
 function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) {
   const execute = vi.fn();
   const registry = new ToolRegistry();
-  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: {}, execute });
+  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: { type: "object", properties: {} }, execute });
   const settings = {
     chatProvider: "jait", jaitBackend: "openai", selectedModel: "fixture-model",
     apiKeys: { OPENAI_API_KEY: "owner-key", OPENAI_BASE_URL: "https://fixture.example.test/v1" },
@@ -66,7 +66,7 @@ function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) 
   const worker = createInProcessWorkflowWorker(loadConfig(), { getSettings }, registry);
   return { worker, getSettings, execute };
 }
-const __jait_hook_1321 = () => vi.unstubAllGlobals();
+const __jait_hook_1396 = () => vi.unstubAllGlobals();
 /*__jait_scope_open__*/{
 
 try {
@@ -97,7 +97,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1321();
+await __jait_hook_1396();
 }
 }
 
@@ -109,12 +109,12 @@ case "tailstatic_packages_gateway_src_services_orchestration_in_process_worker_t
 const request: SubAgentRunRequest = {
   userId: "workflow-owner", runId: "run", taskId: "task", attemptId: "attempt",
   prompt: "Summarize the supplied dependency result.", timeoutMs: 1000,
-  claims: { reads: [], writes: [] }, signal: new AbortController().signal,
+  claims: { reads: [], writes: [] }, worker: { kind: "jait" }, workspace: null, signal: new AbortController().signal,
 };
 function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) {
   const execute = vi.fn();
   const registry = new ToolRegistry();
-  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: {}, execute });
+  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: { type: "object", properties: {} }, execute });
   const settings = {
     chatProvider: "jait", jaitBackend: "openai", selectedModel: "fixture-model",
     apiKeys: { OPENAI_API_KEY: "owner-key", OPENAI_BASE_URL: "https://fixture.example.test/v1" },
@@ -124,7 +124,7 @@ function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) 
   const worker = createInProcessWorkflowWorker(loadConfig(), { getSettings }, registry);
   return { worker, getSettings, execute };
 }
-const __jait_hook_1321 = () => vi.unstubAllGlobals();
+const __jait_hook_1396 = () => vi.unstubAllGlobals();
 /*__jait_scope_open__*/{
 
 try {
@@ -140,7 +140,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1321();
+await __jait_hook_1396();
 }
 }
 
@@ -152,12 +152,12 @@ case "tailstatic_packages_gateway_src_services_orchestration_in_process_worker_t
 const request: SubAgentRunRequest = {
   userId: "workflow-owner", runId: "run", taskId: "task", attemptId: "attempt",
   prompt: "Summarize the supplied dependency result.", timeoutMs: 1000,
-  claims: { reads: [], writes: [] }, signal: new AbortController().signal,
+  claims: { reads: [], writes: [] }, worker: { kind: "jait" }, workspace: null, signal: new AbortController().signal,
 };
 function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) {
   const execute = vi.fn();
   const registry = new ToolRegistry();
-  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: {}, execute });
+  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: { type: "object", properties: {} }, execute });
   const settings = {
     chatProvider: "jait", jaitBackend: "openai", selectedModel: "fixture-model",
     apiKeys: { OPENAI_API_KEY: "owner-key", OPENAI_BASE_URL: "https://fixture.example.test/v1" },
@@ -167,7 +167,7 @@ function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) 
   const worker = createInProcessWorkflowWorker(loadConfig(), { getSettings }, registry);
   return { worker, getSettings, execute };
 }
-const __jait_hook_1321 = () => vi.unstubAllGlobals();
+const __jait_hook_1396 = () => vi.unstubAllGlobals();
 /*__jait_scope_open__*/{
 
 try {
@@ -185,7 +185,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1321();
+await __jait_hook_1396();
 }
 }
 
@@ -197,12 +197,12 @@ case "tailstatic_packages_gateway_src_services_orchestration_in_process_worker_t
 const request: SubAgentRunRequest = {
   userId: "workflow-owner", runId: "run", taskId: "task", attemptId: "attempt",
   prompt: "Summarize the supplied dependency result.", timeoutMs: 1000,
-  claims: { reads: [], writes: [] }, signal: new AbortController().signal,
+  claims: { reads: [], writes: [] }, worker: { kind: "jait" }, workspace: null, signal: new AbortController().signal,
 };
 function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) {
   const execute = vi.fn();
   const registry = new ToolRegistry();
-  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: {}, execute });
+  registry.register({ name: "fixture.write", description: "Write a fixture", parameters: { type: "object", properties: {} }, execute });
   const settings = {
     chatProvider: "jait", jaitBackend: "openai", selectedModel: "fixture-model",
     apiKeys: { OPENAI_API_KEY: "owner-key", OPENAI_BASE_URL: "https://fixture.example.test/v1" },
@@ -212,7 +212,7 @@ function setup(overrides: Partial<ReturnType<UserService["getSettings"]>> = {}) 
   const worker = createInProcessWorkflowWorker(loadConfig(), { getSettings }, registry);
   return { worker, getSettings, execute };
 }
-const __jait_hook_1321 = () => vi.unstubAllGlobals();
+const __jait_hook_1396 = () => vi.unstubAllGlobals();
 /*__jait_scope_open__*/{
 
 try {
@@ -237,7 +237,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1321();
+await __jait_hook_1396();
 }
 }
 

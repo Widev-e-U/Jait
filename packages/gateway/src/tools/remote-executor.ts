@@ -106,6 +106,9 @@ export type CallNodeTarget = {
  * silently executed locally, so a typo cannot look like a successful remote run.
  */
 export function resolveCallNodeTarget(toolName: string, input: unknown): CallNodeTarget {
+  // project.move uses nodeId as its destination, not as an execution target.
+  if (toolName === "project.move") return { nodeId: null, forcesLocal: false, input };
+
   const raw = input && typeof input === "object" && !Array.isArray(input)
     ? (input as { nodeId?: unknown }).nodeId
     : undefined;

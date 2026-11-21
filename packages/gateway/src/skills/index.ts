@@ -10,9 +10,8 @@ import { getStateDirectory } from "../state-directory.js";
  * Compatible with OpenClaw skill format.
  */
 
-import { readdir, readFile, stat } from "node:fs/promises";
 import { join, basename, delimiter } from "node:path";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, readdirSync, readFileSync, statSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 
 /* ------------------------------------------------------------------ */
@@ -166,31 +165,22 @@ export function parseFrontmatter(content: string): SkillFrontmatter {
 /*  Discovery — scan a directory for SKILL.md files                    */
 /* ------------------------------------------------------------------ */
 
-async function scanSkillDir(
-  dir: string,
-  source: Skill["source"],
-): Promise<Skill[]> {
+/** Synchronous so the live registry can rescan inside its sync read methods. */
+function scanSkillDirSync(dir: string, source: Skill["source"]): Skill[] {
   const skills: Skill[] = [];
   let entries: string[];
   try {
-    entries = await readdir(dir);
+    entries = readdirSync(dir);
   } catch {
     return skills;
   }
-
   for (const entry of entries) {
     const skillDir = join(dir, entry);
-    const dirStat = await stat(skillDir).catch(() => null);
-    if (!dirStat?.isDirectory()) continue;
-
-    const skillPath = join(skillDir, "SKILL.md");
     try {
-      const content = await readFile(skillPath, "utf-8");
-      const fm = parseFrontmatter(content);
-
-      // Require at least a name and description
+      if (!statSync(skillDir).isDirectory()) continue;
+      const skillPath = join(skillDir, "SKILL.md");
+      const fm = parseFrontmatter(readFileSync(skillPath, "utf-8"));
       if (!fm.name || !fm.description) continue;
-
       skills.push({
         id: basename(skillDir),
         name: fm.name,
@@ -202,7 +192,7 @@ async function scanSkillDir(
         ...(fm.install ? { install: fm.install } : {}),
       });
     } catch {
-      // No SKILL.md — skip
+      // No SKILL.md or unreadable — skip
     }
   }
   return skills;
@@ -281,26 +271,66 @@ export function checkSkillTools(skill: Skill): SkillToolStatus {
 /*  Skill Registry (in-memory)                                         */
 /* ------------------------------------------------------------------ */
 
+/** Minimum time between automatic rescans of the skill directories. */
+export const SKILL_RESCAN_INTERVAL_MS = 2000;
+
+/**
+ * The registry is live: every read first rescans the known skill directories when the last scan
+ * is older than {@link SKILL_RESCAN_INTERVAL_MS}, so a skill dropped into a skills folder (or
+ * edited or deleted) is picked up without a gateway restart. Explicit enable/disable choices
+ * survive rescans, and skills registered via {@link add} (e.g. plugins) are kept.
+ */
 export class SkillRegistry {
   private skills = new Map<string, Skill>();
+  private dirs: { path: string; source: Skill["source"] }[] = [];
+  private added = new Map<string, Skill>();
+  private enabledOverrides = new Map<string, boolean>();
+  private lastScan = 0;
 
-  /** Discover skills from multiple directories. Later sources override earlier. */
+  /** Discover skills from multiple directories and remember them for later rescans. */
   async discover(dirs: { path: string; source: Skill["source"] }[]): Promise<void> {
-    for (const { path, source } of dirs) {
-      const found = await scanSkillDir(path, source);
-      for (const skill of found) {
-        this.skills.set(skill.id, skill);
+    for (const dir of dirs) {
+      if (!this.dirs.some((known) => known.path === dir.path && known.source === dir.source)) {
+        this.dirs.push({ ...dir });
       }
+    }
+    this.rescan();
+  }
+
+  /** Rescan every known directory now. Later sources override earlier. */
+  rescan(): void {
+    const next = new Map<string, Skill>();
+    for (const { path, source } of this.dirs) {
+      for (const skill of scanSkillDirSync(path, source)) next.set(skill.id, skill);
+    }
+    for (const skill of this.added.values()) next.set(skill.id, skill);
+    for (const skill of next.values()) {
+      const override = this.enabledOverrides.get(skill.id);
+      if (override !== undefined) skill.enabled = override;
+    }
+    this.skills = next;
+    this.lastScan = Date.now();
+  }
+
+  private refreshIfStale(): void {
+    if (this.dirs.length === 0) return;
+    if (Date.now() - this.lastScan < SKILL_RESCAN_INTERVAL_MS) return;
+    try {
+      this.rescan();
+    } catch {
+      this.lastScan = Date.now(); // keep serving the last snapshot
     }
   }
 
   /** Add a single skill (e.g., from a plugin). */
   add(skill: Skill): void {
+    this.added.set(skill.id, skill);
     this.skills.set(skill.id, skill);
   }
 
   /** List all discovered skills. */
   list(): Skill[] {
+    this.refreshIfStale();
     return [...this.skills.values()];
   }
 
@@ -311,30 +341,37 @@ export class SkillRegistry {
 
   /** Get a specific skill. */
   get(id: string): Skill | undefined {
+    this.refreshIfStale();
     return this.skills.get(id);
   }
 
   /** Remove a skill from the registry (e.g., after uninstall). */
   remove(id: string): void {
     this.skills.delete(id);
+    this.added.delete(id);
+    this.enabledOverrides.delete(id);
   }
 
   /** Enable/disable a skill. */
   setEnabled(id: string, enabled: boolean): void {
-    const skill = this.skills.get(id);
-    if (skill) skill.enabled = enabled;
+    const skill = this.get(id);
+    if (!skill) return;
+    skill.enabled = enabled;
+    this.enabledOverrides.set(id, enabled);
   }
 
   /** Apply an allow-list of enabled skill ids (disable everything else). */
   applyAllowList(enabledIds: string[]): void {
     const allowed = new Set(enabledIds);
-    for (const skill of this.skills.values()) {
+    for (const skill of this.list()) {
       skill.enabled = allowed.has(skill.id);
+      this.enabledOverrides.set(skill.id, skill.enabled);
     }
   }
 
   /** Get the count. */
   get size(): number {
+    this.refreshIfStale();
     return this.skills.size;
   }
 }

@@ -369,6 +369,7 @@ describe("SessionSqlService", () => {
         "metadata",
         "project_id",
         "viewed_at",
+        "shared_with_project",
       ]);
       expect(sessions?.columns.find((column) => column.name === "created_at")?.type).toBe("TEXT");
       // Blocked tables are named but not described.

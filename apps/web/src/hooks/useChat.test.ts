@@ -9,6 +9,7 @@ import {
   getVisibleChangedFiles,
   isTurnEndEvent,
   isTurnStartEvent,
+  mapSnapshotMessages,
   parseQueuedChatResponse,
   planTurnStartMessage,
   reconcileQueuedMessagesAtTurnStart,
@@ -19,6 +20,17 @@ import {
   WAKE_RESUME_STALE_MS,
 } from '@/hooks/useChat'
 import type { MessageStreamSnapshot } from '@/lib/message-stream'
+
+describe('mapSnapshotMessages', () => {
+  it('preserves authenticated authors while leaving older messages unattributed', () => {
+    const messages = mapSnapshotMessages([
+      { id: 'new', role: 'user', content: 'Hello', authorUserId: 'user-1' },
+      { id: 'old', role: 'user', content: 'Earlier' },
+    ], false)
+    expect(messages[0]?.authorUserId).toBe('user-1')
+    expect(messages[1]?.authorUserId).toBeUndefined()
+  })
+})
 
 describe('formatChatHttpError', () => {
   it('explains Codex image uploads that hit the gateway body limit', () => {

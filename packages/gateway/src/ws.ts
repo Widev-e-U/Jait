@@ -1365,7 +1365,8 @@ export class WsControlPlane {
   /** Broadcast an event to all clients subscribed to a session */
   broadcast(sessionId: string, event: WsEvent) {
     for (const client of this.clients.values()) {
-      if (this.hasAuthority(client) && client.sessionId === sessionId && client.ws.readyState === 1) {
+      if (this.hasAuthority(client) && client.sessionId === sessionId && client.ws.readyState === 1
+          && (!this.canAccessSession || this.canAccessSession(sessionId, client.userId))) {
         this.send(client.ws, event);
       }
     }
@@ -1455,7 +1456,8 @@ export class WsControlPlane {
   broadcastExcluding(sessionId: string, excludeClientId: string, event: WsEvent) {
     for (const client of this.clients.values()) {
       if (client.id === excludeClientId) continue;
-      if (this.hasAuthority(client) && client.sessionId === sessionId && client.ws.readyState === 1) {
+      if (this.hasAuthority(client) && client.sessionId === sessionId && client.ws.readyState === 1
+          && (!this.canAccessSession || this.canAccessSession(sessionId, client.userId))) {
         this.send(client.ws, event);
       }
     }

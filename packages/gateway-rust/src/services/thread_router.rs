@@ -118,7 +118,57 @@ fn skill_words(text: &str) -> HashSet<String> {
         .filter(|w| w.len() > 2 && !DATA.generic.contains(w))
         .collect()
 }
+/// Minimum keyword score for routing recommendations.
+pub const MIN_AUTO_SKILL_SCORE: usize = 2;
+/// Stricter keyword score for loading a skill into a chat turn when System One is unavailable.
+pub const MIN_TURN_SKILL_SCORE: usize = 4;
+/// System One relevance a candidate skill needs before it is loaded into a chat turn.
+pub const TURN_SKILL_MIN_RELEVANCE: f64 = 0.7;
+/// Most keyword/System One selected skills loaded into one chat turn (explicit `/skill-id` is extra).
+pub const TURN_SKILL_MAX: usize = 2;
+
 pub fn match_skills(message: &str, skills: &[RoutingSkill]) -> Vec<String> {
+    match_skills_with_min(message, skills, MIN_AUTO_SKILL_SCORE)
+}
+
+/// Non-explicit skills sharing any keyword with the message: the shortlist System One judges.
+pub fn turn_skill_shortlist(message: &str, skills: &[RoutingSkill]) -> Vec<String> {
+    let explicit = match_explicit_skill_invocations(message, skills);
+    skills
+        .iter()
+        .filter(|skill| !explicit.contains(&skill.id))
+        .filter(|skill| {
+            match_skills_with_min(message, std::slice::from_ref(skill), 1).contains(&skill.id)
+        })
+        .map(|skill| skill.id.clone())
+        .collect()
+}
+
+/// Skills to load for a chat turn. `system_one_ranked` is `None` when System One is not
+/// configured (strict keyword score), otherwise the shortlist after System One relevance
+/// filtering in rank order. Explicit `/skill-id` invocations always come first.
+pub fn select_turn_skills(
+    message: &str,
+    skills: &[RoutingSkill],
+    system_one_ranked: Option<&[String]>,
+) -> Vec<String> {
+    let Some(ranked) = system_one_ranked else {
+        return match_skills_with_min(message, skills, MIN_TURN_SKILL_SCORE);
+    };
+    let mut chosen = match_explicit_skill_invocations(message, skills);
+    chosen.extend(ranked.iter().take(TURN_SKILL_MAX).cloned());
+    skills
+        .iter()
+        .filter(|skill| chosen.contains(&skill.id))
+        .map(|skill| skill.id.clone())
+        .collect()
+}
+
+pub fn match_skills_with_min(
+    message: &str,
+    skills: &[RoutingSkill],
+    min_score: usize,
+) -> Vec<String> {
     static PATHS: LazyLock<Regex> =
         LazyLock::new(|| re(r"\S*[/\\]\S+|\b\S+\.(?:txt|json|jsonl|ts|js|mjs|md)\b", ""));
     let mut explicit = match_explicit_skill_invocations(message, skills);
@@ -143,7 +193,7 @@ pub fn match_skills(message: &str, skills: &[RoutingSkill]) -> Vec<String> {
             .filter(|w| !names.contains(*w))
             .count()
             + 2 * names.intersection(&words).count();
-        if score >= 2 {
+        if score >= min_score {
             scored.push((skill.id.clone(), score));
         }
     }
@@ -321,6 +371,67 @@ mod tests {
             match_skills("scheduling agendas", &skills),
             vec!["calendar"]
         );
+    }
+    fn turn_skills() -> Vec<RoutingSkill> {
+        vec![
+            skill("charts", "Chart Maker", "draw plots"),
+            skill("research", "Deep Research", "compare options"),
+            skill("pin", "Pin", "pin pin pin"),
+        ]
+    }
+    #[test]
+    fn turn_keyword_threshold_is_stricter_than_routing() {
+        let skills = turn_skills();
+        // One name word scores 2: enough to route, not enough to load into a turn.
+        assert_eq!(match_skills("chart", &skills), vec!["charts"]);
+        assert!(match_skills_with_min("chart", &skills, MIN_TURN_SKILL_SCORE).is_empty());
+        assert!(select_turn_skills("chart", &skills, None).is_empty());
+        // Two name words score 4.
+        assert_eq!(
+            select_turn_skills("chart maker", &skills, None),
+            vec!["charts"]
+        );
+        // Repeated description words never count as extra evidence.
+        assert!(select_turn_skills("pin", &skills, None).is_empty());
+    }
+    #[test]
+    fn turn_explicit_invocation_always_loads() {
+        let skills = turn_skills();
+        assert_eq!(
+            select_turn_skills("/deep-research hi", &skills, None),
+            vec!["research"]
+        );
+        assert_eq!(
+            select_turn_skills("/deep-research hi", &skills, Some(&[])),
+            vec!["research"]
+        );
+    }
+    #[test]
+    fn turn_shortlist_excludes_explicit_and_unrelated_skills() {
+        let skills = turn_skills();
+        assert_eq!(
+            turn_skill_shortlist("draw a chart", &skills),
+            vec!["charts"]
+        );
+        assert!(turn_skill_shortlist("hello there", &skills).is_empty());
+        assert!(turn_skill_shortlist("/charts chart", &skills).is_empty());
+    }
+    #[test]
+    fn turn_system_one_selection_is_bounded_and_registry_ordered() {
+        let skills = vec![
+            skill("a", "Alpha", ""),
+            skill("b", "Beta", ""),
+            skill("c", "Gamma", ""),
+            skill("d", "Delta", ""),
+        ];
+        let ranked: Vec<String> = ["c", "a", "b"].map(String::from).into();
+        // Top TURN_SKILL_MAX ranked skills load; explicit `/d` is additional.
+        assert_eq!(
+            select_turn_skills("/d go", &skills, Some(&ranked)),
+            vec!["a", "c", "d"]
+        );
+        // System One rejected everything: nothing loads, and no keyword fallback applies.
+        assert!(select_turn_skills("Alpha Beta", &skills, Some(&[])).is_empty());
     }
     #[test]
     fn auto_selection_is_stable_bounded_and_pins_are_first() {

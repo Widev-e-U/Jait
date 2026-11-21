@@ -157,9 +157,11 @@ function skillWords(text: string): Set<string> {
     .filter(word => word.length > 2 && !SKILL_GENERIC_WORDS.has(word)));
 }
 const MIN_AUTO_SKILL_SCORE = 2;
+/** Stricter keyword threshold for loading a skill into a chat turn when System One is unavailable. */
+export const MIN_TURN_SKILL_SCORE = 4;
 const MAX_AUTO_SKILLS = 2;
 
-export function matchSkills(message: string, skills: Skill[]): string[] {
+export function matchSkills(message: string, skills: Skill[], minScore = MIN_AUTO_SKILL_SCORE): string[] {
   if (skills.length === 0) return [];
 
   // Explicit `/skill-id` invocations always win and come first.
@@ -177,7 +179,7 @@ export function matchSkills(message: string, skills: Skill[]): string[] {
     for (const word of descWords) if (words.has(word) && !nameWords.has(word)) score++;
     for (const word of nameWords) if (words.has(word)) score += 2;
 
-    if (score >= MIN_AUTO_SKILL_SCORE) {
+    if (score >= minScore) {
       matched.push({ id: skill.id, score });
     }
   }
