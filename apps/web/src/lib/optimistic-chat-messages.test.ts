@@ -204,6 +204,12 @@ describe('client message identity', () => {
       .toEqual(['server-other', 'user-local-12345678'])
   })
 
+  it('does not append a pending prompt already saved under the same ID', () => {
+    const current = [user('user-local-12345678', 'hello', { optimistic: true })]
+    const snapshot = [user('user-local-12345678', 'hello')]
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current).map(message => message.id)).toEqual(['user-local-12345678'])
+  })
+
   it('reconciles the exact durable ID without relying on text', () => {
     const current = [user('user-local-12345678', 'continue', { optimistic: true })]
     const snapshot = [user('server-1', 'continue [attached: file]', { clientMessageId: 'user-local-12345678' })]

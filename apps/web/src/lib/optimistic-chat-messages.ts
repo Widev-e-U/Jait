@@ -87,7 +87,7 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
     // New clients use the same durable ID for their optimistic message. A
     // different client's identical prompt must never consume this one.
     if (message.id.startsWith('user-')) {
-      if (snapshotMessages.some(saved => saved.clientMessageId === message.id)) {
+      if (snapshotMessages.some(saved => saved.id === message.id || saved.clientMessageId === message.id)) {
         preserveNextOptimisticAssistant = false
       } else {
         unmatchedOptimisticMessages.push(message)
