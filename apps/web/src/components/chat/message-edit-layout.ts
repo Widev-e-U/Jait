@@ -3,9 +3,9 @@ import { cn } from '@/lib/utils'
 /** The transcript and composer share a centered column and outer edges. */
 export const CHAT_COLUMN_MAX_WIDTH_CLASS = 'max-w-4xl'
 
-/** Match the composer's mobile inset while keeping desktop edges flush. */
-export const CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS = 'px-2 md:px-0'
-export const CHAT_COMPOSER_COLUMN_PADDING_CLASS = 'px-0'
+/** Keep a gutter around the transcript and composer at narrow panel widths. */
+export const CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS = 'px-2 md:px-4'
+export const CHAT_COMPOSER_COLUMN_PADDING_CLASS = 'px-4'
 
 /** Centered chat column, without a horizontal inset. */
 export function getChatColumnClassName(...extra: Array<string | false | null | undefined>): string {
@@ -22,8 +22,8 @@ export function getChatTranscriptBoundaryClassName(): string {
 }
 
 /**
- * On mobile, match the header’s 8px side inset. On desktop, the composer
- * spans the column edge so its box aligns with the transcript.
+ * On mobile, match the header’s 8px side inset. On desktop, retain a
+ * gutter around the composer when the panel is narrow.
  */
 export function getChatComposerBoundaryClassName(isMobile: boolean): string {
   return cn(
