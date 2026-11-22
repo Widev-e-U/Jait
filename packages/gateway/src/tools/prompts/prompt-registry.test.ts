@@ -9,6 +9,8 @@ import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE, PROJECT_ARTIFACT_INSTRUCTIONS
 
 describe("buildSystemPrompt", () => {
   it("includes artifact guidance in the direct CLI provider bootstrap", () => {
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain("```openui");
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain("root = Panel");
     expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain(PROJECT_ARTIFACT_INSTRUCTIONS);
     expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain(LIVE_BROWSER_UPDATE_INSTRUCTIONS);
     expect(LIVE_BROWSER_UPDATE_INSTRUCTIONS).toContain("Do not open a browser or look for an existing session merely");
@@ -21,6 +23,8 @@ describe("buildSystemPrompt", () => {
     { model: "llama3.2", baseUrl: "http://localhost:11434/v1", backend: "ollama" },
   ])("keeps generated artifacts in the active project for $model", (endpoint) => {
     const prompt = buildSystemPrompt("agent", endpoint, { projectRoot: "/work/project" });
+    expect(prompt).toContain("```openui");
+    expect(prompt).toContain("root = Panel");
     expect(prompt).toContain(LIVE_BROWSER_UPDATE_INSTRUCTIONS);
     expect(prompt).toContain("<projectArtifacts>");
     expect(prompt).toContain(".jait/shots/");

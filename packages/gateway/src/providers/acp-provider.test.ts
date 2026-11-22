@@ -878,6 +878,20 @@ describe("AcpProvider Codex ACP tool payloads", () => {
   });
 });
 
+describe("Codex ACP collaboration", () => {
+  it("preserves the child state from the final ACP rawInput", () => {
+    const provider = new AcpProvider({ id: "codex", name: "Codex", description: "Codex via ACP", command: process.execPath, args: ["-e", fakeAcpAgentScript] });
+    (provider as unknown as { sessions: Map<string, { toolCalls: Map<string, Record<string, unknown>> }> }).sessions.set("s1", { toolCalls: new Map() });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent(event => events.push(event));
+    provider.handleSessionUpdate("s1", { update: { sessionUpdate: "tool_call", toolCallId: "c1", title: "spawnAgent", kind: "other", status: "in_progress", rawInput: { senderThreadId: "parent", prompt: "Inspect" } } } as any);
+    provider.handleSessionUpdate("s1", { update: { sessionUpdate: "tool_call_update", toolCallId: "c1", status: "completed", rawInput: { senderThreadId: "parent", prompt: "Inspect", receiverThreadIds: ["child"], agentsStates: { child: { status: "running" } } }, rawOutput: null } } as any);
+    unsubscribe();
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool.start", tool: "agent.spawn", args: expect.objectContaining({ prompt: "Inspect", type: "collabAgentToolCall" }) }));
+    expect(events).toContainEqual(expect.objectContaining({ type: "tool.result", tool: "agent.spawn", message: "", data: expect.objectContaining({ receiverThreadIds: ["child"], agentsStates: { child: { status: "running" } } }) }));
+  });
+});
+
 describe("AcpProvider Claude Code progressive tool updates", () => {
   function makeProvider() {
     return new AcpProvider({

@@ -87,6 +87,11 @@ test('global new chat stays personal after opening a project', async ({ page, re
     }
     return { projectId: lastActive.project?.id ?? null, sessionId: lastActive.session?.id ?? null }
   }).toEqual({ projectId: null, sessionId: session.id })
+
+  const composer = page.locator('[role="textbox"][contenteditable="true"]').first()
+  await expect(composer).toBeEditable()
+  await page.goto(`/?sessionId=${session.id}`)
+  await expect(composer).toBeEditable()
 })
 
 

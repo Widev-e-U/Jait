@@ -374,6 +374,20 @@ describe('sub-agent activity', () => {
     expect([firstPage, secondPage, finalPage]).toEqual([36, 48, 50])
   })
 
+  it('shows Codex child status separately from the completed spawn operation', () => {
+    const html = renderToStaticMarkup(createElement(ToolCallCard, { call: {
+      callId: 'spawn-codex', tool: 'agent.spawn',
+      args: { type: 'collabAgentToolCall', prompt: 'Inspect the repo' },
+      status: 'success', startedAt: 1, completedAt: 2,
+      result: { ok: true, message: '', data: { type: 'collabAgentToolCall', receiverThreadIds: ['child-1'], agentsStates: { 'child-1': { status: 'running', message: 'Checking files' } } } },
+    } }))
+    expect(html).toContain('Sub-agent')
+    expect(html).toContain('child-1')
+    expect(html).toContain('running')
+    expect(html).toContain('Checking files')
+    expect(html).not.toContain('Agent completed')
+  })
+
   it('keeps the delegated mission sticky when child calls appear', () => {
     const call = {
       callId: 'agent-implementation',
@@ -1419,7 +1433,7 @@ describe('tool-card auto-collapse scroll contract', () => {
   it('closes the finished single card without announcing a toggle', () => {
     const effect = codeLines(sliceBetween(
       'The card collapses itself when the tool finishes, without a click',
-      '[backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody])',
+      '[backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody, isCodexAgentCall])',
     ))
     expect(effect.join('\n')).toContain('setOpen(false)')
     expect(effect.join('\n')).not.toContain('anchorToggle()')

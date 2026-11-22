@@ -23,6 +23,7 @@ export interface ProjectSession {
   viewedAt: string | null
   metadata: string | null
   sharedWithProject?: boolean
+  isOwner?: boolean
   canManageShare?: boolean
 }
 

@@ -106,6 +106,8 @@ export function reviewClientRequests(sites, table = CLIENT_REQUEST_SITES) {
 // Reviewed non-literal request calls: file|enclosing function, the number of such calls there, and where the path comes from.
 // Health probes (/health) are gateway routes outside /api. A Matrix homeserver URL is not a gateway route at all.
 export const CLIENT_REQUEST_SITES = [
+  { key: "apps/web/src/components/project/project-members.tsx|ProjectMembers.change", count: 1, reason: "forwards the project members endpoint or endpoint plus an encoded user ID from component handlers" },
+  { key: "apps/web/src/components/project/project-members.tsx|ProjectMembers", count: 3, reason: "fetch forwards the helper URL; two request calls use the project members endpoint built in this component" },
   { key: "apps/web/src/App.tsx|App", count: 1, reason: "health probe of the configured gateway (${getApiUrl()}/health)" },
   { key: "apps/web/src/components/consent/action-card.tsx|consentFetch", count: 1, reason: "helper; the url it receives is ${GATEWAY}/api/consent/pending[/id] built in the caller" },
   { key: "apps/web/src/components/messenger/teams-connection-card.tsx|TeamsConnectionCard", count: 1, reason: "REAUTH_URL, the constant '/api/messenger/bridge-reauth/teams' in this file" },

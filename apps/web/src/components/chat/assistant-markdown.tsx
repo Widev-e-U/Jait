@@ -19,6 +19,7 @@ import { safeNotificationLink } from '@jait/shared'
 import { parseFileDownloadLink } from '@/components/ui/file-download-link'
 import { MessageLink } from '@/components/ui/message-link'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { OpenUIBlock } from './openui-block'
 
 /**
  * Shared assistant-markdown renderer: syntax-highlighted code blocks, project
@@ -249,6 +250,7 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
           ? className.replace(/^language-/, '').split(' ')[0] || 'text'
           : 'text'
         const code = String(children ?? '').replace(/\n$/, '')
+        if (language.toLowerCase() === 'openui') return <OpenUIBlock code={code} isStreaming={isStreaming} />
         return (
           <CodeBlock code={code} language={language}>
             <CodeBlockHeader>

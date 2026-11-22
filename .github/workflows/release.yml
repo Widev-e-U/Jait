@@ -559,6 +559,63 @@ jobs:
             apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
             apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/latest.json
 
+  # Build on Linux so native Node dependencies match the desktop host.
+  desktop-linux:
+    name: Desktop Build (Linux AppImage)
+    runs-on: ubuntu-22.04
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.changed == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
+      - name: Build and package Linux gateway
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+          JAIT_HOSTING_TEST_RESOURCES: ${{ github.workspace }}/apps/desktop/src-tauri/gateway
+          JAIT_GRAPHIFY_COMMAND: __jait_smoke_no_optional_python__
+        run: |
+          bun install --frozen-lockfile
+          bun run --filter @jait/shared build
+          bun run --filter @jait/screen-share build
+          bun run --filter @jait/api-client build
+          bun run --filter @jait/ui-shared build
+          bun run --filter @jait/gateway build
+          node packages/gateway/scripts/package-desktop.mjs
+          node packages/gateway/scripts/smoke-desktop.mjs
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml packaged_runtime_lifecycle -- --ignored
+      - name: Build Linux AppImage
+        run: |
+          VERSION="${{ needs.auto-tag.outputs.version }}"
+          if [ -z "$VERSION" ]; then
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION=$(jq -r .version packages/gateway/package.json); fi
+          fi
+          jq --arg v "$VERSION" '.version = $v' apps/desktop/src-tauri/tauri.conf.json > /tmp/jait-tauri-conf.json
+          mv /tmp/jait-tauri-conf.json apps/desktop/src-tauri/tauri.conf.json
+          cd apps/web
+          bunx vite build --base ./ --sourcemap false
+          cd ../desktop/src-tauri
+          cargo install tauri-cli --version '^2' --locked
+          cargo tauri build --config '{"bundle":{"resources":{"gateway/":"gateway/"},"createUpdaterArtifacts":false}}' --features shell,frontend --bundles appimage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux-release-assets
+          retention-days: 3
+          if-no-files-found: error
+          path: apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+
   # ── Build Android APK ──────────────────────────────────────────────
   android:
     name: Android APK
@@ -1002,11 +1059,12 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: [self-hosted, linux]
-    needs: [auto-tag, npm-publish, desktop, android]
+    needs: [auto-tag, npm-publish, desktop, desktop-linux, android]
     if: |
       always() && 
       needs.npm-publish.result == 'success' && 
       needs.desktop.result == 'success' &&
+      needs.desktop-linux.result == 'success' &&
       needs.android.result == 'success' && (
         needs.auto-tag.outputs.tagged == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||
@@ -1023,6 +1081,11 @@ jobs:
         with:
           path: ${{ env.RELEASE_ASSET_DIR }}
           merge-multiple: true
+      - name: Download Linux desktop assets
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-linux-release-assets
+          path: ${{ env.RELEASE_ASSET_DIR }}
       - name: Verify staged release assets
         if: env.RELEASE_ASSET_MODE == 'runner'
         run: |

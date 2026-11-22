@@ -76,7 +76,7 @@ export function mapCodexNotification(
             : "";
         return [{
           type: "tool.result", sessionId, tool: category,
-          ok: status !== "error" && status !== "failed",
+          ok: status !== "error" && status !== "failed" && status !== "interrupted",
           message: output, callId: itemId, data: extractToolResultData(item),
         }];
       }
@@ -121,7 +121,7 @@ export function mapCodexNotification(
         type: "tool.result",
         sessionId,
         tool: toolName,
-        ok: status !== "error" && status !== "failed",
+        ok: status !== "error" && status !== "failed" && status !== "interrupted",
         message: output,
         callId: itemId,
         data: extractToolResultData(params),
@@ -161,7 +161,7 @@ export function mapCodexNotification(
               : "";
         return [{
           type: "tool.result", sessionId, tool: category,
-          ok: status !== "error" && status !== "failed",
+          ok: status !== "error" && status !== "failed" && status !== "interrupted",
           message: output, callId: itemId, data: extractToolResultData(msg),
         }];
       }
@@ -315,6 +315,9 @@ function parseJsonObject(v: unknown): Record<string, unknown> | undefined {
 }
 
 function extractToolResultData(item: Record<string, unknown>): unknown {
+  // A collab call completes when the operation finishes, not necessarily when
+  // the spawned agent does. Preserve the provider's separate agent states.
+  if (normalizeItemType(String(item.type ?? "")) === "collab agent tool call") return item;
   return (
     asObject(item.result) ??
     asObject(item.output) ??
@@ -372,6 +375,15 @@ function isToolItemType(normalized: string): boolean {
 
 function mapItemToCategory(normalizedType: string, item: Record<string, unknown>): string {
   const providerToolName = extractProviderToolName(item);
+  if (normalizedType === "collab agent tool call") {
+    const operation = providerToolName?.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
+    const names: Record<string, string> = {
+      spawn_agent: "agent.spawn", wait: "agent.wait", close_agent: "agent.close",
+      resume_agent: "agent.resume", send_input: "agent.send", send_message: "agent.send",
+      followup_task: "agent.send", interrupt_agent: "agent.interrupt", list_agents: "agent.list",
+    };
+    return names[operation ?? ""] ?? "agent";
+  }
   if (providerToolName && isProviderAgentTool(providerToolName)) return providerToolName;
   if (normalizedType.includes("subagent")) return "agent";
   if (normalizedType.includes("command")) return "execute";

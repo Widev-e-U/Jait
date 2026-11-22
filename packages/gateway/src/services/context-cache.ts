@@ -30,3 +30,20 @@ export function applyContextCaching(body: Record<string, unknown>, route: { back
   }
   body.messages = messages;
 }
+
+/** Local comparison of consecutive wire payloads; this is not a provider cache-hit signal. */
+export interface CachePrefixSnapshot { tools: string; messages: string[] }
+export function compareCachePrefix(body: Record<string, unknown>, previous?: CachePrefixSnapshot): {
+  snapshot: CachePrefixSnapshot;
+  changes?: { toolsChanged: boolean; previousMessagesChanged: boolean };
+} {
+  const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value) ?? "null").digest("hex");
+  const snapshot = {
+    tools: hash(body.tools ?? []),
+    messages: Array.isArray(body.messages) ? body.messages.map(hash) : [],
+  };
+  return { snapshot, ...(previous ? { changes: {
+    toolsChanged: previous.tools !== snapshot.tools,
+    previousMessagesChanged: previous.messages.some((message, index) => snapshot.messages[index] !== message),
+  } } : {}) };
+}

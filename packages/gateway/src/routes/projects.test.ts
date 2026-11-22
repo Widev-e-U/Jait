@@ -100,7 +100,10 @@ describe("project routes", () => {
     expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: memberHeaders })).statusCode).toBe(404);
     expect((await app.inject({ method: "PATCH", url: `/api/sessions/${shared.id}/share`, headers: memberHeaders, payload: { sharedWithProject: true } })).statusCode).toBe(404);
     expect((await app.inject({ method: "PATCH", url: `/api/sessions/${shared.id}/share`, headers: ownerHeaders, payload: { sharedWithProject: true } })).statusCode).toBe(200);
-    expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: memberHeaders })).statusCode).toBe(200);
+    const memberSession = await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: memberHeaders });
+    expect(memberSession.statusCode).toBe(200);
+    expect(memberSession.json()).toMatchObject({ isOwner: false, canManageShare: false });
+    expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: ownerHeaders })).json()).toMatchObject({ isOwner: true, canManageShare: true });
     sqlite.prepare("INSERT INTO messages (id, session_id, role, content, tool_calls, segments, thinking, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run("share-test-message", shared.id, "assistant", "Visible answer", '[{"secret":"tool-secret"}]', '[{"secret":"segment-secret"}]', "thinking-secret", new Date().toISOString());
     sqlite.prepare("INSERT INTO messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)").run("share-test-system", shared.id, "system", "system-secret", new Date().toISOString());
     const messagesResponse = await app.inject({ method: "GET", url: `/api/sessions/${shared.id}/messages`, headers: memberHeaders });
@@ -111,6 +114,7 @@ describe("project routes", () => {
     expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: strangerHeaders })).statusCode).toBe(404);
     const listed = (await app.inject({ method: "GET", url: `/api/projects/${project.id}/sessions`, headers: memberHeaders })).json() as { sessions: Array<{ id: string }> };
     expect(listed.sessions.map(row => row.id)).toEqual([shared.id]);
+    expect(listed.sessions[0]).toMatchObject({ isOwner: false, canManageShare: false });
     expect((await app.inject({ method: "DELETE", url: `/api/projects/${project.id}/members/${member.id}`, headers: ownerHeaders })).statusCode).toBe(204);
     expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}`, headers: memberHeaders })).statusCode).toBe(404);
     expect((await app.inject({ method: "GET", url: `/api/sessions/${shared.id}/messages`, headers: memberHeaders })).statusCode).toBe(404);

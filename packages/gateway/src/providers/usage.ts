@@ -93,11 +93,15 @@ export function summarizeUsage(rounds: Array<{ metrics?: UsageSummary }>): Usage
   if (!values.length) return;
   return {
     durationMs: values.reduce((sum, m) => sum + m.durationMs, 0),
-    promptTokens: values.reduce((sum, m) => sum + (m.promptTokens ?? 0), 0),
-    completionTokens: values.reduce((sum, m) => sum + (m.completionTokens ?? 0), 0),
-    totalTokens: values.reduce((sum, m) => sum + (m.totalTokens ?? (m.promptTokens ?? 0) + (m.completionTokens ?? 0)), 0),
+    ...(values.every(m => m.promptTokens !== undefined) ? { promptTokens: values.reduce((sum, m) => sum + m.promptTokens!, 0) } : {}),
+    ...(values.every(m => m.completionTokens !== undefined) ? { completionTokens: values.reduce((sum, m) => sum + m.completionTokens!, 0) } : {}),
+    ...(values.every(m => m.totalTokens !== undefined || (m.promptTokens !== undefined && m.completionTokens !== undefined))
+      ? { totalTokens: values.reduce((sum, m) => sum + (m.totalTokens ?? m.promptTokens! + m.completionTokens!), 0) } : {}),
     tokenUsageEstimated: values.some(m => m.tokenUsageEstimated),
     ...(values.every(m => m.cachedPromptTokens !== undefined) ? { cachedPromptTokens: values.reduce((sum, m) => sum + m.cachedPromptTokens!, 0) } : {}),
+    ...(values.every(m => m.cacheWriteTokens !== undefined) ? { cacheWriteTokens: values.reduce((sum, m) => sum + m.cacheWriteTokens!, 0) } : {}),
+    ...(values.every(m => m.cost !== undefined && m.cost.currency === values[0]?.cost?.currency && m.cost.basis === "configured-rates")
+      ? { cost: { amount: values.reduce((sum, m) => sum + m.cost!.amount, 0), currency: values[0]!.cost!.currency, basis: "configured-rates" as const } } : {}),
     ...(values.every(m => m.requestCount !== undefined) ? { requestCount: values.reduce((sum, m) => sum + m.requestCount!, 0) } : {}),
   };
 }

@@ -18,6 +18,31 @@ describe('AssistantMarkdown', () => {
     expect(markup).not.toContain('data-streaming-text')
   })
 
+  it.each([false, true])('renders OpenUI alongside Markdown (streaming: %s)', (isStreaming) => {
+    const content = 'Before\n\n```openui\nroot = Panel("Status", [metric, tasks])\nmetric = Metric("Done", "3", "of 5")\ntasks = Checklist("Next", ["Review", "Test"])\n```\n\nAfter'
+    const html = renderToStaticMarkup(<AssistantMarkdown content={content} isStreaming={isStreaming} />)
+    expect(html).toContain('Before')
+    expect(html).toContain('After')
+    expect(html).toContain('Status')
+    expect(html).toContain('Done')
+    expect(html).toContain('Review')
+    expect(html).toContain('type="checkbox"')
+    expect(html).not.toContain('language-openui')
+  })
+
+  it('renders an unfinished OpenUI fence as it streams', () => {
+    const html = renderToStaticMarkup(<AssistantMarkdown isStreaming content={'```openui\nroot = Panel("Live", [metric])\nmetric = Metric("Count", "2", "items")'} />)
+    expect(html).toContain('Live')
+    expect(html).toContain('Count')
+  })
+
+  it('keeps malformed OpenUI source available without rendering HTML', () => {
+    const html = renderToStaticMarkup(<AssistantMarkdown content={'```openui\n<script>alert(1)</script>\n```'} />)
+    expect(html).toContain('OpenUI source')
+    expect(html).toContain('&lt;script&gt;')
+    expect(html).not.toContain('<script>')
+  })
+
   it('keeps Jait pages and external file URLs out of the project file opener', () => {
     const html = renderToStaticMarkup(<AssistantMarkdown
       content="[Todo](/todo?q=fix) [Web](https://example.com/readme.md) [File](/home/jakob/jait/README.md:3)"

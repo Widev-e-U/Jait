@@ -399,9 +399,12 @@ export interface LlmContextFlowRound {
 /** Per-round performance and token metrics. */
 export interface RoundMetrics {
   requestCount?: number;
+  cachePrefixChanges?: { toolsChanged: boolean; previousMessagesChanged: boolean }
   durationMs: number
   promptTokens?: number
   cachedPromptTokens?: number
+  cacheWriteTokens?: number
+  cost?: { amount: number; currency: string; basis: "configured-rates" }
   completionTokens?: number
   totalTokens?: number
   tokenUsageEstimated?: boolean

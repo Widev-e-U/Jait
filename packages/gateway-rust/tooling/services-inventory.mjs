@@ -120,7 +120,7 @@ const TIMER_SITES = [
   { key: 'ws.ts|WsControlPlane.start', services: ['wsHub'] },
   { key: 'channels/telegram/connector.ts|TelegramConnector.startTyping', reason: 'typing indicator while one chat reply is pending' },
   { key: 'routes/browser-devtools.ts|registerBrowserDevToolsRoutes.upgrade', reason: 'validity check on one devtools transport, cleared with that transport' },
-  { key: 'routes/chat.ts|registerChatRoutes', count: 4, reason: 'SSE keepalive and heartbeat on one chat stream' },
+  { key: 'routes/chat.ts|registerChatRoutes', count: 8, reason: 'per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close' },
   { key: 'routes/mcp-server.ts|registerMcpRoutes', count: 2, reason: 'keepalive on one MCP connection' },
   { key: 'tools/browser-handoff.ts|createBrowserHandoffTool.wait', reason: 'poll inside one browser handoff tool call' },
   { key: 'tools/terminal-tools.ts|executeInTerminal', reason: 'poll inside one terminal tool execution' },

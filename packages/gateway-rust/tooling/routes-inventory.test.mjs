@@ -116,7 +116,10 @@ test('a plugin that registers itself with a prefix is a cycle and throws', () =>
 
 test('the reviewed tables cover every route and registration in the real gateway source', () => {
   const routes = gatewayRoutes(walkGatewaySource(gatewaySrc));
-  assert.equal(routes.length, 444);
+  assert.equal(routes.length, 449);
+  assert.ok(routes.some((route) => route.method === 'GET' && route.path === '/api/sessions/:sessionId/shared-stream'));
+  assert.ok(routes.some((route) => route.method === 'PATCH' && route.path === '/api/sessions/:id/share'));
+  assert.ok(routes.some((route) => route.method === 'DELETE' && route.path === '/api/projects/:id/members/:userId'));
   const webhook = routes.find((route) => route.method === 'POST' && route.path === '/api/github/apps/webhook');
   assert.deepEqual(webhook.files, ['routes/agent-github-apps.ts'], 'a route on a scoped child of register is read');
   assert.deepEqual(routes.find((route) => route.method === 'GET' && route.path === '/').files, ['server.ts'], 'the web UI is a reviewed static registration');

@@ -152,6 +152,24 @@ describe("mapCodexNotification", () => {
     }]);
   });
 
+  it("preserves native Codex agent operations and separate child states", () => {
+    const item = {
+      id: "spawn-1", type: "collabAgentToolCall", tool: "spawnAgent", status: "completed",
+      prompt: "Inspect the repository", receiverThreadIds: ["child-1"],
+      agentsStates: { "child-1": { status: "running", message: null } },
+    };
+    expect(mapCodexNotification("item/started", { item }, "session-1")[0]).toMatchObject({
+      type: "tool.start", tool: "agent.spawn", callId: "spawn-1", args: { prompt: "Inspect the repository" },
+    });
+    expect(mapCodexNotification("item/completed", { item }, "session-1")[0]).toMatchObject({
+      type: "tool.result", tool: "agent.spawn", ok: true, data: item,
+    });
+    const wait = { ...item, tool: "wait", status: "interrupted" };
+    expect(mapCodexNotification("item/completed", { item: wait }, "session-1")[0]).toMatchObject({
+      tool: "agent.wait", ok: false, data: wait,
+    });
+  });
+
   it("maps file read items as read tool events instead of dropping them", () => {
     const started = mapCodexNotification("codex/event/item_started", {
       msg: {

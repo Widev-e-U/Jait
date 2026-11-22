@@ -43,6 +43,7 @@
     "@matrix-org/matrix-sdk-crypto-wasm": "18.9.0",
     "@monaco-editor/loader": "^1.7.0",
     "@monaco-editor/react": "^4.7.0",
+    "@openuidev/react-lang": "^1.1.1",
     "@radix-ui/react-avatar": "1.2.6",
     "@radix-ui/react-collapsible": "1.1.20",
     "@radix-ui/react-dialog": "1.1.23",
@@ -86,7 +87,8 @@
     "tailwind-merge": "^3.7.0",
     "tailwindcss-animate": "^1.0.7",
     "use-stick-to-bottom": "^1.1.6",
-    "vscode-jsonrpc": "8.2.0"
+    "vscode-jsonrpc": "8.2.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.20",

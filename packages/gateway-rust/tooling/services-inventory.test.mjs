@@ -40,7 +40,7 @@ test('the reviewed inventory covers every background site in the real gateway so
   // The composition root's start call and the setInterval inside the service.
   assert.equal(services.find((s) => s.name === 'scheduler').nodeSites.length, 2);
   assert.equal(services.find((s) => s.name === 'primaryLink').nodeSites.length, 2);
-  assert.ok(excluded.some((e) => e.key === 'routes/chat.ts|registerChatRoutes' && e.sites.length === 4));
+  assert.ok(excluded.some((e) => e.key === 'routes/chat.ts|registerChatRoutes' && e.sites.length === 8));
 });
 
 test('an unreviewed background site in the real gateway source makes the inventory throw', () => {

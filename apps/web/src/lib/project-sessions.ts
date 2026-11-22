@@ -1,3 +1,5 @@
+import type { ProjectSession } from '@/hooks/useProjects'
+
 export interface ProjectSessionForSelection {
   id: string
   createdAt: string
@@ -16,4 +18,12 @@ export function getLatestProjectSessionId(project: ProjectForSessionSelection | 
     return sessionTime > currentTime ? session : current
   }, null)
   return latest?.id ?? null
+}
+
+export function isReadOnlyChatSession(
+  session: Pick<ProjectSession, 'projectId' | 'isOwner' | 'canManageShare'> | null | undefined,
+): boolean {
+  if (session?.isOwner !== undefined) return !session.isOwner
+  // Older gateways mark personal chats as ineligible for project sharing.
+  return Boolean(session?.projectId) && session?.canManageShare === false
 }

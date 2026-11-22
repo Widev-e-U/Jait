@@ -181,7 +181,7 @@ export class ProjectService {
       projects: limitedRows.map((project) => ({
         ...project,
         canManageProject: project.userId === userId,
-        sessions: (sessionMap.get(project.id) ?? []).map(session => ({ ...session, canManageShare: session.userId === userId })),
+        sessions: (sessionMap.get(project.id) ?? []).map(session => ({ ...session, isOwner: session.userId === userId, canManageShare: session.userId === userId })),
       })),
       hasMore: typeof limit === "number" ? projectRows.length > limit : false,
     };
@@ -227,7 +227,7 @@ export class ProjectService {
         .map((project) => ({
           ...project,
           canManageProject: project.userId === userId,
-          sessions: (sessionsByProject.get(project.id) ?? []).map(session => ({ ...session, canManageShare: session.userId === userId })),
+          sessions: (sessionsByProject.get(project.id) ?? []).map(session => ({ ...session, isOwner: session.userId === userId, canManageShare: session.userId === userId })),
         })),
       personalSessions,
     };
@@ -246,7 +246,7 @@ export class ProjectService {
       eq(sessions.projectId, projectId), eq(sessions.status, status),
       or(eq(sessions.userId, userId), eq(sessions.sharedWithProject, true)),
     )).orderBy(desc(sessions.lastActiveAt)).all().map(session => ({
-      ...session, canManageShare: session.userId === userId,
+      ...session, isOwner: session.userId === userId, canManageShare: session.userId === userId,
     }));
   }
 

@@ -31,6 +31,8 @@ describe('personal chat listing', () => {
     try {
       const token = await signAuthToken({ id: owner.id, username: owner.username }, config.jwtSecret)
       const headers = { authorization: `Bearer ${token}` }
+      const detail = await app.inject({ method: 'GET', url: `/api/sessions/${personal[0]!.id}`, headers })
+      expect(detail.json()).toMatchObject({ isOwner: true, canManageShare: false })
       // The former sidebar query loses all 105 personal chats behind project activity.
       const oldPage = await app.inject({ method: 'GET', url: '/api/sessions?status=active&limit=100', headers })
       expect(oldPage.json().sessions.filter((s: { projectId: string | null }) => !s.projectId)).toHaveLength(0)

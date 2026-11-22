@@ -26,7 +26,7 @@ import type { FsNode } from '@jait/shared'
 import { buildChatDragPayload, buildProjectDragPayload, JAIT_CHAT_REF_MIME, JAIT_PROJECT_REF_MIME, setDragImageRow } from '@/lib/jait-dnd'
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { primarySessionWaits, type SessionWaitMap } from '@/lib/session-waits'
-import { getLatestProjectSessionId } from '@/lib/project-sessions'
+import { getLatestProjectSessionId, isReadOnlyChatSession } from '@/lib/project-sessions'
 import { getProjectRepository } from '@/lib/project-repositories'
 import { SessionRow, isSessionUnread } from '@/components/chat/session-row'
 import { formatAgo } from '@/lib/relative-time'
@@ -613,7 +613,7 @@ export function SessionSelector({
     if (!hasSessionContextMenu) return
     const session = projects.flatMap((project) => project.sessions).find((item) => item.id === sessionId)
       ?? personalSessions.find((item) => item.id === sessionId)
-    if (session?.canManageShare === false) return
+    if (isReadOnlyChatSession(session)) return
     const menuHeight = getSessionContextMenuHeight({
       showRename: Boolean(onRenameSession),
       showMoveToTop: true,

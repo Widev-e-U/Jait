@@ -17,6 +17,9 @@ export interface UsageSummary {
   durationMs: number;
   promptTokens?: number;
   cachedPromptTokens?: number;
+  cacheWriteTokens?: number;
+  /** Estimate from explicitly configured rates, not an invoice. */
+  cost?: { amount: number; currency: string; basis: "configured-rates" };
   completionTokens?: number;
   totalTokens?: number;
   tokenUsageEstimated?: boolean;

@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "source_sha256": "6a5c9c35b52c25b583d245ee324707704e0f1a9e37f4a34aa7b86d1cdd5c62f7",
+  "source_sha256": "77ca401c7d6f98aeecd3f0d17ba28139f1c38aeaeecf1da793ba2190fdccdc98",
   "repair_source_sha256": "f5f227422e0d9e23f05afcced86f15581b6fc8611b021d007540b3f0b5563ea5",
   "repairs": {
     "agent_threads": {
@@ -1651,6 +1651,90 @@
         {
           "kind": "sql",
           "sql": "CREATE INDEX IF NOT EXISTS idx_github_intake_history ON github_intake_decisions(user_id, agent_id, created_at)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "name": "user_settings_navigation_order",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE user_settings ADD COLUMN navigation_order TEXT",
+          "ignore_errors": true
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "name": "plan_orchestration_runs",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS orchestration_runs (id TEXT PRIMARY KEY, plan_id TEXT, user_id TEXT NOT NULL, repo_id TEXT, title TEXT NOT NULL, status TEXT NOT NULL, paused INTEGER NOT NULL DEFAULT 0, max_workers INTEGER NOT NULL, definition TEXT NOT NULL, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_orchestration_runs_owner ON orchestration_runs(user_id, created_at)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS orchestration_task_runs (run_id TEXT NOT NULL, task_id TEXT NOT NULL, state TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, current_attempt_id TEXT, last_error TEXT, result TEXT, verification TEXT, agent_ref TEXT, worktree_ref TEXT, started_at TEXT, finished_at TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (run_id, task_id))",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_orchestration_task_runs_state ON orchestration_task_runs(run_id, state)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS orchestration_attempts (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, task_id TEXT NOT NULL, attempt_no INTEGER NOT NULL, state TEXT NOT NULL, agent_ref TEXT, worktree_ref TEXT, outcome TEXT, error TEXT, started_at TEXT NOT NULL, finished_at TEXT)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE UNIQUE INDEX IF NOT EXISTS idx_orchestration_attempts_no ON orchestration_attempts(run_id, task_id, attempt_no)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_orchestration_attempts_run ON orchestration_attempts(run_id)",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "name": "project_members_and_shared_chats",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS project_members (project_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (project_id, user_id))",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id)",
+          "ignore_errors": false
+        },
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE sessions ADD COLUMN shared_with_project INTEGER NOT NULL DEFAULT 0",
+          "ignore_errors": false
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "name": "chat_message_author",
+      "operations": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE messages ADD COLUMN author_user_id TEXT",
           "ignore_errors": false
         }
       ]

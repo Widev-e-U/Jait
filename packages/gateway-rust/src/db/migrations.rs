@@ -398,7 +398,7 @@ mod ordering_tests {
             )
             .unwrap();
         assert_eq!(root, "/repo");
-        assert_eq!(schema_version(&db), 77);
+        assert_eq!(schema_version(&db), 81);
         super::super::migrate_database(&db).unwrap();
         let count: u32 = db
             .query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0))

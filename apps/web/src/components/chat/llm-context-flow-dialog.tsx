@@ -284,6 +284,11 @@ function RoundMetricsBar({ metrics }: { metrics?: RoundMetrics }) {
       {metrics.promptTokens != null && <TooltipHint content={`${tokenLabelPrefix}prompt tokens`}><span>{tokenTextPrefix}{formatNumber(metrics.promptTokens)} prompt</span></TooltipHint>}
       {metrics.cachedPromptTokens != null && metrics.cachedPromptTokens > 0 && <TooltipHint content="Prompt tokens served from provider cache"><span>{formatNumber(metrics.cachedPromptTokens)} cached</span></TooltipHint>}
       {metrics.completionTokens != null && <TooltipHint content={`${tokenLabelPrefix}completion tokens`}><span>{tokenTextPrefix}{formatNumber(metrics.completionTokens)} completion</span></TooltipHint>}
+      {metrics.cachePrefixChanges && (metrics.cachePrefixChanges.toolsChanged || metrics.cachePrefixChanges.previousMessagesChanged) && (
+        <TooltipHint content="The request changed earlier tool definitions or messages compared with the previous request. Actual cache reuse depends on the provider.">
+          <span>prefix changed: {[metrics.cachePrefixChanges.toolsChanged && 'tools', metrics.cachePrefixChanges.previousMessagesChanged && 'messages'].filter(Boolean).join(', ')}</span>
+        </TooltipHint>
+      )}
       {metrics.tokensPerSecond != null && (
         <TooltipHint content="Completion tokens per second"><span className="font-medium text-foreground/80">{metrics.tokensPerSecond} tok/s</span></TooltipHint>
       )}

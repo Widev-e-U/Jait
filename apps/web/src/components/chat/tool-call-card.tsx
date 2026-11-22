@@ -57,7 +57,7 @@ export function SubAgentAuthProvider({ sessionId, authToken, children }: SubAgen
 function usePersistedSubAgent(record: Record<string, unknown>): Record<string, unknown> {
   const { sessionId, authToken } = useContext(SubAgentAuthContext)
   const subAgentId = typeof record.subAgentId === 'string' ? record.subAgentId : null
-  const [merged, setMerged] = useState<Record<string, unknown>>(record)
+  const [merged, setMerged] = useState<Record<string, unknown> | null>(null)
   // The parent re-derives the stub object on every render, so keep the latest
   // reference in a ref and fetch the full body exactly once.
   const recordRef = useRef(record)
@@ -99,7 +99,7 @@ function usePersistedSubAgent(record: Record<string, unknown>): Record<string, u
     return () => { cancelled = true }
   }, [subAgentId, sessionId, authToken])
 
-  return merged
+  return merged && subAgentId && merged.subAgentId === subAgentId ? { ...record, ...merged } : record
 }
 
 /** Auto-scroll a container to the bottom when content changes. */
@@ -335,6 +335,7 @@ export function getToolInvocationLabels(
   }
   if (isAgentToolName(normalized)) {
     const desc = truncate(displayStr(args.description ?? args.prompt ?? args.message), 60)
+    if (normalized === 'agent.spawn' && args.type === 'collabAgentToolCall') return { running: 'Starting agent', done: 'Agent started' }
     if (normalized === 'agent.wait') return { running: 'Waiting for agents', done: 'Collected agent results' }
     if (normalized === 'agent.close') return { running: 'Closing agent', done: 'Closed agent' }
     if (normalized === 'agent.resume') return { running: 'Resuming agent', done: 'Resumed agent' }
@@ -2286,6 +2287,30 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
   )
 }
 
+/** Codex reports the operation and the child state separately. A completed
+ * spawn operation does not mean that its child has finished. */
+function CodexAgentStates({ data }: { data: Record<string, unknown> }) {
+  if (data.type !== 'collabAgentToolCall' && data.type !== 'collab_agent_tool_call') return null
+  const states = data.agentsStates ?? data.agents_states
+  const entries = states && typeof states === 'object' && !Array.isArray(states) ? Object.entries(states) : []
+  const ids = data.receiverThreadIds ?? data.receiver_thread_ids
+  const allIds = new Set([...entries.map(([id]) => id), ...(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])])
+  if (!allIds.size) return null
+  const stateMap = Object.fromEntries(entries)
+  return <div className="space-y-2 px-3 py-2 text-xs" aria-label="Codex agent status">
+    {[...allIds].map(id => {
+      const state = stateMap[id]
+      const detail = state && typeof state === 'object' && !Array.isArray(state) ? state as Record<string, unknown> : {}
+      const status = typeof detail.status === 'string' ? detail.status.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ') : 'unknown'
+      const message = typeof detail.message === 'string' ? detail.message : ''
+      return <div key={id} className="rounded-md border border-border/60 bg-muted/30 p-2">
+        <div className="flex flex-wrap gap-x-2 text-muted-foreground"><span>Agent {id}</span><span>· last reported: {status}</span></div>
+        {message && <div className="mt-1 whitespace-pre-wrap break-words text-foreground">{message}</div>}
+      </div>
+    })}
+  </div>
+}
+
 function SubAgentLiveActivity({ output, isRunning }: { output?: string; isRunning: boolean }) {
   const scrollRef = useAutoScroll<HTMLDivElement>(output)
   const latest = getLatestSubAgentActivity(output)
@@ -2537,6 +2562,7 @@ function SubAgentHistoryView({
         onScroll={history.handleScroll}
       >
         <SubAgentMission args={args} />
+        <CodexAgentStates data={data} />
         <SubAgentLiveActivity output={streamingOutput} isRunning={isRunning} />
 
         {hasSegments ? (
@@ -3962,7 +3988,8 @@ function ToolCallCardInner({
 }: ToolCallCardProps) {
   call = canonicalizeExecuteCall(coalesceQuestionCalls([call])[0])
   const initialInline = isInlineToolCall(call)
-  const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
+  const isCodexAgentCall = call.args.type === 'collabAgentToolCall' || call.args.type === 'collab_agent_tool_call'
+  const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline || isCodexAgentCall)
   // Cards created mid-stream (pending/running) mount open underneath the
   // streaming bottom-chaser, which pins scroll in the same frame a layout
   // change commits. Animating their height in that window is what made rows
@@ -4203,6 +4230,7 @@ function ToolCallCardInner({
       setOpen(true)
     } else if (
       !inlineBody
+      && !isCodexAgentCall
       && bodyKind !== 'threadList'
       && (prevStatus === 'running' || prevStatus === 'pending')
       && call.status !== 'running'
@@ -4223,7 +4251,7 @@ function ToolCallCardInner({
       setOpen(true)
     }
     prevStatusRef.current = call.status
-  }, [backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody])
+  }, [backgroundWaiting, bodyKind, call.status, hasInlineSecretPrompt, inlineBody, isCodexAgentCall])
 
   useEffect(() => {
     if (
@@ -4802,6 +4830,7 @@ function AgentSpecialistBlock({
     <SubAgentScrollArea {...scroll} onScroll={history.handleScroll}>
       <div className="space-y-1">
         <SubAgentMission args={normalizedArgs} />
+        <CodexAgentStates data={effectiveResult} />
         {history.hiddenCount > 0 && (
           <SubAgentLoadEarlierButton onLoad={history.requestOlder} />
         )}

@@ -154,7 +154,7 @@ export function registerSessionRoutes(
     if (!session || !(session.userId === authUser.id || projectService?.canAccessSession(id, authUser.id))) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
-    return { ...session, canManageShare: session.userId === authUser.id && !!session.projectId && !!projectService?.isMember(session.projectId, authUser.id) };
+    return { ...session, isOwner: session.userId === authUser.id, canManageShare: session.userId === authUser.id && !!session.projectId && !!projectService?.isMember(session.projectId, authUser.id) };
   });
 
   // Sharing is explicit and controlled by the chat owner.

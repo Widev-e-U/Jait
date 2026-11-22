@@ -16,6 +16,8 @@ export default defineConfig({
     'notification-deck.spec.ts',
     'notification-center.spec.ts',
     'message-links.spec.ts',
+    'openui-chat.spec.ts',
+    'codex-agent.spec.ts',
     'tool-results.spec.ts',
     'chat-loop.spec.ts',
     'email-workspace.spec.ts',

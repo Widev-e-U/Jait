@@ -116,7 +116,7 @@ import {
 } from '@/lib/automation-selection-storage'
 import { getApiUrl, getStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import type { AutomationRepository } from '@/lib/automation-repositories'
-import { getLatestProjectSessionId } from '@/lib/project-sessions'
+import { getLatestProjectSessionId, isReadOnlyChatSession } from '@/lib/project-sessions'
 import { shouldAutoTitleSession } from '@/lib/session-title'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { updateModeProviderSelection, type ModeProviderSelection } from '@/lib/mode-provider-selection'
@@ -873,7 +873,7 @@ function App() {
     onLoginRequired,
     activeProject?.surfaceId ?? null,
     activeSessionRecord?.lastActiveAt ?? null,
-    activeSessionRecord?.canManageShare === false
+    isReadOnlyChatSession(activeSessionRecord)
   )
   const handleLatestContentViewed = useCallback(() => {
     if (activeSessionId && viewedActivityAt) void markSessionViewed(activeSessionId, viewedActivityAt)
@@ -2876,7 +2876,7 @@ function App() {
       toast.error('Failed to open chat panel.')
       return
     }
-    if (session.canManageShare === false) {
+    if (isReadOnlyChatSession(session)) {
       toast.info('Shared chats are available in the main panel in read-only mode.')
       return
     }
@@ -5721,7 +5721,7 @@ function App() {
                   !showMobileTerminalFullscreen &&
                   (<>
                       <DeveloperChatWorkspace
-                        readOnly={activeSessionRecord?.canManageShare === false}
+                        readOnly={isReadOnlyChatSession(activeSessionRecord)}
                         newChatContext={
                           <NewChatContextSelector
                             projects={projects}

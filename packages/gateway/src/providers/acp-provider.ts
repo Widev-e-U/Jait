@@ -1457,9 +1457,9 @@ export class AcpProvider implements CliProviderAdapter {
             sessionId,
             tool: getAcpToolName(merged),
             ok: update.status === "completed",
-            message: stringifyToolContent(update.rawOutput ?? update.status),
+            message: getAcpCodexCollab(merged) ? "" : stringifyToolContent(update.rawOutput ?? update.status),
             callId: update.toolCallId,
-            data: update.rawOutput,
+            data: getAcpCodexCollab(merged)?.args ?? update.rawOutput,
           });
         }
         break;
@@ -1901,7 +1901,28 @@ function getAcpJaitMcpCall(update: unknown): { tool: string; args: Record<string
   return { tool: normalizedTool, args: {} };
 }
 
+/** Codex ACP reports collaboration operations as other tools with camelCase
+ * titles and puts child state in rawInput, including on the final update. */
+function getAcpCodexCollab(update: unknown): { tool: string; args: Record<string, unknown> } | undefined {
+  if (!update || typeof update !== "object" || Array.isArray(update)) return;
+  const record = update as Record<string, unknown>;
+  const input = record.rawInput;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return;
+  const args = input as Record<string, unknown>;
+  if (typeof args.senderThreadId !== "string") return;
+  const names: Record<string, string> = {
+    spawnAgent: "agent.spawn", wait: "agent.wait", closeAgent: "agent.close",
+    resumeAgent: "agent.resume", sendInput: "agent.send", sendMessage: "agent.send",
+    followupTask: "agent.send", interruptAgent: "agent.interrupt", listAgents: "agent.list",
+  };
+  const tool = typeof record.title === "string" ? names[record.title] : undefined;
+  if (!tool) return;
+  return { tool, args: { ...args, type: "collabAgentToolCall" } };
+}
+
 function getAcpToolName(update: unknown): string {
+  const collab = getAcpCodexCollab(update);
+  if (collab) return collab.tool;
   const jaitMcpCall = getAcpJaitMcpCall(update);
   if (jaitMcpCall) return jaitMcpCall.tool;
   if (!update || typeof update !== "object") return "tool";
@@ -1920,6 +1941,8 @@ function getAcpToolName(update: unknown): string {
 }
 
 function getAcpToolArgs(update: unknown): unknown {
+  const collab = getAcpCodexCollab(update);
+  if (collab) return collab.args;
   const jaitMcpCall = getAcpJaitMcpCall(update);
   if (jaitMcpCall) return jaitMcpCall.args;
   if (!update || typeof update !== "object") return undefined;

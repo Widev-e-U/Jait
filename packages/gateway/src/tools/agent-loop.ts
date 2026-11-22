@@ -1,5 +1,5 @@
 import { isToolDisabled, toolPolicyNames } from "./tool-names.js";
-import { applyContextCaching } from "../services/context-cache.js";
+import { applyContextCaching, compareCachePrefix, type CachePrefixSnapshot } from "../services/context-cache.js";
 import { contextBudget, contextBudgetFromJson, boundSummaryInput, captureUsageAnchor, estimateAnchoredContext, pruneToolContext, compactionPlan, shouldCommitCompaction, priceTokenUsage, type ContextBudget, type UsageAnchor, type TokenPrices } from "../services/context-budget.js";
 import { loadContextState, saveContextState, projectToolEvidence } from "./context-evidence.js";
 import { serializeToolResultForModel } from "./model-result.js";
@@ -113,12 +113,15 @@ export interface RoundMetrics {
   contextAccounting?: { tokens: number; source: "provider-anchor" | "estimate" };
 
   requestCount?: number;
+  /** Request-shape comparison, not a claim about provider cache hits. */
+  cachePrefixChanges?: { toolsChanged: boolean; previousMessagesChanged: boolean };
   /** Wall-clock duration of the LLM request in ms. */
   durationMs: number;
   /** Provider-reported token usage (when available). */
   promptTokens?: number;
   /** Prompt tokens served from the provider cache (included in promptTokens). */
   cachedPromptTokens?: number;
+  cacheWriteTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
   /** True when token counts were estimated because the provider reported no usage. */
@@ -1525,6 +1528,12 @@ export function buildTieredToolSchemas(
   },
 ): OpenAIToolSchema[] {
   let tools = registry.listForLLM(disabledTools);
+  // The navigation card is optional (ordinary Markdown links work directly).
+  // Advertise its large schema only when requested or discovered, while
+  // retaining it if discovery itself is unavailable.
+  if (tools.some((tool) => tool.name === "tools.search")) {
+    tools = tools.filter((tool) => tool.name !== "jait.link");
+  }
   if (options?.ollamaEssentials) {
     // Keep the compact core set for local models, then add only the small
     // request-relevant selection below.
@@ -3459,6 +3468,7 @@ export async function runAgentLoop(
   let swarmDelegationNudged = false;
   /** The periodic reminder currently in history, so the next one replaces it. */
   let periodicReminderPrompt: AgentMessage | null = null;
+  let previousCachePrefix: CachePrefixSnapshot | undefined;
   /** The convergence directive currently in history, removed once progress resumes. */
   let convergePrompt: AgentMessage | null = null;
   /** Consecutive rounds that only investigated and completed no plan step. */
@@ -3692,6 +3702,8 @@ export async function runAgentLoop(
       reqBody.tools = roundToolSchemas;
       if (!isOllama) reqBody.tool_choice = "auto";
     }
+    const prefixComparison = compareCachePrefix(reqBody, previousCachePrefix);
+    previousCachePrefix = prefixComparison.snapshot;
     // Snapshot context_usage for inclusion in round metrics
     let roundContextUsage: RoundMetrics["contextUsage"] | undefined;
     if (contextWindow > 0) {
@@ -3857,10 +3869,11 @@ export async function runAgentLoop(
 
       // Attach metrics to the round now that streaming is complete
       const durationMs = Date.now() - llmStartTime;
-      const metrics: RoundMetrics = { requestCount: 1, durationMs };
+      const metrics: RoundMetrics = { requestCount: 1, durationMs, ...(prefixComparison.changes ? { cachePrefixChanges: prefixComparison.changes } : {}) };
       if (parsed.usage) {
         metrics.promptTokens = parsed.usage.prompt_tokens;
         metrics.cachedPromptTokens = parsed.usage.cached_tokens;
+        metrics.cacheWriteTokens = parsed.usage.cache_write_tokens;
         metrics.completionTokens = parsed.usage.completion_tokens;
         metrics.totalTokens = parsed.usage.total_tokens;
         if (llm.tokenPrices && parsed.usage.cached_tokens !== undefined && parsed.usage.cache_write_tokens !== undefined) {

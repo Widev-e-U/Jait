@@ -423,6 +423,21 @@ describe("OpenAI tool name conversion", () => {
 });
 
 describe("buildTieredToolSchemas", () => {
+  it("defers the optional navigation card only when discovery is available", () => {
+    const registry = new ToolRegistry();
+    for (const name of ["tools.search", "jait.link", "todo"]) registry.register({
+      name, description: name, tier: "core", category: "meta", source: "builtin",
+      parameters: { type: "object", properties: {}, required: [] },
+      async execute() { return { ok: true, message: "ok" }; },
+    });
+    const names = (disabled?: Set<string>, activatedToolNames?: string[]) =>
+      buildTieredToolSchemas(registry, disabled, { activatedToolNames }).map(s => fromOpenAIName(s.function.name));
+    expect(names()).toContain("tools.search");
+    expect(names()).not.toContain("jait.link");
+    expect(names(undefined, ["jait.link"])).toContain("jait.link");
+    expect(names(new Set(["tools.search"]))).toContain("jait.link");
+    expect(names(new Set(["jait.link"]), ["jait.link"])).not.toContain("jait.link");
+  });
   it("keeps core discovery tools for Ollama-backed models", () => {
     const registry = new ToolRegistry();
     const register = (name: string, tier: "core" | "standard") => registry.register({

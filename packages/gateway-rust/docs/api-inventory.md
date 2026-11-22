@@ -6,32 +6,32 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 
 ```json
 {
-  "httpTotal": 449,
+  "httpTotal": 454,
   "mounted-fail-closed": 112,
   "native-tested": 242,
-  "missing": 34,
+  "missing": 39,
   "native-untested": 54,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 65.9,
+  "nativeRouteReferencePct": 65.2,
   "nativeTested": 275,
-  "nativeTestedDenominator": 621,
-  "nativeTestedPct": 44.28,
+  "nativeTestedDenominator": 626,
+  "nativeTestedPct": 43.93,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
   "wsWithoutDirectionalRustReference": 76,
-  "clientPathCandidates": 259,
+  "clientPathCandidates": 262,
   "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 18,
-  "clientRequestCalls": 382,
-  "clientNonLiteralRequestCalls": 70,
-  "clientReviewedRequestSites": 67,
+  "clientRequestCalls": 387,
+  "clientNonLiteralRequestCalls": 74,
+  "clientReviewedRequestSites": 69,
   "backgroundServices": 21,
   "backgroundServicesMissing": 21,
   "httpRustStatus": {
     "native-tested": 242,
     "native-untested": 54,
-    "missing": 153
+    "missing": 158
   },
   "wsRustStatus": {
     "native-tested": 33,
@@ -70,6 +70,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | DELETE | `/api/plugins/:id` | missing | mounted-fail-closed |  | routes/plugins.ts |
 | DELETE | `/api/preview/devtools/:grantId` | missing | mounted-fail-closed |  | routes/browser-devtools.ts |
 | DELETE | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
+| DELETE | `/api/projects/:id/members/:userId` | missing | missing |  | routes/projects.ts |
 | DELETE | `/api/projects/archived` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::permanent_archive_deletion_is_atomic_and_owner_scoped` | routes/projects.ts |
 | DELETE | `/api/provider-accounts/:id` | native-untested | native-untested |  | routes/providers.ts |
 | DELETE | `/api/reminders/:id` | missing | mounted-incomplete |  | routes/reminders.ts |
@@ -172,6 +173,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/project/stat` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | GET | `/api/projects` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
+| GET | `/api/projects/:id/members` | missing | missing |  | routes/projects.ts |
 | GET | `/api/projects/:id/sessions` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/state` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/subtree` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
@@ -214,6 +216,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | native-untested | native-untested |  | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/plan` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/runtime` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/shared-stream` | missing | missing |  | routes/chat.ts |
 | GET | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/:sessionId/stream` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | native-untested | native-untested |  | routes/chat.ts |
@@ -271,6 +274,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | PATCH | `/api/repos/:id` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | PATCH | `/api/repos/:id/pull-requests/:number` | native-untested | native-untested |  | routes/pull-requests.ts |
 | PATCH | `/api/sessions/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
+| PATCH | `/api/sessions/:id/share` | missing | missing |  | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_thread_turns.rs::patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice` | routes/sessions.ts |
 | PATCH | `/api/skills/:id` | native-untested | native-untested |  | routes/skills.ts |
 | PATCH | `/api/threads/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
@@ -390,6 +394,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | POST | `/api/project/undo-all` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/project/write` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/projects` | native-tested | native-tested | `tests/binary_reminders.rs::reminder_projects_use_owned_live_project_data` | routes/projects.ts |
+| POST | `/api/projects/:id/members` | missing | missing |  | routes/projects.ts |
 | POST | `/api/projects/:id/move` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
 | POST | `/api/projects/:id/repository` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::assignment_uses_owned_existing_repositories_and_fails_closed_on_discovery` | routes/projects.ts |
 | POST | `/api/projects/:id/restore` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
@@ -502,19 +507,19 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 
 Every background site in the Node gateway source is listed in tooling/services-inventory.mjs: the composition-root starts in index.ts and server.ts, each setInterval, each self re-arming timer and each literal loop. A site that is per request or per tool call is listed under reviewed timers, not as a service. A keyword hit in Rust source does not show the service is wired into the composed binary, so every service stays missing until a test-backed entry exists.
 
-- `primaryLink` (service) — missing; Rust keyword hint present; Node: index.ts:177 primaryLink.start, index.ts:1589 primaryLink.start
+- `primaryLink` (service) — missing; Rust keyword hint present; Node: index.ts:177 primaryLink.start, index.ts:1592 primaryLink.start
 - `threadRestartRecovery` (boot-task) — missing; Rust keyword hint present; Node: index.ts:211 threadService.queueRestartRecovery
 - `emailInboxRefresh` (service) — missing; Rust keyword hint present; Node: index.ts:230 emailService.startInboxRefresh, services/email/service.ts:73 setInterval
 - `projectWatcher` (service) — missing; Rust keyword hint present; Node: index.ts:379 projectWatcher.watch
 - `scheduler` (service) — missing; Rust keyword hint present; Node: index.ts:876 scheduler.start, scheduler/service.ts:280 setInterval
 - `threadReviewSync` (service) — missing; Rust keyword hint present; Node: index.ts:877 threadReviewSync.start, services/thread-review-sync.ts:37 setInterval
-- `wsHub` (service) — missing; Rust keyword hint present; Node: index.ts:1540 ws.start, ws.ts:272 setInterval
-- `databaseRetention` (service) — missing; Rust keyword hint present; Node: index.ts:1562 databaseRetention.start, services/database-retention.ts:623 setTimeout
-- `diskJanitor` (service) — missing; Rust keyword hint present; Node: index.ts:1563 diskJanitor.start, services/disk-janitor.ts:291 setTimeout
-- `sandboxMaintenance` (service) — missing; Rust keyword hint absent; Node: index.ts:1567 jaitProvider.startSandboxMaintenance, providers/jait-provider.ts:194 setInterval
-- `channelAutoStart` (service) — missing; Rust keyword hint present; Node: index.ts:1577 channelManager.startEnabled
-- `terminalReaper` (service) — missing; Rust keyword hint present; Node: index.ts:1594 setInterval
-- `browserReaper` (service) — missing; Rust keyword hint present; Node: index.ts:1659 setInterval
+- `wsHub` (service) — missing; Rust keyword hint present; Node: index.ts:1543 ws.start, ws.ts:272 setInterval
+- `databaseRetention` (service) — missing; Rust keyword hint present; Node: index.ts:1565 databaseRetention.start, services/database-retention.ts:623 setTimeout
+- `diskJanitor` (service) — missing; Rust keyword hint present; Node: index.ts:1566 diskJanitor.start, services/disk-janitor.ts:291 setTimeout
+- `sandboxMaintenance` (service) — missing; Rust keyword hint absent; Node: index.ts:1570 jaitProvider.startSandboxMaintenance, providers/jait-provider.ts:194 setInterval
+- `channelAutoStart` (service) — missing; Rust keyword hint present; Node: index.ts:1580 channelManager.startEnabled
+- `terminalReaper` (service) — missing; Rust keyword hint present; Node: index.ts:1597 setInterval
+- `browserReaper` (service) — missing; Rust keyword hint present; Node: index.ts:1662 setInterval
 - `cliSessionIdleReaper` (service) — missing; Rust keyword hint present; Node: providers/session-idle.ts:33 setInterval
 - `browserDevtoolsGrantCleanup` (service) — missing; Rust keyword hint present; Node: routes/browser-devtools.ts:36 setInterval
 - `threadRecoverySweep` (service) — missing; Rust keyword hint absent; Node: routes/threads.ts:297 setInterval
@@ -528,7 +533,7 @@ Every background site in the Node gateway source is listed in tooling/services-i
 
 - `channels/telegram/connector.ts|TelegramConnector.startTyping` — channels/telegram/connector.ts:578 setInterval — typing indicator while one chat reply is pending
 - `routes/browser-devtools.ts|registerBrowserDevToolsRoutes.upgrade` — routes/browser-devtools.ts:133 setInterval — validity check on one devtools transport, cleared with that transport
-- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4445 setInterval, routes/chat.ts:6524 setInterval, routes/chat.ts:6636 setInterval, routes/chat.ts:6716 setInterval — SSE keepalive and heartbeat on one chat stream
+- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4514 setInterval, routes/chat.ts:6554 setInterval, routes/chat.ts:6668 setInterval, routes/chat.ts:6676 setInterval, routes/chat.ts:6764 setInterval, routes/chat.ts:6798 setInterval, routes/chat.ts:6861 setInterval, routes/chat.ts:6888 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
 - `routes/mcp-server.ts|registerMcpRoutes` — routes/mcp-server.ts:501 setInterval, routes/mcp-server.ts:622 setInterval — keepalive on one MCP connection
 - `tools/browser-handoff.ts|createBrowserHandoffTool.wait` — tools/browser-handoff.ts:25 setInterval — poll inside one browser handoff tool call
 - `tools/terminal-tools.ts|executeInTerminal` — tools/terminal-tools.ts:1029 setInterval — poll inside one terminal tool execution
@@ -540,8 +545,8 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `services/messenger-service.ts|SafeMatrixClient.doRequest` — services/messenger-service.ts:193 while (true) — reads one HTTP response body
 - `services/preview-runner.ts|detectPackageManager` — services/preview-runner.ts:38 while (true) — walks up to the filesystem root
 - `services/subscription-usage-fetchers.ts|fetchOllamaSettingsUsage` — services/subscription-usage-fetchers.ts:84 while (true) — reads one HTTP response body
-- `tools/agent-loop.ts|parseOllamaStream` — tools/agent-loop.ts:1424 while (true) — parses one provider stream
-- `tools/agent-loop.ts|parseOpenAIStream` — tools/agent-loop.ts:1847 while (true) — parses one provider stream
+- `tools/agent-loop.ts|parseOllamaStream` — tools/agent-loop.ts:1427 while (true) — parses one provider stream
+- `tools/agent-loop.ts|parseOpenAIStream` — tools/agent-loop.ts:1856 while (true) — parses one provider stream
 
 ## Client path candidates (heuristic)
 
@@ -686,6 +691,7 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/projects` — GET /api/projects, POST /api/projects — apps/web/src/e2e-fixtures/project-selection-refresh.tsx, apps/web/src/e2e-fixtures/session-selector-show-more.tsx, apps/web/src/hooks/useProjects.ts
 - `/api/projects/:id` — DELETE /api/projects/:id, GET /api/projects/:id, PATCH /api/projects/:id — apps/web/src/hooks/useProjects.ts
 - `/api/projects/{}` — DELETE /api/projects/:id, DELETE /api/projects/archived, GET /api/projects/:id, GET /api/projects/archived, GET /api/projects/last-active, GET /api/projects/search, PATCH /api/projects/:id, POST /api/projects/select — apps/web/src/App.tsx, apps/web/src/hooks/useProjects.ts
+- `/api/projects/{}/members` — GET /api/projects/:id/members, POST /api/projects/:id/members — apps/web/src/components/project/project-members.tsx
 - `/api/projects/{}/move` — POST /api/projects/:id/move — apps/web/src/hooks/useProjects.ts
 - `/api/projects/{}/repository` — POST /api/projects/:id/repository — apps/web/src/hooks/useProjects.ts
 - `/api/projects/{}/restore` — POST /api/projects/:id/restore — apps/web/src/hooks/useProjects.ts
@@ -763,6 +769,8 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/sessions/{}/plan/execute` — POST /api/sessions/:sessionId/plan/execute — apps/web/src/hooks/useChat.ts
 - `/api/sessions/{}/plan/reject` — POST /api/sessions/:sessionId/plan/reject — apps/web/src/hooks/useChat.ts
 - `/api/sessions/{}/restart-from` — POST /api/sessions/:sessionId/restart-from — apps/web/src/hooks/useChat.ts
+- `/api/sessions/{}/share` — PATCH /api/sessions/:id/share — apps/web/src/components/project/project-chat-sharing.tsx
+- `/api/sessions/{}/shared-stream` — GET /api/sessions/:sessionId/shared-stream — apps/web/src/hooks/useChat.ts
 - `/api/sessions/{}/steer` — POST /api/sessions/:sessionId/steer — apps/web/src/App.tsx, apps/web/src/components/app-shell/parallel-chat-panel.tsx
 - `/api/sessions/{}/sub-agents/{}` — GET /api/sessions/:sessionId/sub-agents/:subAgentId — apps/web/src/components/chat/tool-call-card.tsx
 - `/api/sessions/{}/trajectory` — GET /api/sessions/:sessionId/trajectory — apps/web/src/components/debug/use-session-trajectory.ts
@@ -811,6 +819,8 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 
 Each request call (fetch, apiFetch, request, this.request, getJson) whose path is not a literal containing /api is listed here with the place its path is built. Reviewed in tooling/client-inventory.mjs; the table must match the source exactly.
 
+- `apps/web/src/components/project/project-members.tsx|ProjectMembers.change` (1) — forwards the project members endpoint or endpoint plus an encoded user ID from component handlers
+- `apps/web/src/components/project/project-members.tsx|ProjectMembers` (3) — fetch forwards the helper URL; two request calls use the project members endpoint built in this component
 - `apps/web/src/App.tsx|App` (1) — health probe of the configured gateway (${getApiUrl()}/health)
 - `apps/web/src/components/consent/action-card.tsx|consentFetch` (1) — helper; the url it receives is ${GATEWAY}/api/consent/pending[/id] built in the caller
 - `apps/web/src/components/messenger/teams-connection-card.tsx|TeamsConnectionCard` (1) — REAUTH_URL, the constant '/api/messenger/bridge-reauth/teams' in this file
