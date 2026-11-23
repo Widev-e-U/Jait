@@ -9,10 +9,10 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "httpTotal": 454,
   "mounted-fail-closed": 112,
   "native-tested": 242,
-  "missing": 39,
-  "native-untested": 54,
+  "missing": 35,
+  "native-untested": 58,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 65.2,
+  "nativeRouteReferencePct": 66.1,
   "nativeTested": 275,
   "nativeTestedDenominator": 626,
   "nativeTestedPct": 43.93,
@@ -22,7 +22,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "wsWithoutDirectionalRustReference": 76,
   "clientPathCandidates": 262,
   "clientOnlyRoutes": 5,
-  "rustOnlyRoutes": 18,
+  "rustOnlyRoutes": 19,
   "clientRequestCalls": 387,
   "clientNonLiteralRequestCalls": 74,
   "clientReviewedRequestSites": 69,
@@ -30,8 +30,8 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "backgroundServicesMissing": 21,
   "httpRustStatus": {
     "native-tested": 242,
-    "native-untested": 54,
-    "missing": 158
+    "native-untested": 58,
+    "missing": 154
   },
   "wsRustStatus": {
     "native-tested": 33,
@@ -173,7 +173,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/project/stat` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | GET | `/api/projects` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
-| GET | `/api/projects/:id/members` | missing | missing |  | routes/projects.ts |
+| GET | `/api/projects/:id/members` | native-untested | native-untested |  | routes/projects.ts |
 | GET | `/api/projects/:id/sessions` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/state` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/subtree` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
@@ -216,7 +216,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | native-untested | native-untested |  | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/plan` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/runtime` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/shared-stream` | missing | missing |  | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/shared-stream` | native-untested | native-untested |  | routes/chat.ts |
 | GET | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/:sessionId/stream` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | native-untested | native-untested |  | routes/chat.ts |
@@ -274,7 +274,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | PATCH | `/api/repos/:id` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | PATCH | `/api/repos/:id/pull-requests/:number` | native-untested | native-untested |  | routes/pull-requests.ts |
 | PATCH | `/api/sessions/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
-| PATCH | `/api/sessions/:id/share` | missing | missing |  | routes/sessions.ts |
+| PATCH | `/api/sessions/:id/share` | native-untested | native-untested |  | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_thread_turns.rs::patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice` | routes/sessions.ts |
 | PATCH | `/api/skills/:id` | native-untested | native-untested |  | routes/skills.ts |
 | PATCH | `/api/threads/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
@@ -394,7 +394,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | POST | `/api/project/undo-all` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/project/write` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/projects` | native-tested | native-tested | `tests/binary_reminders.rs::reminder_projects_use_owned_live_project_data` | routes/projects.ts |
-| POST | `/api/projects/:id/members` | missing | missing |  | routes/projects.ts |
+| POST | `/api/projects/:id/members` | native-untested | native-untested |  | routes/projects.ts |
 | POST | `/api/projects/:id/move` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
 | POST | `/api/projects/:id/repository` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::assignment_uses_owned_existing_repositories_and_fails_closed_on_discovery` | routes/projects.ts |
 | POST | `/api/projects/:id/restore` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
@@ -533,7 +533,7 @@ Every background site in the Node gateway source is listed in tooling/services-i
 
 - `channels/telegram/connector.ts|TelegramConnector.startTyping` — channels/telegram/connector.ts:578 setInterval — typing indicator while one chat reply is pending
 - `routes/browser-devtools.ts|registerBrowserDevToolsRoutes.upgrade` — routes/browser-devtools.ts:133 setInterval — validity check on one devtools transport, cleared with that transport
-- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4514 setInterval, routes/chat.ts:6554 setInterval, routes/chat.ts:6668 setInterval, routes/chat.ts:6676 setInterval, routes/chat.ts:6764 setInterval, routes/chat.ts:6798 setInterval, routes/chat.ts:6861 setInterval, routes/chat.ts:6888 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
+- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4495 setInterval, routes/chat.ts:6535 setInterval, routes/chat.ts:6649 setInterval, routes/chat.ts:6657 setInterval, routes/chat.ts:6745 setInterval, routes/chat.ts:6779 setInterval, routes/chat.ts:6842 setInterval, routes/chat.ts:6869 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
 - `routes/mcp-server.ts|registerMcpRoutes` — routes/mcp-server.ts:501 setInterval, routes/mcp-server.ts:622 setInterval — keepalive on one MCP connection
 - `tools/browser-handoff.ts|createBrowserHandoffTool.wait` — tools/browser-handoff.ts:25 setInterval — poll inside one browser handoff tool call
 - `tools/terminal-tools.ts|executeInTerminal` — tools/terminal-tools.ts:1029 setInterval — poll inside one terminal tool execution

@@ -3,10 +3,10 @@
     "httpTotal": 454,
     "mounted-fail-closed": 112,
     "native-tested": 242,
-    "missing": 39,
-    "native-untested": 54,
+    "missing": 35,
+    "native-untested": 58,
     "mounted-incomplete": 7,
-    "nativeRouteReferencePct": 65.2,
+    "nativeRouteReferencePct": 66.1,
     "nativeTested": 275,
     "nativeTestedDenominator": 626,
     "nativeTestedPct": 43.93,
@@ -16,7 +16,7 @@
     "wsWithoutDirectionalRustReference": 76,
     "clientPathCandidates": 262,
     "clientOnlyRoutes": 5,
-    "rustOnlyRoutes": 18,
+    "rustOnlyRoutes": 19,
     "clientRequestCalls": 387,
     "clientNonLiteralRequestCalls": 74,
     "clientReviewedRequestSites": 69,
@@ -24,8 +24,8 @@
     "backgroundServicesMissing": 21,
     "httpRustStatus": {
       "native-tested": 242,
-      "native-untested": 54,
-      "missing": 158
+      "native-untested": 58,
+      "missing": 154
     },
     "wsRustStatus": {
       "native-tested": 33,
@@ -1899,10 +1899,11 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "missing",
+      "status": "native-untested",
       "testPathReference": true,
+      "rustFile": "routes/projects.rs",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -2549,10 +2550,11 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "missing",
+      "status": "native-untested",
       "testPathReference": true,
+      "rustFile": "routes/chat.rs",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
     },
     {
       "method": "GET",
@@ -3452,10 +3454,11 @@
       "nodeFiles": [
         "routes/sessions.ts"
       ],
-      "status": "missing",
+      "status": "native-untested",
       "testPathReference": true,
+      "rustFile": "routes/sessions.rs",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
     },
     {
       "method": "PATCH",
@@ -5188,10 +5191,11 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "missing",
+      "status": "native-untested",
       "testPathReference": true,
+      "rustFile": "routes/projects.rs",
       "binaryTests": [],
-      "rustStatus": "missing"
+      "rustStatus": "native-untested"
     },
     {
       "method": "POST",
@@ -8346,14 +8350,14 @@
     {
       "key": "routes/chat.ts|registerChatRoutes",
       "sites": [
-        "routes/chat.ts:4514 setInterval",
-        "routes/chat.ts:6554 setInterval",
-        "routes/chat.ts:6668 setInterval",
-        "routes/chat.ts:6676 setInterval",
-        "routes/chat.ts:6764 setInterval",
-        "routes/chat.ts:6798 setInterval",
-        "routes/chat.ts:6861 setInterval",
-        "routes/chat.ts:6888 setInterval"
+        "routes/chat.ts:4495 setInterval",
+        "routes/chat.ts:6535 setInterval",
+        "routes/chat.ts:6649 setInterval",
+        "routes/chat.ts:6657 setInterval",
+        "routes/chat.ts:6745 setInterval",
+        "routes/chat.ts:6779 setInterval",
+        "routes/chat.ts:6842 setInterval",
+        "routes/chat.ts:6869 setInterval"
       ],
       "reason": "per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close"
     },
@@ -11701,6 +11705,7 @@
     "ALL /api/sessions/{}/state",
     "ALL /api/sessions/{}/{}",
     "DELETE /api/plugins/scan",
+    "DELETE /api/projects/{}/members",
     "GET /api/consent/pending/approve",
     "GET /api/consent/pending/approve-all",
     "GET /api/consent/pending/reject",
