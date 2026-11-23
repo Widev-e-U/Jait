@@ -224,6 +224,45 @@ pub struct ChatRoutes {
     pub(crate) session_events: Option<SessionEventSink>,
 }
 impl ChatRoutes {
+    /// Resolve access before joining the event bus; the projection and delivery
+    /// independently recheck authority after this initial admission check.
+    pub(super) async fn shared_owner(
+        &self,
+        reader: &str,
+        session: &str,
+    ) -> Result<Option<String>, String> {
+        let reader = reader.to_owned();
+        let session = session.to_owned();
+        self.auth.with_database(move |db| {
+            use rusqlite::OptionalExtension;
+            db.query_row(
+                "SELECT s.user_id FROM sessions s WHERE s.id=?1 AND s.status='active' AND (s.user_id=?2 OR (s.shared_with_project=1 AND EXISTS (SELECT 1 FROM projects p WHERE p.id=s.project_id AND p.status='active' AND (p.user_id=?2 OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?2)))))",
+                rusqlite::params![session, reader], |row| row.get(0),
+            ).optional().map_err(Into::into)
+        }).await.map_err(|_| "Session access could not be checked".to_owned())
+    }
+
+    pub(super) async fn shared_snapshot(
+        &self,
+        owner: &str,
+        reader: &str,
+        session: &str,
+    ) -> Result<Option<Value>, String> {
+        consistent_snapshot(&self.active, owner, session, || async {
+            crate::runtime::chat_projection::project_messages_for_reader(
+                self.auth.clone(),
+                reader.to_owned(),
+                session.to_owned(),
+                None,
+                None,
+                true,
+            )
+            .await
+            .map(|result| result.unwrap_or(Value::Null))
+        })
+        .await
+    }
+
     pub fn new(
         auth: AuthState,
         factory: Arc<dyn ChatFactory>,
@@ -322,6 +361,10 @@ impl ChatRoutes {
             .route("/api/threads/{id}/resume", post(thread_resume))
             .route("/api/threads/{id}/steer", post(thread_steer))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
+            .route(
+                "/api/sessions/{id}/shared-stream",
+                get(super::chat_events::shared_stream),
+            )
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .route(
                 "/api/sessions/{id}/trajectory",

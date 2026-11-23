@@ -131,6 +131,7 @@ async fn project_membership_is_owner_managed_and_revocable() {
         db.execute("INSERT INTO messages(id,session_id,role,content,created_at) VALUES('fixture-system',?1,'system','system-secret','2026-01-01T00:00:02Z')", [private_id]).unwrap();
     }
     let messages_url = url(&format!("/api/sessions/{private_id}/messages"));
+    let shared_stream_url = url(&format!("/api/sessions/{private_id}/shared-stream"));
     let project_url = url(&format!("/api/projects/{id}"));
     let members_url = format!("{project_url}/members");
     assert_eq!(
@@ -216,6 +217,16 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .iter()
             .any(|p| p["id"] == id)
+    );
+    assert_eq!(
+        client
+            .get(&shared_stream_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     let session_url = url(&format!("/api/sessions/{private_id}"));
     let share_url = format!("{session_url}/share");
@@ -316,6 +327,32 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .all(|key| ["id", "role", "content", "authorUserId"].contains(&key.as_str()))
     }));
     assert!(!shared_messages.to_string().contains("secret"));
+    let mut shared_stream = client
+        .get(&shared_stream_url)
+        .bearer_auth(&member)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(shared_stream.status(), 200);
+    let snapshot = tokio::time::timeout(Duration::from_secs(5), async {
+        let mut bytes = Vec::new();
+        while !bytes.ends_with(b"\n\n") {
+            bytes.extend_from_slice(
+                &shared_stream
+                    .chunk()
+                    .await
+                    .unwrap()
+                    .expect("stream closed before snapshot"),
+            );
+            assert!(bytes.len() < 1_000_000, "snapshot exceeded test limit");
+        }
+        String::from_utf8(bytes).unwrap()
+    })
+    .await
+    .unwrap();
+    assert!(snapshot.contains("\"type\":\"snapshot\""));
+    assert!(snapshot.contains("hello") && snapshot.contains("answer"));
+    assert!(!snapshot.contains("secret"));
     let owner_messages: Value = client
         .get(&messages_url)
         .bearer_auth(&owner)
@@ -348,6 +385,23 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .status(),
         200
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_secs(4), shared_stream.chunk())
+            .await
+            .unwrap()
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        client
+            .get(&shared_stream_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     assert_eq!(
         client

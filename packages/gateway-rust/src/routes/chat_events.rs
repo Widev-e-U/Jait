@@ -300,6 +300,171 @@ pub async fn stream(
     serve(state, session_id, headers, false).await
 }
 
+/// Project only conversational events; unrecognized or malformed frames are never forwarded.
+fn shared_event(data: &str) -> Option<String> {
+    let event: Value = serde_json::from_str(data).ok()?;
+    let kind = event.get("type")?.as_str()?;
+    let value = match kind {
+        "token" | "request" => {
+            if kind == "request"
+                && !matches!(event.get("systemNotice"), None | Some(Value::Bool(false)))
+            {
+                return None;
+            }
+            let content = event.get("content")?.as_str()?;
+            let mut value = json!({"type":kind,"content":content});
+            if kind == "request"
+                && let Some(author) = event
+                    .get("authorUserId")
+                    .and_then(Value::as_str)
+                    .filter(|v| !v.is_empty())
+            {
+                value["authorUserId"] = json!(author);
+            }
+            value
+        }
+        "done" => json!({"type":"done"}),
+        _ => return None,
+    };
+    Some(format!("data: {value}\n\n"))
+}
+
+struct SharedStream {
+    state: ChatRoutes,
+    receiver: broadcast::Receiver<Message>,
+    session: String,
+    reader: String,
+    owner: String,
+    snapshot: Option<String>,
+    last: i64,
+    bytes: usize,
+    ticks: usize,
+    timer: Interval,
+}
+
+/// Read-only shared stream. The subscription precedes the snapshot and the
+/// snapshot's durable cursor suppresses duplicate buffered frames.
+pub async fn shared_stream(
+    State(state): State<ChatRoutes>,
+    Path(session): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let user = match auth::require_user(&state.auth, &headers).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    let owner = match state.shared_owner(&user.id, &session).await {
+        Ok(Some(owner)) => owner,
+        Ok(None) => return auth::response(404, json!({"error":"SESSION_NOT_FOUND"})),
+        Err(_) => return auth::internal_error(),
+    };
+    let (receiver, _) = match state.events.subscribe(&session, &owner) {
+        Ok(result) => result,
+        Err(_) => return auth::response(503, json!({"error":"STREAM_CAPACITY_UNAVAILABLE"})),
+    };
+    let snapshot = match state.shared_snapshot(&owner, &user.id, &session).await {
+        Ok(Some(value)) if value.is_null() => {
+            return auth::response(404, json!({"error":"SESSION_NOT_FOUND"}));
+        }
+        Ok(Some(value)) => value,
+        Ok(None) => return auth::response(503, json!({"error":"CHAT_SNAPSHOT_BUSY"})),
+        Err(_) => return auth::internal_error(),
+    };
+    let Some(last) = snapshot.get("seq").and_then(Value::as_i64) else {
+        return auth::internal_error();
+    };
+    let Some(messages) = snapshot.get("messages").and_then(Value::as_array) else {
+        return auth::internal_error();
+    };
+    let messages: Vec<Value> = messages
+        .iter()
+        .filter_map(|message| {
+            if !matches!(
+                message.get("role").and_then(Value::as_str),
+                Some("user" | "assistant")
+            ) || message.get("systemNotice").and_then(Value::as_bool) == Some(true)
+            {
+                return None;
+            }
+            let mut filtered = serde_json::Map::new();
+            for key in ["id", "role", "content", "authorUserId"] {
+                if let Some(value) = message.get(key) {
+                    filtered.insert(key.to_owned(), value.clone());
+                }
+            }
+            Some(Value::Object(filtered))
+        })
+        .collect();
+    let frame = format!(
+        "data: {}\n\n",
+        json!({"type":"snapshot","messages":messages,"streaming":snapshot["streaming"]})
+    );
+    if frame.len() > state.limits.stream_bytes {
+        return auth::internal_error();
+    }
+    let mut timer = tokio::time::interval_at(
+        tokio::time::Instant::now() + Duration::from_secs(1),
+        Duration::from_secs(1),
+    );
+    timer.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let stream = SharedStream {
+        state,
+        receiver,
+        session,
+        reader: user.id,
+        owner,
+        snapshot: Some(frame),
+        last,
+        bytes: 0,
+        ticks: 0,
+        timer,
+    };
+    let body = futures_util::stream::unfold(stream, |mut stream| async move {
+        loop {
+            let frame = if let Some(snapshot) = stream.snapshot.take() {
+                Some(snapshot)
+            } else {
+                tokio::select! {
+                    _ = stream.timer.tick() => {
+                        stream.ticks += 1;
+                        (stream.ticks % 15 == 0).then(|| ": keepalive\n\n".to_owned())
+                    }
+                    event = stream.receiver.recv() => match event {
+                        Ok(Message::Durable(frame)) if frame.log_id > stream.last => {
+                            stream.last = frame.log_id;
+                            shared_event(&frame.data)
+                        }
+                        Ok(_) => None,
+                        Err(_) => return None,
+                    }
+                }
+            };
+            // Check on every event and timer tick, including an idle connection.
+            if !matches!(stream.state.shared_owner(&stream.reader, &stream.session).await, Ok(Some(ref owner)) if owner == &stream.owner)
+            {
+                return None;
+            }
+            if let Some(frame) = frame {
+                stream.bytes = stream.bytes.saturating_add(frame.len());
+                if stream.bytes > stream.state.limits.stream_bytes {
+                    return None;
+                }
+                return Some((Ok::<_, Infallible>(frame), stream));
+            }
+        }
+    });
+    (
+        [
+            (header::CONTENT_TYPE, "text/event-stream"),
+            (header::CACHE_CONTROL, "no-cache, no-transform"),
+            (header::CONTENT_ENCODING, "identity"),
+            (header::HeaderName::from_static("x-accel-buffering"), "no"),
+        ],
+        Body::from_stream(body),
+    )
+        .into_response()
+}
+
 /// Full persisted event log followed by live events, wrapped in trajectory envelopes.
 pub async fn trajectory(
     State(state): State<ChatRoutes>,
@@ -420,6 +585,37 @@ async fn serve(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_events_only_expose_conversational_fields() {
+        let frame = shared_event(r#"{"type":"token","content":"hi","secret":"no"}"#).unwrap();
+        let payload = frame
+            .strip_prefix("data: ")
+            .unwrap()
+            .strip_suffix("\n\n")
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(payload).unwrap(),
+            json!({"type":"token","content":"hi"})
+        );
+        assert!(
+            shared_event(r#"{"type":"request","content":"hidden","systemNotice":true}"#).is_none()
+        );
+        for marker in [json!(true), json!("true"), json!(null), json!(0)] {
+            let event = json!({"type":"request","content":"hidden","systemNotice":marker});
+            assert!(shared_event(&event.to_string()).is_none());
+        }
+        assert!(
+            shared_event(r#"{"type":"request","content":"visible","systemNotice":false}"#)
+                .is_some()
+        );
+        assert!(shared_event(r#"{"type":"tool_result","content":"secret"}"#).is_none());
+        assert!(shared_event("invalid").is_none());
+        assert_eq!(
+            shared_event(r#"{"type":"done","secret":"no"}"#).unwrap(),
+            "data: {\"type\":\"done\"}\n\n"
+        );
+    }
 
     fn database() -> Connection {
         let db = Connection::open_in_memory().unwrap();

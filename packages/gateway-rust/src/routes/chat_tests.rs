@@ -1796,6 +1796,134 @@ async fn stream_delivers_live_events_published_after_subscribe() {
 }
 
 #[tokio::test]
+async fn shared_stream_delivers_filtered_live_frames_and_revokes() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    let mut response = fixture
+        .get("/api/sessions/session/shared-stream")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let mut text = String::new();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !text.contains("\n\n") {
+            text.push_str(&String::from_utf8_lossy(
+                &response.chunk().await.unwrap().unwrap(),
+            ));
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(frame_payloads(&text)[0]["type"], "snapshot");
+
+    // Frame zero is already covered by the snapshot cursor. Hidden frames must
+    // advance the cursor without exposing their contents or disturbing order.
+    for (id, payload) in [
+        (0, json!({"type":"token","content":"old-secret"})),
+        (
+            1,
+            json!({"type":"request","content":"hello","authorUserId":"owner","secret":"private"}),
+        ),
+        (2, json!({"type":"thinking","content":"thinking-secret"})),
+        (
+            3,
+            json!({"type":"request","content":"notice-secret","systemNotice":"malformed"}),
+        ),
+        (
+            4,
+            json!({"type":"token","content":"answer","secret":"private"}),
+        ),
+        (5, json!({"type":"done","secret":"private"})),
+    ] {
+        fixture
+            .routes
+            .events
+            .publish_serialized("session", id, payload.to_string())
+            .unwrap();
+    }
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while frame_payloads(&text).len() < 4 {
+            text.push_str(&String::from_utf8_lossy(
+                &response.chunk().await.unwrap().unwrap(),
+            ));
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        frame_payloads(&text),
+        vec![
+            json!({"type":"snapshot","messages":[],"streaming":false}),
+            json!({"type":"request","content":"hello","authorUserId":"owner"}),
+            json!({"type":"token","content":"answer"}),
+            json!({"type":"done"}),
+        ]
+    );
+    fixture
+        .auth
+        .with_database(|db| {
+            db.execute(
+                "UPDATE sessions SET status='archived' WHERE id='session'",
+                [],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    fixture
+        .routes
+        .events
+        .publish_serialized(
+            "session",
+            6,
+            json!({"type":"token","content":"after-revocation"}).to_string(),
+        )
+        .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(5), response.chunk())
+            .await
+            .unwrap()
+            .unwrap()
+            .is_none()
+    );
+    drop(response);
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn shared_stream_receives_real_turn_events() {
+    let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
+    let stream = fixture
+        .get("/api/sessions/session/shared-stream")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stream.status(), 200);
+    let turn = fixture
+        .post("/api/chat")
+        .json(&json!({"session_id":"session","message":"hi"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(turn.status(), 200);
+    let body = read_until_type(stream, &["token"]).await;
+    let values = frame_payloads(&body);
+    assert!(
+        values
+            .iter()
+            .any(|value| value["type"] == "request" && value["content"] == "hi")
+    );
+    assert!(
+        values
+            .iter()
+            .any(|value| value["type"] == "token" && value["content"] == "response fragment ")
+    );
+    assert!(!body.contains("thinking") && !body.contains("reason"));
+    drop(turn);
+    fixture.finish().await;
+}
+
+#[tokio::test]
 async fn snapshot_retries_when_session_lease_completes_during_projection() {
     let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
     let lease = fixture.routes.admit("owner", "session", false).unwrap();
