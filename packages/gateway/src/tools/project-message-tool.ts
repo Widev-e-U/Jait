@@ -1,3 +1,4 @@
+import { getInternalChatRequestHeaders } from "../services/internal-chat-request.js";
 import type { FastifyInstance } from "fastify";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import { createThreadControlTool, type ThreadControlToolDeps } from "./thread-tools.js";
@@ -243,7 +244,7 @@ export function createProjectMessageTool(deps: ProjectMessageToolDeps): ToolDefi
               const response = await app.inject({
                 method: "POST",
                 url: "/api/chat",
-                headers: { authorization: `Bearer ${token}` },
+                headers: getInternalChatRequestHeaders(config, token),
                 payload: { sessionId: session.id, message },
               });
               if (response.statusCode === 200 || response.statusCode === 202) {

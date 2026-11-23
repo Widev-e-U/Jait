@@ -1,3 +1,4 @@
+import { getInternalChatRequestHeaders } from "../services/internal-chat-request.js";
 import { isAbsolute, win32 } from "node:path";
 import type { Readable } from "node:stream";
 import { signAuthToken } from "../security/http-auth.js";
@@ -117,7 +118,7 @@ export function createProjectChatTool(deps: ProjectMessageToolDeps): ToolDefinit
         if (context.signal?.aborted) return { ok: false, message: "Created the chat, but message submission was cancelled before it started.", data: { project, session, href, pageLinks, accepted: false } };
         // Streaming injection resolves at response headers; drain the stream so
         // the new chat runs independently without buffering its entire output.
-        const response = await app.inject({ method: "POST", url: "/api/chat", headers: { authorization: `Bearer ${token}` }, payloadAsStream: true,
+        const response = await app.inject({ method: "POST", url: "/api/chat", headers: getInternalChatRequestHeaders(deps.config, token), payloadAsStream: true,
           payload: { sessionId: session.id, content: message, provider, ...(model ? { model } : {}), ...(runtimeMode ? { runtimeMode } : {}),
             ...(reasoningEffort ? { reasoningEffort } : {}) } });
         const stream = response.stream();

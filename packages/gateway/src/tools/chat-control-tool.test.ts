@@ -10,7 +10,7 @@ import { UserService } from "../services/users.js";
 import { createChatControlTool } from "./chat-control-tool.js";
 import { ASK_MODE_TOOLS, MUTATING_TOOLS } from "./chat-modes.js";
 
-const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", jwtSecret: "chat-control-test-secret" };
+const config = { ...loadConfig(), host: "0.0.0.0", port: 43_123, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", jwtSecret: "chat-control-test-secret" };
 afterEach(() => vi.unstubAllGlobals());
 
 async function setup() {
@@ -36,10 +36,16 @@ async function setup() {
     } }), { headers: { "Content-Type": "text/event-stream" } });
   }));
   const app = await createServer(config, { db, sqlite, userService, sessionService, sessionStateService: sessionState });
+  const chatOrigins: string[] = [];
+  app.addHook("onRequest", async (request) => {
+    if (request.method === "POST" && request.url === "/api/chat") {
+      chatOrigins.push(`${request.protocol}://${request.headers.host}`);
+    }
+  });
   const tool = createChatControlTool({ sessionService, sessionState, userService, config, getApp: () => app });
   const context = { userId: user.id, sessionId: origin.id, actionId: "test", requestedBy: "test" };
   const run = (input: Record<string, unknown>) => tool.execute({ sessionId: target.id, ...input }, context);
-  return { db, sqlite, app, user, origin, target, sessionState, requests, release, run, tool, context, userService, sessionService };
+  return { db, sqlite, app, user, origin, target, sessionState, requests, chatOrigins, release, run, tool, context, userService, sessionService };
 }
 
 describe("chat.control", () => {
@@ -57,6 +63,7 @@ describe("chat.control", () => {
       expect(sent.data).toMatchObject({ accepted: true, queued: false, href: `/chat?sessionId=${env.target.id}` });
       await vi.waitFor(() => expect(env.requests.length).toBeGreaterThan(0));
       expect(env.requests[0]).toContain("openai/gpt-4o");
+      expect(env.chatOrigins).toEqual(["http://127.0.0.1:43123"]);
 
       const busySend = await env.run({ action: "send", message: "Second task" });
       expect(busySend.ok).toBe(false);
@@ -81,6 +88,7 @@ describe("chat.control", () => {
         expect(rows.filter(row => row.role === "user").map(row => row.content)).toEqual(["First task", "Second task"]);
         expect((await env.run({ action: "status" })).data).toMatchObject({ running: false, queued: [] });
       }, { timeout: 5000 });
+      expect(env.chatOrigins).toEqual(Array<string>(3).fill("http://127.0.0.1:43123"));
       expect(env.db.select().from(messages).where(eq(messages.sessionId, env.origin.id)).all()).toHaveLength(0);
     } finally {
       env.release();

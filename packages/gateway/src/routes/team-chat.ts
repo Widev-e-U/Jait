@@ -1,3 +1,4 @@
+import { getInternalChatRequestHeaders } from "../services/internal-chat-request.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config.js";
@@ -30,9 +31,8 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
     // preparation, thread start or work-chat fallback can begin a model turn.
     // The delivery stays queued so resuming delivers it rather than losing it.
     if (agentControl?.isHalted(user.id)) throw new AgentHaltedError(undefined, "team_delivery");
-    const connectHost = config.host === "0.0.0.0" || config.host === "::" ? "127.0.0.1" : config.host;
-    const headers = { authorization: "Bearer " + await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret),
-      host: (connectHost.includes(":") ? "[" + connectHost + "]" : connectHost) + ":" + config.port };
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = getInternalChatRequestHeaders(config, token);
     const message = service.history(user.id, delivery.roomId).find(item => item.id === delivery.messageId)!;
     let thread = service.threadById(user.id, delivery.sessionId);
     if (thread) {

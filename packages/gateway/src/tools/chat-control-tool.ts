@@ -1,3 +1,4 @@
+import { getInternalChatRequestHeaders } from "../services/internal-chat-request.js";
 import type { LightMyRequestResponse } from "fastify";
 import { signAuthToken } from "../security/http-auth.js";
 import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
@@ -60,7 +61,7 @@ export function createChatControlTool(deps: Pick<ProjectMessageToolDeps, "sessio
       const base = { sessionId, name: session.name, href, pageLinks };
 
       const token = await signAuthToken({ id: user.id, username: user.username }, deps.config.jwtSecret);
-      const headers = { authorization: `Bearer ${token}` };
+      const headers = getInternalChatRequestHeaders(deps.config, token);
       const sessionUrl = `/api/sessions/${encodeURIComponent(sessionId)}`;
       const runtime = async () => {
         const response = await app.inject({ method: "GET", url: `${sessionUrl}/runtime`, headers });

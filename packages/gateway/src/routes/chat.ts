@@ -1,3 +1,4 @@
+import { getInternalChatRequestHeaders } from "../services/internal-chat-request.js";
 import { ProviderSteeringDispatcher } from "../providers/steering-dispatcher.js";
 import type { SteeringMessage } from "../tools/agent-loop.js";
 import { ChatLoopService, chatLoopInstructions } from "../services/chat-loops.js";
@@ -1778,26 +1779,6 @@ function parseRuntimeMode(raw: unknown): RuntimeMode {
 
 function resolveProviderRuntimeMode(provider: CliProviderAdapter, requestedMode: RuntimeMode): RuntimeMode {
   return provider.info.modes.includes(requestedMode) ? requestedMode : (provider.info.modes[0] ?? "full-access");
-}
-
-function getInternalRequestHost(config: Pick<AppConfig, "host" | "port">): string {
-  const connectHost = config.host === "0.0.0.0"
-    ? "127.0.0.1"
-    : config.host === "::"
-      ? "::1"
-      : config.host;
-  const authority = connectHost.includes(":") ? `[${connectHost}]` : connectHost;
-  return `${authority}:${config.port}`;
-}
-
-function getInternalChatRequestHeaders(
-  config: Pick<AppConfig, "host" | "port">,
-  token: string,
-): { authorization: string; host: string } {
-  return {
-    authorization: `Bearer ${token}`,
-    host: getInternalRequestHost(config),
-  };
 }
 
 function getRequestBaseUrl(request: FastifyRequest): string | undefined {
