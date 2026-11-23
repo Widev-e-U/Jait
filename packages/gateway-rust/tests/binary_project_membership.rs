@@ -124,6 +124,13 @@ async fn project_membership_is_owner_managed_and_revocable() {
         .await
         .unwrap();
     let private_id = private["id"].as_str().unwrap();
+    {
+        let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+        db.execute("INSERT INTO messages(id,session_id,role,content,tool_calls,segments,thinking,created_at) VALUES('fixture-user',?1,'user','hello',NULL,NULL,NULL,'2026-01-01T00:00:00Z')", [private_id]).unwrap();
+        db.execute(r#"INSERT INTO messages(id,session_id,role,content,tool_calls,segments,thinking,created_at) VALUES('fixture-assistant',?1,'assistant','answer','[{"secret":"tool-secret"}]','[{"secret":"segment-secret"}]','thinking-secret','2026-01-01T00:00:01Z')"#, [private_id]).unwrap();
+        db.execute("INSERT INTO messages(id,session_id,role,content,created_at) VALUES('fixture-system',?1,'system','system-secret','2026-01-01T00:00:02Z')", [private_id]).unwrap();
+    }
+    let messages_url = url(&format!("/api/sessions/{private_id}/messages"));
     let project_url = url(&format!("/api/projects/{id}"));
     let members_url = format!("{project_url}/members");
     assert_eq!(
@@ -214,6 +221,26 @@ async fn project_membership_is_owner_managed_and_revocable() {
     let share_url = format!("{session_url}/share");
     assert_eq!(
         client
+            .get(format!("{messages_url}?limit=invalid"))
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .get(&messages_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
             .get(&session_url)
             .bearer_auth(&member)
             .send()
@@ -268,6 +295,38 @@ async fn project_membership_is_owner_managed_and_revocable() {
     assert_eq!(shared["sharedWithProject"], true);
     assert_eq!(shared["isOwner"], false);
     assert_eq!(shared["canManageShare"], false);
+    let shared_messages: Value = client
+        .get(&messages_url)
+        .bearer_auth(&member)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let visible = shared_messages["messages"].as_array().unwrap();
+    assert_eq!(visible.len(), 2);
+    assert_eq!(visible[0]["content"], "hello");
+    assert_eq!(visible[1]["content"], "answer");
+    assert!(visible.iter().all(|message| {
+        message
+            .as_object()
+            .unwrap()
+            .keys()
+            .all(|key| ["id", "role", "content", "authorUserId"].contains(&key.as_str()))
+    }));
+    assert!(!shared_messages.to_string().contains("secret"));
+    let owner_messages: Value = client
+        .get(&messages_url)
+        .bearer_auth(&owner)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(owner_messages.to_string().contains("thinking-secret"));
+    assert!(owner_messages.to_string().contains("system-secret"));
     assert_eq!(
         client
             .patch(&session_url)
@@ -289,6 +348,16 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .status(),
         200
+    );
+    assert_eq!(
+        client
+            .get(&messages_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     assert_eq!(
         client
@@ -320,6 +389,16 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .status(),
         204
+    );
+    assert_eq!(
+        client
+            .get(&messages_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     assert_eq!(
         client
@@ -380,6 +459,16 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .status(),
         204
+    );
+    assert_eq!(
+        client
+            .get(&messages_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     assert_eq!(
         client

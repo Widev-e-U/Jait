@@ -608,6 +608,21 @@ pub async fn project_messages(
     limit: Option<usize>,
     before: Option<String>,
 ) -> Result<Value, String> {
+    project_messages_for_reader(auth, owner, session, limit, before, false)
+        .await?
+        .ok_or_else(|| "Active session is unavailable".to_owned())
+}
+
+/// Authorize and project in one SQLite transaction, so revocation and the
+/// returned history are observed in the same database snapshot.
+pub(crate) async fn project_messages_for_reader(
+    auth: AuthState,
+    reader: String,
+    session: String,
+    limit: Option<usize>,
+    before: Option<String>,
+    allow_shared: bool,
+) -> Result<Option<Value>, String> {
     let limit = limit.unwrap_or(50);
     if !(1..=100).contains(&limit) {
         return Err("Invalid message limit".into());
@@ -624,8 +639,11 @@ pub async fn project_messages(
         .transpose()?;
     auth.with_database(move|db|{
         let tx=db.unchecked_transaction()?;
-        let active:Option<String>=tx.query_row("SELECT last_active_at FROM sessions WHERE id=? AND user_id=? AND status='active'",params![session,owner],|row|row.get(0)).optional()?;
-        let active=active.ok_or("Active session is unavailable")?;
+        let access:Option<(String, bool)>=tx.query_row(
+            "SELECT s.last_active_at, s.user_id=?2 FROM sessions s WHERE s.id=?1 AND s.status='active' AND (s.user_id=?2 OR (?3 AND s.shared_with_project=1 AND EXISTS (SELECT 1 FROM projects p WHERE p.id=s.project_id AND p.status='active' AND (p.user_id=?2 OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?2)))))",
+            params![session,reader,allow_shared], |row| Ok((row.get(0)?,row.get(1)?))
+        ).optional()?;
+        let Some((active,is_owner))=access else { return Ok(None); };
         let has_log:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM session_events WHERE session_id=? AND type=?)",params![session,EVENT_TYPE],|row|row.get(0))?;
         // Repair logs written before materialization existed; all writes are atomic.
         if has_log {project_log(&tx,&session)?;}
@@ -681,12 +699,24 @@ pub async fn project_messages(
             if last["role"] != "assistant" { return Err("Tool start has no assistant message".into()); }
             last["toolCalls"] = json!(calls);
         }
+        if !is_owner {
+            messages.retain(|message| matches!(message["role"].as_str(), Some("user" | "assistant")));
+            for message in &mut messages {
+                let mut filtered = serde_json::Map::new();
+                for key in ["id", "role", "content", "authorUserId"] {
+                    if let Some(value) = message.get(key) {
+                        filtered.insert(key.to_owned(), value.clone());
+                    }
+                }
+                *message = Value::Object(filtered);
+            }
+        }
         let seq:i64=tx.query_row("SELECT COALESCE(MAX(log_id),0) FROM session_events WHERE session_id=?",[&session],|row|row.get(0))?;
         tx.commit()?;
         // Only the runtime route can establish live ownership; persisted frames cannot.
         let result=json!({"sessionId":session,"streaming":false,"seq":seq,"lastActiveAt":active,"total":total,"hasMore":start>0,"limit":limit,"messages":messages});
         if serde_json::to_writer(JsonBudget(0),&result).is_err(){return Err("Serialized message page exceeds output limits".into());}
-        Ok(result)
+        Ok(Some(result))
     }).await.map_err(|_|"Messages could not be loaded".into())
 }
 

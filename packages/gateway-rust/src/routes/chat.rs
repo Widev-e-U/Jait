@@ -2902,9 +2902,29 @@ async fn messages(
     if !valid_session(&session) {
         return response(400, json!({"error":"INVALID_SESSION"}));
     }
-    if let Err(error) = owned_session(&state, &user.id, &session).await {
-        return *error;
-    }
+    // Preserve the route's authorization-before-validation behavior. The
+    // projection independently rechecks access in its own data transaction.
+    let session_id = session.clone();
+    let reader_id = user.id.clone();
+    let owner = match state
+        .auth
+        .with_database(move |db| {
+            use rusqlite::OptionalExtension;
+            Ok(db
+                .query_row(
+                    "SELECT s.user_id FROM sessions s WHERE s.id=?1 AND s.status='active' AND (s.user_id=?2 OR (s.shared_with_project=1 AND EXISTS (SELECT 1 FROM projects p WHERE p.id=s.project_id AND p.status='active' AND (p.user_id=?2 OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?2)))))",
+                    rusqlite::params![session_id, reader_id],
+                    |row| row.get::<_, Option<String>>(0),
+                )
+                .optional()?
+                .flatten())
+        })
+        .await
+    {
+        Ok(Some(owner)) => owner,
+        Ok(None) => return response(404, json!({"error":"SESSION_NOT_FOUND"})),
+        Err(_) => return auth::internal_error(),
+    };
     let mut limit = None;
     let mut before = None;
     for (key, value) in url::form_urlencoded::parse(request.uri().query().unwrap_or("").as_bytes())
@@ -2926,17 +2946,21 @@ async fn messages(
             _ => return response(400, json!({"error":"INVALID_QUERY"})),
         }
     }
-    match consistent_snapshot(&state.active, &user.id, &session, || {
-        crate::runtime::chat_projection::project_messages(
+    match consistent_snapshot(&state.active, &owner, &session, || async {
+        crate::runtime::chat_projection::project_messages_for_reader(
             state.auth.clone(),
             user.id.clone(),
             session.clone(),
             limit,
             before.clone(),
+            true,
         )
+        .await
+        .map(|result| result.unwrap_or(Value::Null))
     })
     .await
     {
+        Ok(Some(Value::Null)) => response(404, json!({"error":"SESSION_NOT_FOUND"})),
         Ok(Some(value)) => response(200, value),
         Ok(None) => response(503, json!({"error":"CHAT_SNAPSHOT_BUSY"})),
         Err(_) => auth::internal_error(),
@@ -2963,7 +2987,9 @@ where
         if snapshot.revision.as_ref().unwrap().load(Ordering::Relaxed) != revision {
             continue;
         }
-        value["streaming"] = json!(turns.get(session).is_some_and(|turn| turn.owner == owner));
+        if !value.is_null() {
+            value["streaming"] = json!(turns.get(session).is_some_and(|turn| turn.owner == owner));
+        }
         return Ok(Some(value));
     }
     Ok(None)
