@@ -19,6 +19,7 @@ use axum::{
     response::Response,
     routing::{any, get, post},
 };
+use rusqlite::OptionalExtension;
 use serde_json::{Map, Value, json};
 use std::{collections::BTreeMap, future::Future, pin::Pin, sync::Arc};
 #[derive(Clone, Debug)]
@@ -92,6 +93,7 @@ impl SessionRoutes {
                 "/api/sessions/{id}",
                 get(handle).patch(handle).delete(handle),
             )
+            .route("/api/sessions/{id}/share", axum::routing::patch(handle))
             .route("/api/sessions/{id}/archive", post(handle))
             .route("/api/sessions/{id}/viewed", post(handle))
             .route("/api/sessions/{id}/move", post(handle))
@@ -375,6 +377,45 @@ fn dispatch(
             400,
             json!({"error":"VALIDATION_ERROR","details":"projectId must be a project id or null"}),
         ));
+    }
+    if method == Method::PATCH && operation == "share" {
+        let Some(shared) = body.get("sharedWithProject").and_then(Value::as_bool) else {
+            return Ok(response(400, json!({"error":"VALIDATION_ERROR"})));
+        };
+        if !state.projects {
+            return Ok(response(404, json!({"error":"NOT_FOUND"})));
+        }
+        let changed = db.execute(
+            "UPDATE sessions SET shared_with_project=?1 WHERE id=?2 AND user_id=?3 AND status IS NOT 'deleted' AND EXISTS (SELECT 1 FROM projects p WHERE p.id=sessions.project_id AND p.status='active' AND (p.user_id=?3 OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?3)))",
+            rusqlite::params![shared, id.as_ref(), user.id],
+        )?;
+        return Ok(if changed == 0 {
+            response(404, json!({"error":"NOT_FOUND"}))
+        } else {
+            response(200, json!({"sharedWithProject":shared}))
+        });
+    }
+    if method == Method::GET && operation.is_empty() {
+        // Fetch the session and its authorization state in one SQLite snapshot.
+        let details = db.query_row(
+            "SELECT s.id,s.user_id,s.project_id,s.name,s.project_path,s.created_at,s.last_active_at,s.viewed_at,s.status,s.metadata,s.shared_with_project, EXISTS(SELECT 1 FROM projects p WHERE p.id=s.project_id AND p.status='active' AND (p.user_id=?2 OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?2))) FROM sessions s WHERE s.id=?1",
+            rusqlite::params![id.as_ref(), user.id],
+            |row| Ok((crate::services::sessions::record(row)?, row.get::<_, bool>(10)?, row.get::<_, bool>(11)?)),
+        ).optional()?;
+        let Some((session, shared, member)) = details else {
+            return Ok(missing("Session"));
+        };
+        let is_owner = session.user_id.as_deref() == Some(user.id.as_str());
+        if !is_owner
+            && !(state.projects && shared && member && session.status.as_deref() != Some("deleted"))
+        {
+            return Ok(missing("Session"));
+        }
+        let mut result = serde_json::to_value(&session)?;
+        result["sharedWithProject"] = json!(shared);
+        result["isOwner"] = json!(is_owner);
+        result["canManageShare"] = json!(is_owner && state.projects && member);
+        return Ok(response(200, result));
     }
     let Some(session) = sessions.get(&id, owner)? else {
         return Ok(missing("Session"));

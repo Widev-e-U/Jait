@@ -210,6 +210,107 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .iter()
             .any(|p| p["id"] == id)
     );
+    let session_url = url(&format!("/api/sessions/{private_id}"));
+    let share_url = format!("{session_url}/share");
+    assert_eq!(
+        client
+            .get(&session_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .patch(&share_url)
+            .bearer_auth(&member)
+            .json(&json!({"sharedWithProject":true}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .patch(&share_url)
+            .bearer_auth(&owner)
+            .json(&json!({"sharedWithProject":"true"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        400
+    );
+    assert_eq!(
+        client
+            .patch(&share_url)
+            .bearer_auth(&owner)
+            .json(&json!({"sharedWithProject":true}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    let shared: Value = client
+        .get(&session_url)
+        .bearer_auth(&member)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(shared["id"], private_id);
+    assert_eq!(shared["sharedWithProject"], true);
+    assert_eq!(shared["isOwner"], false);
+    assert_eq!(shared["canManageShare"], false);
+    assert_eq!(
+        client
+            .patch(&session_url)
+            .bearer_auth(&member)
+            .json(&json!({"name":"unauthorized"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .patch(&share_url)
+            .bearer_auth(&owner)
+            .json(&json!({"sharedWithProject":false}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    assert_eq!(
+        client
+            .get(&session_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .patch(&share_url)
+            .bearer_auth(&owner)
+            .json(&json!({"sharedWithProject":true}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
     assert_eq!(
         client
             .delete(&project_url)
@@ -219,6 +320,16 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .status(),
         204
+    );
+    assert_eq!(
+        client
+            .get(&session_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     let archived: Value = client
         .get(url("/api/projects?status=archived"))
@@ -269,6 +380,16 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .status(),
         204
+    );
+    assert_eq!(
+        client
+            .get(&session_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     assert_eq!(
         client
