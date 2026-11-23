@@ -380,7 +380,7 @@ impl<'a> ProjectService<'a> {
             limited.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
         }
         let ids = limited.iter().map(|p| p.id.clone()).collect::<Vec<_>>();
-        let sessions = self.sessions_for_projects(&ids, user)?;
+        let sessions = self.sessions_for_projects(&ids, user, "active")?;
         let rows = limited
             .into_iter()
             .map(|p| {
@@ -399,7 +399,12 @@ impl<'a> ProjectService<'a> {
             return Ok(json!({"projects":[],"personalSessions":[]}));
         }
         let projects = self.list_accessible("active", user, None)?;
-        let sessions = SessionService::new(self.db).list(SessionFilter {
+        let ids = projects
+            .iter()
+            .map(|project| project.id.clone())
+            .collect::<Vec<_>>();
+        let sessions = self.sessions_for_projects(&ids, Some(user), "active")?;
+        let personal_sessions = SessionService::new(self.db).list(SessionFilter {
             status: Some("active"),
             user_id: Some(user),
             ..Default::default()
@@ -409,9 +414,10 @@ impl<'a> ProjectService<'a> {
             .iter()
             .filter(|s| matches(s.name.as_deref()) || matches(s.project_path.as_deref()))
             .collect::<Vec<_>>();
-        let personal = matching
+        let personal = personal_sessions
             .iter()
             .filter(|s| nonempty(s.project_id.as_deref()).is_none())
+            .filter(|s| matches(s.name.as_deref()) || matches(s.project_path.as_deref()))
             .collect::<Vec<_>>();
         let projects = projects
             .into_iter()
@@ -788,7 +794,8 @@ impl<'a> ProjectService<'a> {
         &self,
         ids: &[String],
         user: Option<&str>,
-    ) -> rusqlite::Result<Vec<SessionRecord>> {
+        status: &str,
+    ) -> rusqlite::Result<Vec<VisibleSession>> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -806,10 +813,35 @@ impl<'a> ProjectService<'a> {
                 .unwrap_or(rusqlite::types::Value::Null),
         );
         let n = values.len();
-        let mut statement=self.db.prepare(&format!("SELECT {} FROM sessions WHERE project_id IN ({clause}) AND status='active' AND (?{n} IS NULL OR user_id=?{n}) ORDER BY last_active_at DESC",super::sessions::COLUMNS))?;
+        values.push(rusqlite::types::Value::Text(status.into()));
+        let status_param = n + 1;
+        // Project visibility and session sharing must both hold in the same
+        // database snapshot. Membership alone never exposes a private session.
+        let mut statement = self.db.prepare(&format!(
+            "SELECT {},shared_with_project FROM sessions WHERE project_id IN ({clause}) AND status=?{status_param} AND (?{n} IS NULL OR (EXISTS (SELECT 1 FROM projects p WHERE p.id=sessions.project_id AND (p.user_id=?{n} OR (p.status='active' AND EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?{n})))) AND (user_id=?{n} OR (shared_with_project=1 AND EXISTS (SELECT 1 FROM projects active_project WHERE active_project.id=sessions.project_id AND active_project.status='active'))))) ORDER BY last_active_at DESC",
+            super::sessions::COLUMNS
+        ))?;
         statement
-            .query_map(params_from_iter(values), super::sessions::record)?
+            .query_map(params_from_iter(values), |row| {
+                Ok(VisibleSession {
+                    record: super::sessions::record(row)?,
+                    shared: row.get::<_, i64>(10)? == 1,
+                })
+            })?
             .collect()
+    }
+
+    pub fn visible_sessions(
+        &self,
+        project_id: &str,
+        user: &str,
+        status: &str,
+    ) -> rusqlite::Result<Vec<Value>> {
+        Ok(self
+            .sessions_for_projects(&[project_id.to_owned()], Some(user), status)?
+            .iter()
+            .map(|session| session.value(Some(user)))
+            .collect())
     }
 
     pub fn active_session_counts(&self, user: &str) -> rusqlite::Result<BTreeMap<String, i64>> {
@@ -825,21 +857,35 @@ impl<'a> ProjectService<'a> {
             .collect())
     }
 }
-fn with_sessions(project: ProjectRecord, sessions: &[&SessionRecord], user: Option<&str>) -> Value {
+struct VisibleSession {
+    record: SessionRecord,
+    shared: bool,
+}
+impl std::ops::Deref for VisibleSession {
+    type Target = SessionRecord;
+    fn deref(&self) -> &SessionRecord {
+        &self.record
+    }
+}
+impl VisibleSession {
+    fn value(&self, user: Option<&str>) -> Value {
+        let mut value = json!(self.record);
+        let is_owner = self.record.user_id.as_deref() == user;
+        let map = value.as_object_mut().expect("record");
+        map.insert("sharedWithProject".into(), json!(self.shared));
+        map.insert("isOwner".into(), json!(is_owner));
+        map.insert("canManageShare".into(), json!(is_owner));
+        value
+    }
+}
+fn with_sessions(
+    project: ProjectRecord,
+    sessions: &[&VisibleSession],
+    user: Option<&str>,
+) -> Value {
     let owner = project.user_id.as_deref() == user;
     let mut value = serde_json::to_value(project).expect("record");
-    let children: Vec<Value> = sessions
-        .iter()
-        .map(|session| {
-            let mut value = json!(session);
-            let is_owner = session.user_id.as_deref() == user;
-            if let Some(map) = value.as_object_mut() {
-                map.insert("isOwner".into(), json!(is_owner));
-                map.insert("canManageShare".into(), json!(is_owner));
-            }
-            value
-        })
-        .collect();
+    let children: Vec<Value> = sessions.iter().map(|session| session.value(user)).collect();
     let map = value.as_object_mut().expect("record");
     map.insert("sessions".into(), json!(children));
     map.insert("canManageProject".into(), json!(owner));

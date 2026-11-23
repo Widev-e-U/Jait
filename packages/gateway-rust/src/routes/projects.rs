@@ -579,11 +579,17 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
             let limit = query_limit(&uri);
             let user_id = uid.clone();
             return run(&state.auth, move |db| {
-                let service = ProjectService::new(db);
+                let tx = rusqlite::Transaction::new_unchecked(
+                    db,
+                    rusqlite::TransactionBehavior::Deferred,
+                )
+                .map_err(db_err)?;
+                let service = ProjectService::new(&tx);
                 let mut body = service
                     .list_with_sessions(Some(&user_id), &status, limit)
                     .map_err(db_err)?;
-                project_list_status(db, &mut body).map_err(db_err)?;
+                project_list_status(&tx, &mut body).map_err(db_err)?;
+                tx.commit().map_err(db_err)?;
                 Res::Ok(response(200, body))
             })
             .await
@@ -601,11 +607,15 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
             .unwrap_or_default();
         let user_id = uid.clone();
         return run(&state.auth, move |db| {
-            let service = ProjectService::new(db);
+            let tx =
+                rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Deferred)
+                    .map_err(db_err)?;
+            let service = ProjectService::new(&tx);
             let mut body = service
                 .search_with_sessions(&user_id, &needle)
                 .map_err(db_err)?;
-            project_list_status(db, &mut body).map_err(db_err)?;
+            project_list_status(&tx, &mut body).map_err(db_err)?;
+            tx.commit().map_err(db_err)?;
             Res::Ok(response(200, body))
         })
         .await
@@ -886,21 +896,21 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                 })
                 .unwrap_or_else(|| "active".to_owned());
             return run(&state.auth, move |db| {
-                match ProjectService::new(db).get(&id, Some(&user_id)) {
+                let tx = rusqlite::Transaction::new_unchecked(
+                    db,
+                    rusqlite::TransactionBehavior::Deferred,
+                )
+                .map_err(db_err)?;
+                let projects = ProjectService::new(&tx);
+                match projects.get_accessible(&id, &user_id) {
                     Ok(Some(_)) => {}
                     Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                     Err(error) => return Err(db_err(error)),
                 }
-                let sessions = crate::services::sessions::SessionService::new(db);
-                let rows = sessions
-                    .list(crate::services::sessions::SessionFilter {
-                        status: Some(&status),
-                        user_id: Some(&user_id),
-                        project_id: Some(&id),
-                        personal_only: false,
-                        limit: None,
-                    })
+                let rows = projects
+                    .visible_sessions(&id, &user_id, &status)
                     .map_err(db_err)?;
+                tx.commit().map_err(db_err)?;
                 Res::Ok(response(200, json!({"sessions": rows})))
             })
             .await
@@ -1113,41 +1123,28 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
         if method == axum::http::Method::GET {
             let user_id = uid.clone();
             return run(&state.auth, move |db| {
-                let projects = ProjectService::new(db);
-                let sessions = crate::services::sessions::SessionService::new(db);
+                let tx = rusqlite::Transaction::new_unchecked(
+                    db,
+                    rusqlite::TransactionBehavior::Deferred,
+                )
+                .map_err(db_err)?;
+                let projects = ProjectService::new(&tx);
                 let project = match projects.get_accessible(&id, &user_id) {
                     Ok(Some(project)) => project,
                     Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                     Err(error) => return Err(db_err(error)),
                 };
-                let rows = sessions
-                    .list(crate::services::sessions::SessionFilter {
-                        status: Some("active"),
-                        user_id: Some(&user_id),
-                        project_id: Some(&id),
-                        personal_only: false,
-                        limit: None,
-                    })
+                let rows = projects
+                    .visible_sessions(&id, &user_id, "active")
                     .map_err(db_err)?;
                 let can_manage = project.user_id.as_deref() == Some(&user_id);
-                let rows: Vec<Value> = rows
-                    .iter()
-                    .map(|session| {
-                        let mut value = json!(session);
-                        let is_owner = session.user_id.as_deref() == Some(&user_id);
-                        if let Some(map) = value.as_object_mut() {
-                            map.insert("isOwner".into(), json!(is_owner));
-                            map.insert("canManageShare".into(), json!(is_owner));
-                        }
-                        value
-                    })
-                    .collect();
                 let mut value = json!(project);
                 if let Value::Object(map) = &mut value {
                     map.insert("sessions".to_string(), json!(rows));
                     map.insert("canManageProject".to_string(), json!(can_manage));
                 }
-                project_status(db, &mut value).map_err(db_err)?;
+                project_status(&tx, &mut value).map_err(db_err)?;
+                tx.commit().map_err(db_err)?;
                 Res::Ok(response(200, value))
             })
             .await

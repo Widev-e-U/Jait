@@ -293,6 +293,121 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .status(),
         200
     );
+    // A private sibling and a shared session in another project must not leak
+    // through any project projection or search result.
+    let sibling: Value = client
+        .post(url("/api/sessions"))
+        .bearer_auth(&owner)
+        .json(&json!({"projectId":id,"name":"projection needle private"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let hidden_project: Value = client
+        .post(url("/api/projects"))
+        .bearer_auth(&owner)
+        .json(&json!({"title":"hidden project"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let hidden: Value = client
+        .post(url("/api/sessions"))
+        .bearer_auth(&owner)
+        .json(&json!({"projectId":hidden_project["id"],"name":"projection needle hidden"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let hidden_id = hidden["id"].as_str().unwrap();
+    assert_eq!(
+        client
+            .patch(url(&format!("/api/sessions/{hidden_id}/share")))
+            .bearer_auth(&owner)
+            .json(&json!({"sharedWithProject":true}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    let project_sessions_url = format!("{project_url}/sessions");
+    for path in [
+        url("/api/projects"),
+        url("/api/projects/search?q=private%20marker"),
+        project_url.clone(),
+        project_sessions_url.clone(),
+    ] {
+        let result = client.get(&path).bearer_auth(&member).send().await.unwrap();
+        assert_eq!(result.status(), 200, "{path}");
+        let value: Value = result.json().await.unwrap();
+        let sessions = if path.contains("/search?") || path.ends_with("/api/projects") {
+            value["projects"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["id"] == id)
+                .unwrap()["sessions"]
+                .as_array()
+                .unwrap()
+        } else {
+            value["sessions"].as_array().unwrap()
+        };
+        let visible = sessions
+            .iter()
+            .find(|s| s["id"] == private_id)
+            .expect("shared session visible");
+        assert_eq!(visible["sharedWithProject"], true);
+        assert_eq!(visible["isOwner"], false);
+        assert_eq!(visible["canManageShare"], false);
+        assert!(!value.to_string().contains(sibling["id"].as_str().unwrap()));
+        assert!(!value.to_string().contains(hidden_id));
+    }
+    let hidden_search: Value = client
+        .get(url("/api/projects/search?q=projection%20needle"))
+        .bearer_auth(&member)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(!hidden_search.to_string().contains(hidden_id));
+    assert!(
+        !hidden_search
+            .to_string()
+            .contains(sibling["id"].as_str().unwrap())
+    );
+    assert_eq!(
+        client
+            .get(url(&format!(
+                "/api/projects/{}/sessions",
+                hidden_project["id"].as_str().unwrap()
+            )))
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .post(&project_sessions_url)
+            .bearer_auth(&member)
+            .json(&json!({"name":"forbidden"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
     let shared: Value = client
         .get(&session_url)
         .bearer_auth(&member)
@@ -386,6 +501,26 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .status(),
         200
     );
+    for path in [
+        url("/api/projects"),
+        url("/api/projects/search?q=private%20marker"),
+        project_url.clone(),
+        project_sessions_url.clone(),
+    ] {
+        let value: Value = client
+            .get(path)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(
+            !value.to_string().contains(private_id),
+            "unshared session leaked: {value}"
+        );
+    }
     assert!(
         tokio::time::timeout(Duration::from_secs(4), shared_stream.chunk())
             .await
@@ -513,6 +648,34 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .status(),
         204
+    );
+    for path in [
+        url("/api/projects"),
+        url("/api/projects/search?q=private%20marker"),
+    ] {
+        let value: Value = client
+            .get(path)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(
+            !value.to_string().contains(private_id),
+            "revoked membership leaked: {value}"
+        );
+    }
+    assert_eq!(
+        client
+            .get(&project_sessions_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     assert_eq!(
         client
