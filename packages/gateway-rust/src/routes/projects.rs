@@ -689,18 +689,22 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
         let session_id = js_text(body.get("sessionId")).filter(|value| !value.is_empty());
         let user_id = uid.clone();
         return run(&state.auth, move |db| {
-            let projects = ProjectService::new(db);
+            let tx =
+                rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)
+                    .map_err(db_err)?;
+            let projects = ProjectService::new(&tx);
             if let Some(project_id) = project_id.as_deref() {
-                match projects.get(project_id, Some(&user_id)) {
+                match projects.get_accessible(project_id, &user_id) {
                     Ok(Some(_)) => {}
                     Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                     Err(error) => return Err(db_err(error)),
                 }
             }
-            let users = crate::services::users::UserService::new(db);
+            let users = crate::services::users::UserService::new(&tx);
             users
                 .set_last_selection(&user_id, project_id.as_deref(), session_id.as_deref())
                 .map_err(db_err)?;
+            tx.commit().map_err(db_err)?;
             Res::Ok(response(200, json!({"ok": true})))
         })
         .await

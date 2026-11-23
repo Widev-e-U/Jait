@@ -155,6 +155,18 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .status(),
         404
     );
+    let select_url = url("/api/projects/select");
+    assert_eq!(
+        client
+            .post(&select_url)
+            .bearer_auth(&member)
+            .json(&json!({"projectId": id}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
     let added = client
         .post(&members_url)
         .bearer_auth(&owner)
@@ -172,6 +184,17 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .iter()
             .any(|m| m["username"] == "member" && m["role"] == "member")
+    );
+    assert_eq!(
+        client
+            .post(&select_url)
+            .bearer_auth(&member)
+            .json(&json!({"projectId": id}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
     );
     let owner_detail: Value = client
         .get(&project_url)
@@ -648,6 +671,17 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .unwrap()
             .status(),
         204
+    );
+    assert_eq!(
+        client
+            .post(&select_url)
+            .bearer_auth(&member)
+            .json(&json!({"projectId": id}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
     );
     for path in [
         url("/api/projects"),
