@@ -1,5 +1,9 @@
 # Gateway migration to Rust
 
+## Project membership — partial implementation
+
+The Rust project routes support owner-managed membership and members can list and read accessible projects. Project list, search, and detail projections currently include only the caller's own sessions; shared sessions and the filtered, revocation-aware chat stream are not yet available. Project mutations remain owner-scoped. Unlike TypeScript, member listings exclude archived projects, consistent with revoking member access when a project is archived. This is partial behavior and does not establish project-sharing parity.
+
 ## Native compatibility checks for ownership and failed writes
 
 The Rust session tool endpoints return only the authenticated caller's sessions

@@ -309,13 +309,40 @@ impl<'a> ProjectService<'a> {
             .query_map(params![nonempty(status), nonempty(user), limit], row)?
             .collect()
     }
+    /// List projects visible to this user, without broadening owner-only mutation paths.
+    pub fn list_accessible(
+        &self,
+        status: &str,
+        user: &str,
+        limit: Option<f64>,
+    ) -> rusqlite::Result<Vec<ProjectRecord>> {
+        let limit = limit
+            .filter(|v| v.is_finite() && *v >= 1.0)
+            .map(|v| v.floor() as i64)
+            .unwrap_or(-1);
+        let mut statement = self.db.prepare(&format!("SELECT {COLUMNS} FROM projects WHERE status=?1 AND (user_id=?2 OR (status='active' AND id IN (SELECT project_id FROM project_members WHERE user_id=?2))) ORDER BY last_active_at DESC LIMIT ?3"))?;
+        statement
+            .query_map(params![status, user, limit], row)?
+            .collect()
+    }
+    pub fn get_accessible(&self, id: &str, user: &str) -> rusqlite::Result<Option<ProjectRecord>> {
+        let owned = self.get(id, Some(user))?;
+        if owned.is_some() {
+            return Ok(owned);
+        }
+        let member: bool = self.db.query_row("SELECT EXISTS(SELECT 1 FROM project_members m JOIN projects p ON p.id=m.project_id WHERE p.id=?1 AND p.status='active' AND m.user_id=?2)", params![id, user], |r| r.get(0))?;
+        if member { self.get(id, None) } else { Ok(None) }
+    }
     pub fn list_with_sessions(
         &self,
         user: Option<&str>,
         status: &str,
         limit: Option<f64>,
     ) -> rusqlite::Result<Value> {
-        let projects = self.list(Some(status), user, limit.map(|v| v + 1.0))?;
+        let projects = match user {
+            Some(user) => self.list_accessible(status, user, limit.map(|v| v + 1.0))?,
+            None => self.list(Some(status), None, limit.map(|v| v + 1.0))?,
+        };
         let end = limit
             .map(|v| {
                 if v.is_nan() {
@@ -330,7 +357,10 @@ impl<'a> ProjectService<'a> {
             .min(projects.len());
         let mut limited = projects[..end].to_vec();
         if limit.is_some() && !limited.is_empty() {
-            let all = self.list(Some(status), user, None)?;
+            let all = match user {
+                Some(user) => self.list_accessible(status, user, None)?,
+                None => self.list(Some(status), None, None)?,
+            };
             let mut included = limited.iter().map(|r| r.id.clone()).collect::<HashSet<_>>();
             for project in limited.clone() {
                 let mut cursor = project.parent_id;
@@ -358,7 +388,7 @@ impl<'a> ProjectService<'a> {
                     .iter()
                     .filter(|s| s.project_id.as_deref() == Some(&p.id))
                     .collect::<Vec<_>>();
-                with_sessions(p, &children)
+                with_sessions(p, &children, user)
             })
             .collect::<Vec<_>>();
         Ok(json!({"projects":rows,"hasMore":limit.is_some_and(|v|projects.len() as f64>v)}))
@@ -368,7 +398,7 @@ impl<'a> ProjectService<'a> {
         if query.is_empty() {
             return Ok(json!({"projects":[],"personalSessions":[]}));
         }
-        let projects = self.list(Some("active"), Some(user), None)?;
+        let projects = self.list_accessible("active", user, None)?;
         let sessions = SessionService::new(self.db).list(SessionFilter {
             status: Some("active"),
             user_id: Some(user),
@@ -395,7 +425,7 @@ impl<'a> ProjectService<'a> {
                     || matches(p.root_path.as_deref())
                     || matches(p.description.as_deref())
                     || !children.is_empty())
-                .then(|| with_sessions(p, &children))
+                .then(|| with_sessions(p, &children, Some(user)))
             })
             .collect::<Vec<_>>();
         Ok(json!({"projects":projects,"personalSessions":personal}))
@@ -795,11 +825,23 @@ impl<'a> ProjectService<'a> {
             .collect())
     }
 }
-fn with_sessions(project: ProjectRecord, sessions: &[&SessionRecord]) -> Value {
+fn with_sessions(project: ProjectRecord, sessions: &[&SessionRecord], user: Option<&str>) -> Value {
+    let owner = project.user_id.as_deref() == user;
     let mut value = serde_json::to_value(project).expect("record");
-    value
-        .as_object_mut()
-        .expect("record")
-        .insert("sessions".into(), json!(sessions));
+    let children: Vec<Value> = sessions
+        .iter()
+        .map(|session| {
+            let mut value = json!(session);
+            let is_owner = session.user_id.as_deref() == user;
+            if let Some(map) = value.as_object_mut() {
+                map.insert("isOwner".into(), json!(is_owner));
+                map.insert("canManageShare".into(), json!(is_owner));
+            }
+            value
+        })
+        .collect();
+    let map = value.as_object_mut().expect("record");
+    map.insert("sessions".into(), json!(children));
+    map.insert("canManageProject".into(), json!(owner));
     value
 }

@@ -12,6 +12,7 @@ use axum::{
     http::{StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use rusqlite::OptionalExtension;
 use serde_json::{Value, json};
 
 use crate::{
@@ -748,6 +749,84 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
     }
 
     // ---- per-project routes ---------------------------------------------
+    // Membership grants read visibility only. Session sharing and live stream
+    // projection remain separate paths and are not enabled by this handler.
+    if let Some(id) = mid(&path, "/api/projects/", "/members") {
+        let body = if method == axum::http::Method::POST {
+            match auth::parse_body(request.into_body(), &headers).await {
+                Ok(body) => body,
+                Err(response) => return *response,
+            }
+        } else {
+            Value::Null
+        };
+        let user_id = uid.clone();
+        return run(&state.auth, move |db| {
+            let tx = rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate).map_err(db_err)?;
+            let projects = ProjectService::new(&tx);
+            let project = if method == axum::http::Method::GET {
+                projects.get_accessible(&id, &user_id).map_err(db_err)?
+            } else {
+                projects.get(&id, Some(&user_id)).map_err(db_err)?.filter(|p| p.status.as_deref() == Some("active"))
+            };
+            let Some(project) = project else { return Ok(response(404, json!({"error":"NOT_FOUND"}))); };
+            if method == axum::http::Method::POST {
+                let username = body.get("username").and_then(Value::as_str);
+                let Some(username) = username.filter(|s| !crate::text::js_trim(s).is_empty() && s.encode_utf16().count() <= 200) else {
+                    return Ok(response(400, json!({"error":"INVALID_USERNAME"})));
+                };
+                let target: Option<String> = tx.query_row("SELECT id FROM users WHERE username=?1", [crate::text::js_trim(username)], |r| r.get(0)).optional().map_err(db_err)?;
+                let Some(target) = target else { return Ok(response(404, json!({"error":"USER_NOT_FOUND"}))); };
+                if project.user_id.as_deref() != Some(&target) {
+                    tx.execute("INSERT OR IGNORE INTO project_members(project_id,user_id,created_at) VALUES(?1,?2,strftime('%Y-%m-%dT%H:%M:%fZ','now'))", rusqlite::params![id, target]).map_err(db_err)?;
+                }
+            } else if method != axum::http::Method::GET {
+                return Ok(response(405, json!({"error":"METHOD_NOT_ALLOWED"})));
+            }
+            let members: Vec<Value> = if project.status.as_deref() == Some("active") {
+                let mut stmt = tx.prepare("SELECT u.id,u.username FROM users u WHERE u.id=?2 OR u.id IN (SELECT user_id FROM project_members WHERE project_id=?1)").map_err(db_err)?;
+                let rows = stmt.query_map(rusqlite::params![id, project.user_id], |r| Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?))).map_err(db_err)?;
+                rows.map(|r| r.map(|(id, name)| json!({"userId":id,"username":name,"displayName":name,"role":if project.user_id.as_deref()==Some(&id) {"owner"} else {"member"}}))).collect::<rusqlite::Result<_>>().map_err(db_err)?
+            } else { Vec::new() };
+            let can_manage = project.user_id.as_deref() == Some(&user_id);
+            tx.commit().map_err(db_err)?;
+            Ok(response(200,json!({"members":members,"canManage":can_manage})))
+        }).await.unwrap_or_else(|response| *response);
+    }
+    if let Some(rest) = path.strip_prefix("/api/projects/")
+        && let Some((id, target)) = rest.split_once("/members/")
+        && !id.is_empty()
+        && !target.is_empty()
+        && !target.contains('/')
+    {
+        if method != axum::http::Method::DELETE {
+            return response(405, json!({"error":"METHOD_NOT_ALLOWED"}));
+        }
+        let (id, target, user_id) = (id.to_owned(), target.to_owned(), uid.clone());
+        return run(&state.auth, move |db| {
+            let tx =
+                rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)
+                    .map_err(db_err)?;
+            let project = ProjectService::new(&tx)
+                .get(&id, Some(&user_id))
+                .map_err(db_err)?;
+            if !project.is_some_and(|p| p.status.as_deref() == Some("active")) {
+                return Ok(response(404, json!({"error":"NOT_FOUND"})));
+            }
+            if target == user_id {
+                return Ok(response(400, json!({"error":"CANNOT_REMOVE_OWNER"})));
+            }
+            tx.execute(
+                "DELETE FROM project_members WHERE project_id=?1 AND user_id=?2",
+                rusqlite::params![id, target],
+            )
+            .map_err(db_err)?;
+            tx.commit().map_err(db_err)?;
+            Ok(StatusCode::NO_CONTENT.into_response())
+        })
+        .await
+        .unwrap_or_else(|response| *response);
+    }
     if let Some(id) = mid(&path, "/api/projects/", "/restore") {
         if method != axum::http::Method::POST {
             return fail(405, "METHOD_NOT_ALLOWED", "Method not allowed");
@@ -1036,7 +1115,7 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
             return run(&state.auth, move |db| {
                 let projects = ProjectService::new(db);
                 let sessions = crate::services::sessions::SessionService::new(db);
-                let project = match projects.get(&id, Some(&user_id)) {
+                let project = match projects.get_accessible(&id, &user_id) {
                     Ok(Some(project)) => project,
                     Ok(None) => return Res::Ok(fail(404, "NOT_FOUND", "Project not found")),
                     Err(error) => return Err(db_err(error)),
@@ -1050,9 +1129,23 @@ async fn dispatch(State(state): State<ProjectCollectionRoutes>, request: Request
                         limit: None,
                     })
                     .map_err(db_err)?;
+                let can_manage = project.user_id.as_deref() == Some(&user_id);
+                let rows: Vec<Value> = rows
+                    .iter()
+                    .map(|session| {
+                        let mut value = json!(session);
+                        let is_owner = session.user_id.as_deref() == Some(&user_id);
+                        if let Some(map) = value.as_object_mut() {
+                            map.insert("isOwner".into(), json!(is_owner));
+                            map.insert("canManageShare".into(), json!(is_owner));
+                        }
+                        value
+                    })
+                    .collect();
                 let mut value = json!(project);
                 if let Value::Object(map) = &mut value {
                     map.insert("sessions".to_string(), json!(rows));
+                    map.insert("canManageProject".to_string(), json!(can_manage));
                 }
                 project_status(db, &mut value).map_err(db_err)?;
                 Res::Ok(response(200, value))
