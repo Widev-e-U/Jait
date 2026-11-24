@@ -1,7 +1,7 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code, GripVertical } from 'lucide-react'
-import { buildProjectTree, flattenProjectTree, readChatLoop, resolveProjectColor, validateProjectMove } from '@jait/shared'
+import { buildProjectTree, flattenProjectTree, resolveProjectColor, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
@@ -135,24 +135,9 @@ export function orderSidebarProjects<T extends { id: string }>(projects: T[], or
   return [...orderSidebarItems(projects.slice(0, olderStart), order), ...projects.slice(olderStart)]
 }
 
-/**
- * Newest activity first. A running chat (streaming turn or running goal loop)
- * counts as active now: the server only bumps `lastActiveAt` when a turn
- * starts or ends, so a long loop turn would otherwise sink below chats used
- * while it was still working.
- */
-export function sortSessionsByActivity<T extends { id: string; createdAt: string; lastActiveAt: string; metadata?: string | null }>(
-  sessions: T[],
-  streamingSessionIds?: ReadonlySet<string>,
-): T[] {
-  const keyed = sessions.map((session) => ({
-    session,
-    live: (streamingSessionIds?.has(session.id) ?? false) || readChatLoop(session.metadata)?.status === 'running',
-    at: Date.parse(session.lastActiveAt || session.createdAt),
-  }))
-  return keyed
-    .sort((a, b) => Number(b.live) - Number(a.live) || b.at - a.at)
-    .map(({ session }) => session)
+/** Order chats by their most recent activity. */
+export function sortSessionsByActivity<T extends { createdAt: string; lastActiveAt: string }>(sessions: T[]): T[] {
+  return [...sessions].sort((a, b) => Date.parse(b.lastActiveAt || b.createdAt) - Date.parse(a.lastActiveAt || a.createdAt))
 }
 
 export function moveSidebarItem(ids: string[], source: string, target: string, after: boolean): string[] {
@@ -171,7 +156,7 @@ function readSidebarOrder(): SidebarOrder {
 }
 
 const RECENT_SESSIONS_LIMIT = 5
-/** Personal chats shown before "Show older" — long enough to scroll, short enough to scan. */
+/** Chats shown before "Show older" — long enough to scroll, short enough to scan. */
 const PERSONAL_SESSIONS_LIMIT = 20
 const COLLAPSED_FOLDERS_STORAGE_KEY = 'jait.sidebar.collapsedFolders'
 /** Per nesting level; deep enough to read, shallow enough for a 256px sidebar. */
@@ -349,7 +334,7 @@ export function SessionSelector({
   })
   const [visibleSessionsByProject, setVisibleSessionsByProject] = useState<Record<string, number>>({})
   const [visiblePersonalSessions, setVisiblePersonalSessions] = useState(PERSONAL_SESSIONS_LIMIT)
-  // Projects & Chats / Personal chats split. Resizable and persisted locally,
+  // Projects / Chats split. Resizable and persisted locally,
   // mirroring the developer sidebar's draggable width.
   const paneContainerRef = useRef<HTMLDivElement | null>(null)
   const [splitRatio, setSplitRatio] = useState(() => readSessionSidebarSplit())
@@ -482,7 +467,7 @@ export function SessionSelector({
     if (normalizedSearchQuery) {
       return filteredProjects.map((project) => ({ project, depth: 0, hasChildren: false, }))
     }
-    const orderedProjects = orderSidebarProjects(filteredProjects, manualOrder.projects)
+    const orderedProjects = sortSessionsByActivity(filteredProjects)
     const rows = flattenProjectTree(buildProjectTree(orderedProjects))
     const hiddenUnder = new Set<string>()
     const out: Array<{ project: (typeof filteredProjects)[number]; depth: number; hasChildren: boolean }> = []
@@ -537,16 +522,12 @@ export function SessionSelector({
       if (source.kind === 'session') {
         if (target.kind === 'session') {
           if (target.projectId !== source.projectId || target.id === source.id) return null
-          return { type: 'order', scope: 'sessions', storeKey: `sessions:${target.projectId ?? 'personal'}`, ids: target.ids, source: source.id, target: target.id, after }
+          return target.projectId === null ? { type: 'order', scope: 'sessions', storeKey: 'sessions:personal', ids: target.ids, source: source.id, target: target.id, after } : null
         }
         if (!onMoveSession || source.streaming || source.projectId === target.id) return null
         return { type: 'move-session', sessionId: source.id, to: target.id, dropId: target.id }
       }
       if (target.kind !== 'project' || target.id === source.id) return null
-      const edge = (clientY - rect.top) / rect.height
-      if (source.parentId === target.parentId && (!target.isFolder || edge < 0.25 || edge > 0.75)) {
-        return { type: 'order', scope: 'projects', storeKey: 'projects', ids: [], source: source.id, target: target.id, after: edge >= 0.5 }
-      }
       if (target.isFolder && canDropProjectInto(source.id, target.id)) {
         return { type: 'move-project', projectId: source.id, to: target.id, dropId: target.id }
       }
@@ -809,7 +790,7 @@ export function SessionSelector({
                 }}
               >
                 <span className="text-2xs font-medium text-muted-foreground">
-                  {view === 'projects' ? 'Projects' : 'Projects & Chats'}
+                  {view === 'projects' ? 'Projects' : 'Projects'}
                 </span>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -878,10 +859,7 @@ export function SessionSelector({
                   const folderIconStyle = folderColor ? { color: folderColor } : undefined
                   const repository = getProjectRepository(project, repositories)
                   const hasUnreadSessions = project.sessions.some(session => isSessionUnread(session))
-                  const sortedSessions = orderSidebarItems(
-                    sortSessionsByActivity(project.sessions, streamingSessionIds),
-                    manualOrder[`sessions:${project.id}`],
-                  )
+                  const sortedSessions = sortSessionsByActivity(project.sessions)
                   sessionOrderIdsRef.current.set(`sessions:${project.id}`, sortedSessions.map((item) => item.id))
                   const visibleSessionLimit = visibleSessionsByProject[project.id] ?? RECENT_SESSIONS_LIMIT
                   const recentSessions = normalizedSearchQuery
@@ -917,16 +895,6 @@ export function SessionSelector({
                       }}
                       onDragEnd={() => { dragProjectRef.current = null; setOrderTarget(null) }}
                       onDragOver={(e) => {
-                        const source = projects.find((item) => item.id === dragProjectRef.current)
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        const edge = (e.clientY - rect.top) / rect.height
-                        if (!normalizedSearchQuery && source && source.id !== project.id && (source.parentId ?? null) === (project.parentId ?? null) && (!isFolder || edge < 0.25 || edge > 0.75)) {
-                          e.preventDefault(); e.stopPropagation()
-                          e.dataTransfer.dropEffect = 'move'
-                          setDropTargetId(null)
-                          setOrderTarget({ kind: 'project', id: project.id, after: edge >= 0.5 })
-                          return
-                        }
                         setOrderTarget(null)
                         const kind = getSidebarDragKind(e.dataTransfer.types)
                         if (kind === 'session') {
@@ -949,16 +917,6 @@ export function SessionSelector({
                       onDragLeave={() => { setDropTargetId((current) => (current === project.id ? null : current)); setOrderTarget((current) => current?.kind === 'project' && current.id === project.id ? null : current) }}
                       onDrop={(e) => {
                         setDropTargetId(null)
-                        const source = projects.find((item) => item.id === dragProjectRef.current)
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        const edge = (e.clientY - rect.top) / rect.height
-                        if (!normalizedSearchQuery && source && source.id !== project.id && (source.parentId ?? null) === (project.parentId ?? null) && (!isFolder || edge < 0.25 || edge > 0.75)) {
-                          e.preventDefault(); e.stopPropagation()
-                          const ids = orderSidebarProjects(projects, manualOrder.projects).map((item) => item.id)
-                          saveOrder('projects', ids, source.id, project.id, edge >= 0.5)
-                          setOrderTarget(null)
-                          return
-                        }
                         setOrderTarget(null)
                         const kind = getSidebarDragKind(e.dataTransfer.types)
                         if (kind === 'session') {
@@ -1288,7 +1246,7 @@ export function SessionSelector({
                               isAwaitingAnswer={questionSessionIds?.has(session.id)}
                               wait={waitBySessionId?.get(session.id)}
                               dragProps={{
-                                ...sessionOrderProps(session.id, project.id, sortedSessions.map((item) => item.id)),
+
                                 draggable: !isMobile,
                                 onDragStart: (e) => {
                                   e.dataTransfer.effectAllowed = 'copyMove'
@@ -1402,7 +1360,7 @@ export function SessionSelector({
                   style={showProjects ? { flex: `1 1 ${(1 - splitRatio) * 100}%` } : { flex: '1 1 auto' }}
                 >
                   {/* Dropping a chat here moves it back to the personal chats
-                      (top level), mirroring the "Projects & Chats" header. */}
+                      (top level), mirroring the "Projects" header. */}
                   <div
                     className={`flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30 ${
                       dropTargetId === '__personal__' ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''
@@ -1428,7 +1386,7 @@ export function SessionSelector({
                   onMoveSession(sessionId, null)
                 }}
                   >
-                    <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
+                    <span className="text-2xs font-medium text-muted-foreground">Chats</span>
                     {onNewPersonalSession && (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -1542,7 +1500,7 @@ export function SessionSelector({
               onArchiveSession={onArchiveSession}
               onOpenInPanel={onOpenSessionInPanel}
               onRename={onRenameSession ? startRename : undefined}
-              onMoveToTop={normalizedSearchQuery ? undefined : (id) => moveSessionToTop(id, sessionContextMenu.projectId)}
+              onMoveToTop={normalizedSearchQuery || sessionContextMenu.projectId !== null ? undefined : (id) => moveSessionToTop(id, sessionContextMenu.projectId)}
               canMoveToTop={(sessionOrderIdsRef.current.get(`sessions:${sessionContextMenu.projectId ?? 'personal'}`)?.indexOf(sessionContextMenu.sessionId) ?? 0) > 0}
               onSearchProjects={onSearchProjects}
               onClose={() => setSessionContextMenu(null)}

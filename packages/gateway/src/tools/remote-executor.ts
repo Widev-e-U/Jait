@@ -184,15 +184,21 @@ export interface RemoteToolExecutorOptions {
 /**
  * Resolve which node ID (if any) should execute tools for a given session.
  *
- * Returns `null` if the project is local to the gateway or no matching
- * remote node is connected.
+ * Returns `null` for gateway execution. Terminal commands retain an explicit
+ * project binding even when the node is disconnected, so the executor can
+ * report that the command could not run on the project's machine.
  */
 export function resolveRemoteNodeForSession(
   ws: WsControlPlane,
   projectPath: string | undefined,
   /** Explicit node binding from the project record — takes priority over path heuristics */
   projectNodeId?: string | null,
+  toolName?: string,
 ): string | null {
+  if (projectNodeId && toolName && REMOTE_TERMINAL_TOOLS.has(toolName)) {
+    return projectNodeId === "gateway" ? null : projectNodeId;
+  }
+
   // If the project is explicitly bound to a non-gateway node, use that directly.
   // This avoids the existsSync ambiguity when both the gateway and a remote node
   // share the same path prefix (e.g. both have /home/alice).

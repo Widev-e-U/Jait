@@ -452,6 +452,18 @@ export function DeveloperChatWorkspace({
     if (message?.role !== 'user') return
     setEditingMessageId(message.id)
   }, [messages])
+  const composerContext = {
+    availableSkills,
+    availableFiles: availableFilesForMention,
+    onSearchFiles,
+    projectOpen: Boolean(activeProjectRoot),
+    projectName: activeProjectDisplayName ?? undefined,
+    projectPath: activeProjectRoot ?? undefined,
+    chatId: activeSessionId ?? undefined,
+    projectNodeId: projectNodeId ?? undefined,
+    projectId: activeProjectId,
+  }
+
   const showNormalComposer = shouldShowNormalChatComposer(isMobile, editingMessageId, editingQueue)
   const panelHideButton = showPanelHideButton ? (
     <TooltipHint content="Hide chat panel">
@@ -548,8 +560,13 @@ export function DeveloperChatWorkspace({
             {controlRowAboveComposer && developerComposerControlRow}
             <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
               <PromptInput
+                {...composerContext}
+                onVoiceInput={onVoiceInput}
+                voiceRecording={voiceRecording}
+                voiceLevels={voiceLevels}
+                voiceTranscribing={voiceTranscribing}
+                onVoiceStop={onStopRecording}
                 ref={promptInputRef}
-                availableSkills={availableSkills}
                 draftStateKey={getChatComposerDraftKey(activeSessionId)}
                 value={inputValueRef.current}
                 syncKey={inputVersion}
@@ -564,11 +581,6 @@ export function DeveloperChatWorkspace({
                 isLoading={isLoading}
                 submitLoading={developerChatSubmitLoading}
                 placeholder={developerPlaceholder}
-                onVoiceInput={onVoiceInput}
-                voiceRecording={voiceRecording}
-                voiceLevels={voiceLevels}
-                voiceTranscribing={voiceTranscribing}
-                onVoiceStop={onStopRecording}
                 mode={chatMode}
                 onModeChange={onChatModeChange}
                 responseStyle={chatResponseStyle}
@@ -586,15 +598,7 @@ export function DeveloperChatWorkspace({
                 onReasoningEffortChange={onReasoningEffortChange}
                 repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
                 onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
-                availableFiles={availableFilesForMention}
-                onSearchFiles={onSearchFiles}
-                projectOpen={Boolean(activeProjectRoot)}
-                projectName={activeProjectDisplayName ?? undefined}
-                projectPath={activeProjectRoot ?? undefined}
-                chatId={activeSessionId ?? undefined}
                 sessionInfo={sessionInfo}
-                projectNodeId={projectNodeId ?? undefined}
-                projectId={activeProjectId}
               />
             </ErrorBoundary>
             {!controlRowAboveComposer && developerComposerControlRow}
@@ -815,6 +819,7 @@ export function DeveloperChatWorkspace({
                 {messageElements}
                 {!readOnly && messageQueue.length > 0 && (
                   <MessageQueue
+                    composerContext={composerContext}
                     items={messageQueue}
                     onEditingChange={setEditingQueue}
                     onRemove={onDequeueMessage}
@@ -899,8 +904,13 @@ export function DeveloperChatWorkspace({
               {inlinePrompts && <div className="border-b border-border p-2">{inlinePrompts}</div>}
               <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
                 <PromptInput
+                  {...composerContext}
+                  onVoiceInput={onVoiceInput}
+                  voiceRecording={voiceRecording}
+                  voiceLevels={voiceLevels}
+                  voiceTranscribing={voiceTranscribing}
+                  onVoiceStop={onStopRecording}
                   ref={promptInputRef}
-                  availableSkills={availableSkills}
                   draftStateKey={getChatComposerDraftKey(activeSessionId)}
                   value={inputValueRef.current}
                   syncKey={inputVersion}
@@ -915,11 +925,6 @@ export function DeveloperChatWorkspace({
                   submitLoading={developerChatSubmitLoading}
                   disabled={limitReached}
                   placeholder={developerPlaceholder}
-                  onVoiceInput={onVoiceInput}
-                  voiceRecording={voiceRecording}
-                  voiceLevels={voiceLevels}
-                  voiceTranscribing={voiceTranscribing}
-                  onVoiceStop={onStopRecording}
                   mode={chatMode}
                   onModeChange={onChatModeChange}
                   responseStyle={chatResponseStyle}
@@ -937,15 +942,7 @@ export function DeveloperChatWorkspace({
                   onReasoningEffortChange={onReasoningEffortChange}
                   repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
                   onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
-                  availableFiles={availableFilesForMention}
-                  onSearchFiles={onSearchFiles}
-                  projectOpen={Boolean(activeProjectRoot)}
-                  projectName={activeProjectDisplayName ?? undefined}
-                  projectPath={activeProjectRoot ?? undefined}
-                  chatId={activeSessionId ?? undefined}
                   sessionInfo={sessionInfo}
-                  projectNodeId={projectNodeId ?? undefined}
-                  projectId={activeProjectId}
                   merged
                 />
               </ErrorBoundary>

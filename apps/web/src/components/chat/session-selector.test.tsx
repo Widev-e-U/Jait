@@ -117,12 +117,12 @@ describe('SessionSelector', () => {
       />,
     )
 
-    expect(markup).toContain('Projects &amp; Chats')
+    expect(markup).toContain('Projects')
     expect(markup).toContain('Jait')
     expect(markup).toContain('Root chat')
-    // The "Personal chats" header doubles as the drop target for moving a
+    // The "Chats" header doubles as the drop target for moving a
     // chat back to the top level, so it is always present.
-    expect(markup).toContain('Personal chats')
+    expect(markup).toContain('Chats')
   })
 
   it('shows only project content in the projects view', () => {
@@ -400,9 +400,9 @@ describe('SessionSelector', () => {
     )
 
     const searchField = markup.indexOf('type="search"')
-    const projectsHeader = markup.indexOf('Projects &amp; Chats')
+    const projectsHeader = markup.indexOf('Projects')
     const newProject = markup.indexOf('aria-label="New project"')
-    const personalHeader = markup.indexOf('Personal chats')
+    const personalHeader = markup.indexOf('Chats')
     const newPersonalChat = markup.indexOf('aria-label="New personal chat"')
 
     // The search field owns its whole row — no trailing + button anymore.
@@ -410,7 +410,7 @@ describe('SessionSelector', () => {
     expect(projectsHeader).toBeGreaterThan(searchField)
     expect(markup.slice(searchField, projectsHeader)).not.toContain('<button')
 
-    // One + sits with "Projects & Chats", the other with "Personal chats".
+    // One + sits with "Projects & Chats", the other with "Chats".
     expect(newProject).toBeGreaterThan(projectsHeader)
     expect(personalHeader).toBeGreaterThan(newProject)
     expect(newPersonalChat).toBeGreaterThan(personalHeader)
@@ -624,18 +624,18 @@ describe('sortSessionsByActivity', () => {
     ]).map((s) => s.id)).toEqual(['new', 'old'])
   })
 
-  it('keeps a streaming chat above chats used since its turn started', () => {
+  it('orders a long-running chat by its last activity', () => {
     expect(sortSessionsByActivity([
       session('recent', '2026-01-01T12:00:00.000Z'),
       session('long-turn', '2026-01-01T10:00:00.000Z'),
-    ], new Set(['long-turn'])).map((s) => s.id)).toEqual(['long-turn', 'recent'])
+    ]).map((s) => s.id)).toEqual(['recent', 'long-turn'])
   })
 
-  it('keeps a running goal loop on top between its turns', () => {
+  it('orders a running goal loop by its last activity', () => {
     expect(sortSessionsByActivity([
       session('recent', '2026-01-01T12:00:00.000Z'),
       session('loop', '2026-01-01T10:00:00.000Z', loop('running')),
       session('paused', '2026-01-01T11:00:00.000Z', loop('paused')),
-    ]).map((s) => s.id)).toEqual(['loop', 'recent', 'paused'])
+    ]).map((s) => s.id)).toEqual(['recent', 'paused', 'loop'])
   })
 })

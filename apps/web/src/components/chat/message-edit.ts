@@ -4,6 +4,7 @@ import {
   normalizeUserMessageSegments,
   userMessageTextFromSegments,
 } from '@/lib/user-message-segments'
+import type { QueuedMessage } from './message-queue'
 import type { ChatAttachment } from '@/hooks/useChat'
 import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
 
@@ -44,4 +45,12 @@ export function createUserMessageEditSubmission(
     referencedFiles: userReferencedFilesFromSegments(displaySegments),
     displaySegments,
   }
+}
+
+export function getQueuedMessageEditSegments(item: QueuedMessage): UserMessageSegment[] {
+  const segments: UserMessageSegment[] = item.displaySegments?.length
+    ? item.displaySegments
+    : [{ type: 'text', text: item.displayContent ?? item.content }]
+  if (segments.some(segment => segment.type === 'file') || !item.referencedFiles?.length) return segments
+  return [...segments, ...item.referencedFiles.map(file => ({ ...file, type: 'file' as const }))]
 }

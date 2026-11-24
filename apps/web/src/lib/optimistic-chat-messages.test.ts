@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createOptimisticAssistantPlaceholder,
+  createOptimisticMessageId,
   mergeSnapshotMessagesWithOptimisticUsers,
   type OptimisticUserMessageLike,
 } from './optimistic-chat-messages'
@@ -197,6 +198,16 @@ describe('message render identity', () => {
 
 
 describe('client message identity', () => {
+  it('reconciles an observed turn with its saved message after completion', () => {
+    const older = user('older', 'repeat')
+    const observedId = createOptimisticMessageId('observed-user')
+    const current = [older, user(observedId, 'repeat', { optimistic: true })]
+    const saved = user('server-new', 'repeat')
+    expect(mergeSnapshotMessagesWithOptimisticUsers([older, saved], current)).toEqual([
+      older, { ...saved, renderId: observedId },
+    ])
+  })
+
   it('keeps a pending prompt when another client sends identical text', () => {
     const current = [user('user-local-12345678', 'continue', { optimistic: true })]
     const snapshot = [user('server-other', 'continue', { clientMessageId: 'user-other-12345678' })]

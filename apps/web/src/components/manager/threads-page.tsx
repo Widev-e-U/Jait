@@ -247,6 +247,14 @@ export function ThreadsPage({
     }
   }
 
+  const composerContext = {
+    availableSkills,
+    availableFiles,
+    onSearchFiles,
+    projectOpen: showProject,
+    chatId: automation.selectedThread?.id ?? undefined,
+  }
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       {!isMobile && sidebarSection === 'repositories' && (
@@ -295,6 +303,7 @@ export function ThreadsPage({
                 )}
                 {selectedManagerQueue.length > 0 && automation.selectedThread && (
                   <MessageQueue
+                    composerContext={composerContext}
                     items={selectedManagerQueue}
                     onRemove={(id) => onDequeueManagerMessage(automation.selectedThread.id, id)}
                     onEdit={(id, content, attachments, displaySegments) => onUpdateManagerQueueItem(automation.selectedThread.id, id, content, attachments, displaySegments)}
@@ -314,8 +323,13 @@ export function ThreadsPage({
                 </div>
                 <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
                   <PromptInput
+                    {...composerContext}
+                    onVoiceInput={onVoiceInput}
+                    voiceRecording={voiceRecording}
+                    voiceLevels={voiceLevels}
+                    voiceTranscribing={voiceTranscribing}
+                    onVoiceStop={onStopRecording}
                     ref={promptInputRef}
-                    availableSkills={availableSkills}
                     draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
                     value={inputValueRef.current}
                     syncKey={inputVersion}
@@ -330,11 +344,6 @@ export function ThreadsPage({
                     // change that execution. Show those settings read-only.
                     controlsDisabled
                     placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
-                    onVoiceInput={onVoiceInput}
-                    voiceRecording={voiceRecording}
-                    voiceLevels={voiceLevels}
-                    voiceTranscribing={voiceTranscribing}
-                    onVoiceStop={onStopRecording}
                     responseStyle={chatResponseStyle}
                     onResponseStyleChange={onResponseStyleChange}
                     provider={threadProvider}
@@ -347,10 +356,6 @@ export function ThreadsPage({
                     onCliModelChange={onCliModelChange}
                     repoRuntime={selectedThreadRepoRuntime}
                     onMoveToGateway={onMoveRepoToGateway}
-                    availableFiles={availableFiles}
-                    onSearchFiles={onSearchFiles}
-                    projectOpen={showProject}
-                    chatId={automation.selectedThread?.id ?? undefined}
                     allowPersonalChatNode={false}
                     merged
                   />

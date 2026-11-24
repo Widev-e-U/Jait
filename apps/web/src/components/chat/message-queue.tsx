@@ -1,8 +1,8 @@
 import { AttachmentList, collectAttachments } from './attachment-list'
 import type { ChatAttachment } from '@/hooks/useChat'
-import { userMessageTextFromSegments, type UserMessageSegment } from '@/lib/user-message-segments'
-import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { createUserMessageEditSubmission } from './message-edit'
+import { userMessageTextFromSegments, type UserMessageSegment, type UserReferencedFile } from '@/lib/user-message-segments'
+import { PromptInput, type PromptInputHandle, type PromptInputContextProps } from './prompt-input'
+import { createUserMessageEditSubmission, getQueuedMessageEditSegments } from './message-edit'
 import { getMessageEditPromptClassName } from './message-edit-layout'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -19,6 +19,7 @@ export interface QueuedMessage {
   displayContent?: string
   attachments?: ChatAttachment[] | string[]
   displaySegments?: UserMessageSegment[]
+  referencedFiles?: UserReferencedFile[]
   /** timestamp when queued */
   queuedAt: number
   /** When true, the queue drain skips this message until the user unlocks it. */
@@ -33,6 +34,7 @@ export interface QueuedMessage {
 
 interface MessageQueueProps {
   items: QueuedMessage[]
+  composerContext?: PromptInputContextProps
   onEditingChange?: (editing: boolean) => void
   onRemove?: (id: string) => void
   onEdit?: (id: string, newContent: string, attachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => void | Promise<void>
@@ -119,6 +121,7 @@ function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number 
 
 function QueueItem({
   item,
+  composerContext,
   index,
   editing,
   onEditingChange,
@@ -137,6 +140,7 @@ function QueueItem({
   onDragStart,
 }: {
   item: QueuedMessage
+  composerContext?: PromptInputContextProps
   index: number
   editing: boolean
   onEditingChange: (id: string, editing: boolean) => void
@@ -157,7 +161,7 @@ function QueueItem({
   const setEditing = useCallback((next: boolean) => onEditingChange(item.id, next), [item.id, onEditingChange])
   const [collapsed, setCollapsed] = useState(true)
   const [draft, setDraft] = useState(item.displayContent ?? item.content)
-  const [draftSegments, setDraftSegments] = useState<UserMessageSegment[]>(item.displaySegments ?? [{ type: 'text', text: item.displayContent ?? item.content }])
+  const [draftSegments, setDraftSegments] = useState(() => getQueuedMessageEditSegments(item))
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<PromptInputHandle>(null)
   const showActions = editing || !dragActive
@@ -176,8 +180,8 @@ function QueueItem({
   useEffect(() => {
     if (editing) return
     setDraft(item.displayContent ?? item.content)
-    setDraftSegments(item.displaySegments ?? [{ type: 'text', text: item.displayContent ?? item.content }])
-  }, [item.content, item.displayContent, item.displaySegments, editing])
+    setDraftSegments(getQueuedMessageEditSegments(item))
+  }, [item, editing])
 
   const commitEdit = useCallback(async (attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => {
     if (saving) return
@@ -291,13 +295,12 @@ function QueueItem({
               <ListPlus className="h-3.5 w-3.5" /> {index === 0 ? "Next" : `Queued #${index + 1}`}
               <span className="ml-auto inline-flex items-center gap-1 text-muted-foreground"><Pencil className="h-3 w-3" /> Editing</span>
             </div>
-            <PromptInput ref={inputRef} draftStateKey={`queue-edit:${item.id}`} value={draft}
+            <PromptInput {...composerContext} ref={inputRef} draftStateKey={`queue-edit:${item.id}`} value={draft}
               segments={draftSegments}
               initialAttachments={collectAttachments(item.attachments, item.displaySegments)}
               onChange={value => { setDraft(value); setDraftSegments(inputRef.current?.getSegments() ?? []) }}
               onSubmit={(_files, attachments, segments) => { void commitEdit(attachments, segments) }}
               disabled={saving} controlsDisabled={saving} clearOnSubmit={false} submitLabel="Save changes" placeholder="Edit message..."
-              availableFiles={[]}
               footerTrailingContent={<Button type="button" variant="ghost" size="sm"
                 disabled={saving} onClick={cancelEdit} aria-label="Cancel editing message">Cancel</Button>}
               className={getMessageEditPromptClassName()} />
@@ -441,7 +444,7 @@ function QueueItem({
 
 /* ── Queue container ────────────────────────────────────────────────── */
 
-export function MessageQueue({ items, onEditingChange, onRemove, onEdit, onReorder, onSteer, onStopAndSteer, onSendToParallelThread, parallelActionLabel, onToggleHold, iconOnly, className }: MessageQueueProps) {
+export function MessageQueue({ items, composerContext, onEditingChange, onRemove, onEdit, onReorder, onSteer, onStopAndSteer, onSendToParallelThread, parallelActionLabel, onToggleHold, iconOnly, className }: MessageQueueProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const editing = editingId !== null && items.some(item => item.id === editingId)
   const handleEditingChange = useCallback((id: string, active: boolean) => {
@@ -600,6 +603,7 @@ export function MessageQueue({ items, onEditingChange, onRemove, onEdit, onReord
         <QueueItem
           key={item.id}
           item={item}
+          composerContext={composerContext}
           index={i}
           editing={editingId === item.id}
           onEditingChange={handleEditingChange}

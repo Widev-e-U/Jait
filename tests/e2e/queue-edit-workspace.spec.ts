@@ -69,3 +69,22 @@ for (const retryMode of ['inline', 'footer']) {
     await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/', `provider-error-retry-${retryMode}.png`) })
   })
 }
+
+test('queued editor can add and reopen a workspace file reference', async ({ page }) => {
+  await page.goto('/src/e2e-fixtures/queue-edit-workspace.html')
+  const edit = page.locator('[data-queue-id="queued-1"]').getByRole('button', { name: 'Edit message', exact: true })
+  await edit.click()
+  const editor = page.locator('[data-queue-editor]')
+  const textbox = editor.getByRole('textbox')
+  await textbox.press('End')
+  await page.keyboard.type(' @queue-example')
+  await expect(page.getByRole('option', { name: /queue-example\.ts/ })).toBeVisible()
+  await textbox.press('Enter')
+  const reference = textbox.locator('[data-segment-type="file"][data-file-path="src/queue-example.ts"]')
+  await expect(reference).toHaveCount(1)
+  await editor.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await expect(editor).toHaveCount(0)
+  await edit.click()
+  await expect(reference).toHaveCount(1)
+  await expect(page.getByRole('textbox').filter({ hasText: 'Keep my unsent draft' })).toBeVisible()
+})

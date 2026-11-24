@@ -1195,9 +1195,10 @@ export function useChat(
         }
 
         if (turnStart?.kind === 'user') {
+          // This client did not send this ID to the gateway; reconcile by visible content.
           const userBubble: ChatMessage = drainedItem
             ? {
-                id: createOptimisticMessageId('user'),
+                id: createOptimisticMessageId('observed-user'),
                 role: 'user',
                 ...(typeof data.authorUserId === 'string' ? { authorUserId: data.authorUserId } : {}),
                 content: drainedItem.content,
@@ -1208,7 +1209,7 @@ export function useChat(
                 ...(drainedItem.attachments?.length ? { attachments: drainedItem.attachments } : {}),
               }
             : {
-                id: createOptimisticMessageId('user'),
+                id: createOptimisticMessageId('observed-user'),
                 role: 'user',
                 ...(typeof data.authorUserId === 'string' ? { authorUserId: data.authorUserId } : {}),
                 content: data.content as string,

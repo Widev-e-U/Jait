@@ -180,7 +180,8 @@ import {
   userMessageTextFromSegments,
   userReferencedFilesFromSegments,
   userReferencedTerminalsFromSegments,
-  userReferencedProjectsFromSegments
+  userReferencedProjectsFromSegments,
+  userReferencedChatsFromSegments,
 } from '@/lib/user-message-segments'
 import {
   BackgroundSecretPrompt,
@@ -3813,7 +3814,9 @@ function App() {
       ? userReferencedTerminalsFromSegments(normalizedSegments)
       : []
 
-    if (!text && referencedFiles.length === 0 && referencedProjects.length === 0 && referencedTerminals.length === 0) return null
+    const referencedChats = userReferencedChatsFromSegments(normalizedSegments)
+
+    if (!text && referencedFiles.length === 0 && referencedProjects.length === 0 && referencedTerminals.length === 0 && referencedChats.length === 0) return null
 
     const fileContents: { path: string; content: string; lineRange?: { startLine: number; endLine: number } }[] = []
     const attachments = new Set<string>()
@@ -3852,6 +3855,10 @@ function App() {
 
     if (referencedProjects.length > 0) {
       referenceSections.push(`Referenced projects:\n${referencedProjects.map((project) => `- ${project.path}`).join('\n')}`)
+    }
+
+    if (referencedChats.length > 0) {
+      referenceSections.push(`Referenced chats:\n${referencedChats.map(chat => `- ${chat.name} (${chat.sessionId})`).join('\n')}`)
     }
 
     if (referencedTerminals.length > 0) {

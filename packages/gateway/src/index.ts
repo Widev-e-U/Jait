@@ -751,7 +751,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       ? null
       : personalNodeId
         ? personalNodeId === "gateway" ? null : personalNodeId
-        : resolveRemoteNodeForSession(ws, projectPath ?? undefined, projectRecord?.nodeId));
+        : resolveRemoteNodeForSession(ws, projectPath ?? undefined, projectRecord?.nodeId, toolName));
     const executor = createRemoteToolExecutor(
       {
         ws,

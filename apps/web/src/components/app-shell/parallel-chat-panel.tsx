@@ -15,7 +15,7 @@ import { API_URL } from '@/lib/gateway-url'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import { shouldProcessQueuedMessage } from '@/lib/chat-queue-decision'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
-import type { UserMessageSegment } from '@/lib/user-message-segments'
+import { serializeUserMessageSegmentsToMarkdown, userMessageTextFromSegments, userReferencedFilesFromSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
 import type { DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { TooltipHint } from '@/components/ui/tooltip'
@@ -29,10 +29,34 @@ import { ChatPanelDivider } from './chat-panel-divider'
 export interface ParallelChatPrompt {
   content: string
   displayContent?: string
-  referencedFiles?: { path: string; name: string }[]
+  referencedFiles?: ReferencedFile[]
   displaySegments?: UserMessageSegment[]
   attachments?: ChatAttachment[]
 }
+
+function buildParallelPrompt(
+  rawValue: string,
+  referencedFiles?: ReferencedFile[],
+  attachments?: ChatAttachment[],
+  displaySegments?: UserMessageSegment[],
+): ParallelChatPrompt | null {
+  const text = (displaySegments?.length ? userMessageTextFromSegments(displaySegments) : rawValue).trim()
+  const uploads = collectAttachments(attachments, displaySegments)
+  const references = (displaySegments ?? []).filter(segment => (
+    segment.type === 'project' || segment.type === 'terminal' || segment.type === 'chat' || (!text && segment.type === 'file')
+  ))
+  const content = [text, ...references.map(reference => serializeUserMessageSegmentsToMarkdown([reference]))]
+    .filter(Boolean).join('\n')
+  if (!content && !referencedFiles?.length && !uploads.length) return null
+  return {
+    content,
+    displayContent: text,
+    referencedFiles,
+    attachments: uploads,
+    displaySegments: mergeAttachmentsIntoSegments(displaySegments, uploads),
+  }
+}
+
 
 export interface ParallelChatPanelProps {
   onSessionViewed?: (sessionId: string, lastActiveAt: string) => void
@@ -304,21 +328,21 @@ function ParallelChatPanelImpl({
       })
   }, [dequeueMessage, isLoading, isLoadingHistory, messageQueue, sendPrompt])
 
+  const resetDraft = useCallback(() => {
+    setDraft('')
+    setInputVersion(version => version + 1)
+  }, [])
+
   const handleSteer = useCallback((
     referencedFiles?: ReferencedFile[],
     attachments?: ChatAttachment[],
     displaySegments?: UserMessageSegment[],
   ) => {
     if (!isLoading) return
-    const content = draft.trim()
-    const uploads = collectAttachments(attachments, displaySegments)
-    if (!content && uploads.length === 0) return
-    const chipFiles = referencedFiles?.map(({ path, name }) => ({ path, name })) ?? []
-    const nextDisplaySegments = mergeAttachmentsIntoSegments(displaySegments, uploads)
-    const displayContent = nextDisplaySegments ? undefined : content
-    recordSteeredMessage(content, displayContent, uploads)
-    setDraft('')
-    setInputVersion((version) => version + 1)
+    const prompt = buildParallelPrompt(draft, referencedFiles, attachments, displaySegments)
+    if (!prompt) return
+    recordSteeredMessage(prompt.content, prompt.displayContent, prompt.attachments)
+    resetDraft()
     void (async () => {
       try {
         const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(session.id)}/steer`, {
@@ -328,24 +352,19 @@ function ParallelChatPanelImpl({
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
-            message: content,
-            ...(chipFiles.length ? { referencedFiles: chipFiles } : {}),
-            ...(uploads.length ? { attachments: uploads } : {}),
-            ...(nextDisplaySegments ? { displaySegments: nextDisplaySegments } : {}),
+            message: prompt.content,
+            referencedFiles: prompt.referencedFiles,
+            attachments: prompt.attachments,
+            displaySegments: prompt.displaySegments,
           }),
         })
-        if (!response.ok) {
-          throw new Error(`Steer failed (${response.status})`)
-        }
+        if (!response.ok) throw new Error(`Steer failed (${response.status})`)
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to steer')
-        enqueueMessage({
-          content,
-          ...(uploads.length ? { attachments: uploads, displaySegments: nextDisplaySegments } : {}),
-        })
+        enqueueMessage(prompt)
       }
     })()
-  }, [draft, enqueueMessage, isLoading, recordSteeredMessage, session.id, token])
+  }, [draft, enqueueMessage, isLoading, recordSteeredMessage, resetDraft, session.id, token])
 
   const handleQueueMessage = useCallback((
     referencedFiles?: ReferencedFile[],
@@ -353,37 +372,45 @@ function ParallelChatPanelImpl({
     displaySegments?: UserMessageSegment[],
   ) => {
     if (!isLoading) return
-    const content = draft.trim()
-    const uploads = collectAttachments(attachments, displaySegments)
-    if (!content && !uploads.length) return
-    enqueueMessage({
-      content,
-      referencedFiles: referencedFiles?.map(({ path, name }) => ({ path, name })),
-      displaySegments: mergeAttachmentsIntoSegments(displaySegments, uploads),
-      attachments: uploads,
-    })
-    setDraft('')
-    setInputVersion((version) => version + 1)
-  }, [draft, enqueueMessage, isLoading])
+    const prompt = buildParallelPrompt(draft, referencedFiles, attachments, displaySegments)
+    if (!prompt) return
+    enqueueMessage(prompt)
+    resetDraft()
+  }, [draft, enqueueMessage, isLoading, resetDraft])
 
   const handleSubmit = useCallback((
     referencedFiles?: ReferencedFile[],
     attachments?: ChatAttachment[],
     displaySegments?: UserMessageSegment[],
   ) => {
-    const content = draft.trim()
-    if ((!content && !attachments?.length) || isLoading) return
-    setDraft('')
-    setInputVersion((version) => version + 1)
-    void sendPrompt({
-      content,
-      ...(referencedFiles?.length ? {
-        referencedFiles: referencedFiles.map(({ path, name }) => ({ path, name })),
-      } : {}),
-      ...(displaySegments?.length ? { displaySegments } : {}),
-      ...(attachments?.length ? { attachments } : {}),
-    })
-  }, [draft, isLoading, sendPrompt])
+    if (isLoading) return
+    const prompt = buildParallelPrompt(draft, referencedFiles, attachments, displaySegments)
+    if (!prompt) return
+    resetDraft()
+    void sendPrompt(prompt)
+  }, [draft, isLoading, resetDraft, sendPrompt])
+
+  const handleEditQueueMessage = useCallback((
+    id: string,
+    content: string,
+    attachments?: ChatAttachment[],
+    displaySegments?: UserMessageSegment[],
+  ) => {
+    const prompt = buildParallelPrompt(content, userReferencedFilesFromSegments(displaySegments), attachments, displaySegments)
+    if (prompt) updateQueueItem(id, content, prompt.attachments, prompt.displaySegments, prompt.content)
+  }, [updateQueueItem])
+
+  const composerContext = {
+    availableSkills,
+    availableFiles,
+    onSearchFiles,
+    projectOpen: Boolean(projectPath),
+    projectName,
+    projectPath,
+    projectNodeId: projectNodeId ?? undefined,
+    projectId: session.projectId,
+    chatId: session.id,
+  }
 
   const messageContents = useMemo(() => messages.map((message) => message.content), [messages])
 
@@ -470,10 +497,11 @@ function ParallelChatPanelImpl({
         <div className={getChatColumnClassName('space-y-1.5')}>
         {messageQueue.length > 0 && (
           <MessageQueue
+            composerContext={composerContext}
             items={messageQueue}
             onEditingChange={setEditingQueue}
             onRemove={dequeueMessage}
-            onEdit={updateQueueItem}
+            onEdit={handleEditQueueMessage}
             onReorder={reorderQueueItem}
             onToggleHold={toggleHoldQueueItem}
             iconOnly={isMobile}
@@ -482,6 +510,7 @@ function ParallelChatPanelImpl({
         <div hidden={!shouldShowNormalChatComposer(isMobile, null, editingQueue)} className="space-y-1.5">
         <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/20 overflow-hidden">
         <PromptInput
+          {...composerContext}
           merged
           value={draft}
           syncKey={inputVersion}
@@ -506,15 +535,6 @@ function ParallelChatPanelImpl({
           onReasoningEffortChange={handleReasoningEffortChange}
           responseStyle={panelResponseStyle}
           onResponseStyleChange={handleResponseStyleChange}
-          availableFiles={availableFiles}
-          availableSkills={availableSkills}
-          onSearchFiles={onSearchFiles}
-          projectOpen={Boolean(projectPath)}
-          projectName={projectName}
-          projectPath={projectPath}
-          projectNodeId={projectNodeId ?? undefined}
-          projectId={session.projectId}
-          chatId={session.id}
         />
         </div>
         {composerControlRow}

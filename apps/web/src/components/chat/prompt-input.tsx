@@ -856,6 +856,12 @@ function appendSegmentNodes(
   }
 }
 
+/** Workspace context shared by the send composer and queued-message editor. */
+export type PromptInputContextProps = Pick<PromptInputProps,
+  | 'availableFiles' | 'onSearchFiles' | 'availableSkills' | 'projectOpen'
+  | 'projectName' | 'projectPath' | 'projectNodeId' | 'projectId' | 'chatId'
+>
+
 export interface PromptInputHandle {
   /** Clear the confirmed submission, including its local attachment draft. */
   reset: () => void

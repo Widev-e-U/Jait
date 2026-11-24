@@ -88,6 +88,7 @@ async fn project_membership_is_owner_managed_and_revocable() {
         .json()
         .await
         .unwrap();
+    let owner_id = owner["user"]["id"].as_str().unwrap().to_owned();
     let owner = owner["access_token"].as_str().unwrap().to_owned();
     let invitation: Value = client
         .post(url("/api/auth/invitations"))
@@ -167,6 +168,40 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .status(),
         404
     );
+    for username in [" ".to_owned(), "x".repeat(201)] {
+        assert_eq!(
+            client
+                .post(&members_url)
+                .bearer_auth(&owner)
+                .json(&json!({"username": username}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            400
+        );
+    }
+    assert_eq!(
+        client
+            .post(&members_url)
+            .bearer_auth(&owner)
+            .json(&json!({"username": "missing-user"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .delete(format!("{members_url}/{owner_id}"))
+            .bearer_auth(&owner)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        400
+    );
     let added = client
         .post(&members_url)
         .bearer_auth(&owner)
@@ -178,6 +213,18 @@ async fn project_membership_is_owner_managed_and_revocable() {
     let added: Value = added.json().await.unwrap();
     assert_eq!(added["members"].as_array().unwrap().len(), 2);
     assert_eq!(added["canManage"], true);
+    let duplicate: Value = client
+        .post(&members_url)
+        .bearer_auth(&owner)
+        .json(&json!({"username": " member "}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(duplicate["members"].as_array().unwrap().len(), 2);
+
     assert!(
         added["members"]
             .as_array()

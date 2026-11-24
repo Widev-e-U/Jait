@@ -139,6 +139,13 @@ describe("resolveRemoteNodeForSession", () => {
     expect(resolveRemoteNodeForSession(ws, "/definitely/missing/jait/project", "dead-node-id")).toBe(remoteNode.id);
   });
 
+  it("keeps gateway-bound shell commands on the gateway when their project path is missing", () => {
+    const ws = createMockWs();
+
+    expect(resolveRemoteNodeForSession(ws, "/definitely/missing/jait/project", "gateway", "jait.terminal")).toBeNull();
+    expect(ws.getFsNodes).not.toHaveBeenCalled();
+  });
+
   it("uses gateway for projectNodeId='gateway'", () => {
     cleanupPath = mkdtempSync(join(tmpdir(), "jait-remote-executor-"));
     const ws = createMockWs();
@@ -235,39 +242,46 @@ describe("createRemoteToolExecutor", () => {
     expect(ws.proxyToolOp).not.toHaveBeenCalled();
   });
 
-  it("routes terminal tools through a visible terminal on the selected node", async () => {
+  it("routes jait.terminal from a Windows project to the node's visible terminal in the project directory", async () => {
     const onOutputChunk = vi.fn();
-    const ws = createMockWs();
-    const localExecutor = vi.fn(async () => ({ ok: true, message: "local result" }));
-    const context = { ...createToolContext(), onOutputChunk };
-    const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
+    const ws = createMockWs({ findNodeByDeviceId: vi.fn(() => windowsNode) });
+    const localExecutor = vi.fn(async () => ({ ok: true, message: "terminal result" }));
+    const context = { ...createToolContext(), projectRoot: "C:\\Users\\test\\repo", onOutputChunk };
+    const nodeId = resolveRemoteNodeForSession(ws, context.projectRoot, windowsNode.id, "jait.terminal");
+    const execute = createRemoteToolExecutor({ ws, localExecutor }, nodeId);
 
-    await expect(execute("terminal.run", { command: "pwd" }, context)).resolves.toEqual({
+    await expect(execute("jait.terminal", { command: "Get-Location" }, context)).resolves.toEqual({
       ok: true,
-      message: "local result",
+      message: "terminal result",
     });
     expect(localExecutor).toHaveBeenCalledWith(
-      "terminal.run",
-      { command: "pwd" },
-      { ...context, executionNodeId: remoteNode.id },
+      "jait.terminal",
+      { command: "Get-Location" },
+      { ...context, executionNodeId: windowsNode.id },
       undefined,
     );
     expect(ws.proxyToolOp).not.toHaveBeenCalled();
   });
 
-  it("does not run a remote-project terminal command on the gateway when its node disconnected", async () => {
-    const ws = createMockWs({ findNodeByDeviceId: vi.fn(() => undefined) });
-    const localExecutor = vi.fn(async () => ({ ok: true, message: "fallback result" }));
-    const context = createToolContext();
-    const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
+  it.each(["jait.terminal", "terminal.run", "execute"])(
+    "keeps %s bound to a disconnected Windows project even when another Windows node is connected",
+    async (toolName) => {
+      const ws = createMockWs({ findNodeByDeviceId: vi.fn((id) => id === windowsNode.id ? windowsNode : undefined) });
+      const localExecutor = vi.fn(async () => ({ ok: true, message: "fallback result" }));
+      const context = { ...createToolContext(), projectRoot: "C:\\Users\\test\\repo" };
+      const projectNodeId = "disconnected-windows-node";
+      const nodeId = resolveRemoteNodeForSession(ws, context.projectRoot, projectNodeId, toolName);
+      const execute = createRemoteToolExecutor({ ws, localExecutor }, nodeId);
 
-    await expect(execute("terminal.run", { command: "pwd" }, context)).resolves.toEqual({
-      ok: false,
-      message: `Project node ${remoteNode.id} is disconnected; terminal command was not run`,
-    });
-    expect(localExecutor).not.toHaveBeenCalled();
-    expect(ws.proxyToolOp).not.toHaveBeenCalled();
-  });
+      await expect(execute(toolName, { command: "Get-Location" }, context)).resolves.toEqual({
+        ok: false,
+        message: `Project node ${projectNodeId} is disconnected; terminal command was not run`,
+      });
+      expect(ws.getFsNodes).not.toHaveBeenCalled();
+      expect(localExecutor).not.toHaveBeenCalled();
+      expect(ws.proxyToolOp).not.toHaveBeenCalled();
+    },
+  );
 
   it("returns a failed tool result when remote execution rejects", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
