@@ -611,7 +611,29 @@ jobs:
           bunx vite build --base ./ --sourcemap false
           cd ../desktop/src-tauri
           cargo install tauri-cli --version '^2' --locked
-          cargo tauri build --config '{"bundle":{"resources":{"gateway/":"gateway/"},"createUpdaterArtifacts":false}}' --features shell,frontend --bundles appimage --verbose
+          # linuxdeploy recursively scans and rewrites ELF files under usr/lib.
+          # Package the shell first, then add the already-tested gateway as-is.
+          cargo tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}' --features shell,frontend --bundles appimage --verbose
+          appimage_dir="$PWD/target/release/bundle/appimage"
+          appdir="$appimage_dir/Jait.AppDir"
+          appimage="$appimage_dir/Jait_${VERSION}_amd64.AppImage"
+          plugin=$(find "${XDG_CACHE_HOME:-$HOME/.cache}/tauri" -type f -name 'linuxdeploy-plugin-appimage*.AppImage' -print -quit)
+          test -x "$plugin"
+          test -x "$appdir/AppRun"
+          gateway_dir="$PWD/gateway"
+          test -x "$gateway_dir/runtime/node"
+          mkdir -p "$appdir/usr/lib/Jait"
+          mv "$gateway_dir" "$appdir/usr/lib/Jait/gateway"
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 LINUXDEPLOY_OUTPUT_VERSION="$VERSION" \
+            LDAI_OUTPUT="$appimage.repacked" "$plugin" --appdir "$appdir"
+          mv "$appimage.repacked" "$appimage"
+          mkdir -p "$GITHUB_WORKSPACE/.jait/artifacts"
+          verification_dir=$(mktemp -d "$GITHUB_WORKSPACE/.jait/artifacts/appimage-verification.XXXXXX")
+          (
+            cd "$verification_dir"
+            "$appimage" --appimage-extract 'usr/lib/Jait/gateway/runtime/node'
+            cmp "$appdir/usr/lib/Jait/gateway/runtime/node" squashfs-root/usr/lib/Jait/gateway/runtime/node
+          )
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux-release-assets
