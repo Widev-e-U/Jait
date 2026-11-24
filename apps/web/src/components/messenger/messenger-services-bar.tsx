@@ -137,23 +137,19 @@ function useServiceStates() {
 }
 
 /**
- * The one and only messenger header row: icon-only search toggle, All chats / Connections buttons, connected
+ * The messenger header row: search, Connections, and connected
  * provider icons with unread badges on the right. Hidden chats are a list filter, not a header button.
  * Tapping a provider opens its settings popover.
  */
-export function MessengerHeaderBar({ service, onService, onOptions, search, onSearch }: {
-  service: string
-  onService: (service: string) => void
+export function MessengerHeaderBar({ onOptions, search, onSearch }: {
   onOptions: () => void
   search: string
   onSearch: (value: string) => void
 }) {
   const items = useServiceStates()
-  const [searching, setSearching] = useState(!!search)
   const [configure, setConfigure] = useState<string | null>(null)
   const active = !!search.trim()
   const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => { if (searching) inputRef.current?.focus() }, [searching])
   const icon = 'relative grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted'
   const badge = (count: number, tone = 'bg-primary text-primary-foreground') => count > 0 && (
     <span aria-label={`${count} unread`} className={'absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full px-1 text-center text-[10px] font-semibold tabular-nums ring-2 ring-background ' + tone}>
@@ -162,40 +158,20 @@ export function MessengerHeaderBar({ service, onService, onOptions, search, onSe
   )
 
   return <div role="group" aria-label="Services and search" className="flex h-11 shrink-0 items-center gap-1 border-b bg-background pl-0.5 pr-1.5">
-    <div role="search" className={'flex min-w-0 items-center overflow-hidden rounded-md transition-[flex-grow,background-color] duration-300 ease-out ' + (searching ? 'grow bg-muted/60' : 'grow-0')}>
-      <button
-        type="button"
-        aria-label={searching ? 'Collapse search' : active ? 'Search (search filter active)' : 'Search'}
-        aria-expanded={searching}
-        onMouseDown={event => event.preventDefault()}
-        onClick={() => setSearching(!searching)}
-        className={icon + (searching ? ' text-foreground' : active ? ' text-primary' : '')}
-      >
-        <Search className="h-4 w-4" />
-        {active && !searching && <span aria-hidden className="absolute right-0.5 top-0.5 size-2 rounded-full bg-primary ring-2 ring-background" />}
-      </button>
-      <div className={'grid min-w-0 flex-1 transition-[grid-template-columns,opacity] duration-300 ease-out ' + (searching ? 'grid-cols-[1fr] opacity-100' : 'pointer-events-none grid-cols-[0fr] opacity-0')}>
-        <div className="flex min-w-0 items-center overflow-hidden">
-          <Input
-            ref={inputRef}
-            aria-label="Search conversations and messages"
-            placeholder="Search chats and messages"
-            tabIndex={searching ? 0 : -1}
-            value={search}
-            onChange={event => onSearch(event.target.value)}
-            onBlur={() => { if (!search.trim()) setSearching(false) }}
-            onKeyDown={event => { if (event.key === 'Escape') { if (search) onSearch(''); setSearching(false) } }}
-            className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0"
-          />
-          {active && <button type="button" aria-label="Clear search" onMouseDown={event => event.preventDefault()} onClick={() => { onSearch(''); inputRef.current?.focus() }} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>}
-        </div>
-      </div>
+    <div role="search" className="flex min-w-0 grow items-center rounded-md bg-muted/60">
+      <Search aria-hidden className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+      <Input
+        ref={inputRef}
+        aria-label="Search conversations and messages"
+        placeholder="Search chats and messages"
+        value={search}
+        onChange={event => onSearch(event.target.value)}
+        onKeyDown={event => { if (event.key === 'Escape') onSearch('') }}
+        className="h-9 min-w-0 flex-1 border-0 bg-transparent px-2 text-sm shadow-none focus-visible:ring-0"
+      />
+      {active && <button type="button" aria-label="Clear search" onMouseDown={event => event.preventDefault()} onClick={() => { onSearch(''); inputRef.current?.focus() }} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>}
     </div>
-    <div className={'flex shrink-0 items-center gap-1 overflow-hidden transition-[max-width,opacity] duration-300 ease-out ' + (searching ? 'pointer-events-none max-w-0 opacity-0' : 'max-w-[16rem] opacity-100')}>
-      <button type="button" tabIndex={searching ? -1 : 0} aria-pressed={service === 'All'} onClick={() => onService('All')}
-        className={'h-7 whitespace-nowrap rounded-md border px-2 text-xs font-medium hover:bg-muted ' + (service === 'All' ? 'bg-secondary' : '')}>All chats</button>
-    </div>
-    <div role="group" aria-label="Provider settings" aria-hidden={searching} className={'ml-auto flex min-w-0 items-center gap-1 overflow-x-auto py-1 transition-[max-width,opacity] duration-300 ease-out ' + (searching ? 'pointer-events-none max-w-0 opacity-0' : 'max-w-[24rem] opacity-100')}>
+    <div role="group" aria-label="Provider settings" className="flex shrink-0 items-center gap-1 overflow-x-auto py-1">
       {items.map(({ name, rooms, unread, state }) => {
         const trigger = <button type="button" aria-label={`${name}: ${STATE_LABEL[state]}`}
           className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full hover:bg-secondary">

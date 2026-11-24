@@ -785,6 +785,10 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     }
 
     const handleTouchStart = (e: TouchEvent) => {
+      if (e.target instanceof Element && e.target.closest('[data-queue-drag-handle]')) {
+        touchStartYRef.current = null
+        return
+      }
       markUserScroll()
       touchStartYRef.current = e.touches[0]?.clientY ?? null
     }
@@ -793,11 +797,11 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     // Prevent boundary drags from escaping the chat scroller and
     // triggering page bounce / pull-to-refresh.
     const handleTouchMove = (e: TouchEvent) => {
-      markUserScroll()
       if (e.touches.length !== 1) return
       const startY = touchStartYRef.current
       const currentY = e.touches[0]?.clientY
       if (startY == null || currentY == null) return
+      markUserScroll()
 
       const maxScrollTop = el.scrollHeight - el.clientHeight
       if (maxScrollTop <= 0) {

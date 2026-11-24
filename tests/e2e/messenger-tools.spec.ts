@@ -25,7 +25,7 @@ test('Matrix search links restore room, service, and query, and preserve paramet
   // The same field also drives loaded-message results; they follow the service filter.
   // Clicking the active service chip clears it back to All.
   await serviceChip('Telegram').click()
-  await expect(page.getByRole('button', { name: 'All chats', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(serviceChip('Telegram')).toHaveAttribute('aria-pressed', 'false')
   await searchBox.fill('Hello')
   await expect(page.getByLabel('Message search results')).toContainText('Hello')
   // Service chips are toggle buttons in the filter row.
@@ -46,18 +46,26 @@ test('Legacy messageQ links still restore the search field', async ({ page }) =>
 test('Conversations header keeps search and provider controls on one row', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 850 })
   await page.goto('/src/e2e-fixtures/messenger-tools.html', { waitUntil: 'domcontentloaded' })
-  const searchToggle = await page.getByRole('button', { name: 'Search', exact: true }).boundingBox()
+  const searchBox = page.getByRole('textbox', { name: 'Search conversations and messages' })
+  await expect(searchBox).toBeVisible()
+  await expect(page.getByRole('button', { name: 'All chats', exact: true })).toHaveCount(0)
+  const searchToggle = await searchBox.boundingBox()
   const provider = await page.getByRole('group', { name: 'Provider settings' }).getByRole('button').first().boundingBox()
   const connections = await page.getByRole('button', { name: 'Connections', exact: true }).boundingBox()
   expect(searchToggle).not.toBeNull()
   expect(provider).not.toBeNull()
   expect(connections).not.toBeNull()
-  // Same row: vertical centers align, and the search toggle, provider icons, and Connections run left to right.
+  // The search field and provider controls remain on the same row.
   const middle = (box: { y: number; height: number }) => box.y + box.height / 2
   expect(Math.abs(middle(searchToggle!) - middle(provider!))).toBeLessThan(4)
   expect(Math.abs(middle(searchToggle!) - middle(connections!))).toBeLessThan(4)
   expect(provider!.x).toBeGreaterThan(searchToggle!.x + searchToggle!.width - 1)
   expect(connections!.x).toBeGreaterThan(provider!.x + provider!.width - 1)
+  await searchBox.fill('test')
+  await searchBox.press('Escape')
+  await expect(searchBox).toBeEmpty()
+  await searchBox.blur()
+  await expect(searchBox).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Search loaded messages' })).toHaveCount(0)
 })
 

@@ -6,7 +6,7 @@ import { expect, test, type Page } from '@playwright/test'
 test.use({ screenshot: 'off' })
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZksAAAAASUVORK5CYII='
 
-async function mount(page: Page) {
+async function mount(page: Page, presence = false, typing = false) {
   const state = { user: '@alice:test', avatar: 'mxc://test/avatar-v1', unread: 2, teamsInvite: false, hidden: new Set<string>(), commands: [] as any[], requests: [] as string[] }
   await page.route('**/api/messenger**', async route => {
     const url = new URL(route.request().url())
@@ -22,13 +22,19 @@ async function mount(page: Page) {
       state.requests.push(route.request().postDataJSON().url)
       return route.fulfill({ json: { data: png } })
     }
+    const roomId = url.searchParams.get('roomId')
     return route.fulfill({ json: { snapshot: {
       status: 'ready', error: null, notifications: false, assistantAccess: false, hasEarlier: false,
       session: { homeserver: 'https://matrix.test', userId: state.user, deviceId: 'A' },
-      selectedRoomId: url.searchParams.get('roomId'), typing: url.searchParams.get('roomId') === '!alice:test' ? ['Bob'] : [], messages: [],
+      selectedRoomId: roomId, typing: roomId === '!alice:test' ? ['Bob'] : [],
+      messages: presence && roomId === '!group:test' ? [
+        { id: '$one', sender: 'Bob', senderId: '@bob:test', senderPresence: 'offline', body: 'Checking in', timestamp: 1 },
+        { id: '$two', sender: 'Carol', senderId: '@carol:test', body: 'Hello', timestamp: 2 },
+      ].map(message => ({ own: false, encrypted: false, unableToDecrypt: false, pending: false, failed: false, ...message })) : [],
       rooms: [
-        { id: '!alice:test', name: 'Alice', service: 'WhatsApp', network: 'Personal', membership: 'join', encrypted: true, unread: state.unread, timestamp: 2, preview: 'Firewall ready', avatarUrl: state.avatar, hidden: state.hidden.has('!alice:test') },
-        { id: '!bob:test', name: 'Bob', service: 'Teams', network: 'Work', membership: state.teamsInvite ? 'invite' : 'join', encrypted: true, unread: 0, timestamp: 1, preview: 'See you tomorrow', hidden: state.hidden.has('!bob:test'), peer: { userId: '@bob:test', name: 'Bob', avatarUrl: state.avatar } },
+        { id: '!alice:test', name: 'Alice', service: 'WhatsApp', network: 'Personal', membership: 'join', encrypted: true, unread: state.unread, timestamp: 2, preview: 'Firewall ready', avatarUrl: state.avatar, hidden: state.hidden.has('!alice:test'), ...(typing ? { typing: ['Bob'] } : {}), ...(presence ? { peer: { userId: '@alice-other:test', name: 'Alice', presence: 'unavailable' } } : {}) },
+        { id: '!bob:test', name: 'Bob', service: 'Teams', network: 'Work', membership: state.teamsInvite ? 'invite' : 'join', encrypted: true, unread: 0, timestamp: 1, preview: 'See you tomorrow', hidden: state.hidden.has('!bob:test'), peer: { userId: '@bob:test', name: 'Bob', avatarUrl: state.avatar, ...(presence ? { presence: 'offline' } : {}) } },
+        ...(presence ? [{ id: '!group:test', name: 'Project group', service: 'Teams', network: 'Work', membership: 'join', encrypted: true, unread: 0, timestamp: 3, preview: 'Hello' }] : []),
       ],
     } } })
   })
@@ -195,14 +201,54 @@ test('provider icons open settings while provider chips filter conversations', a
 })
 
 test('typing indicator follows the room and drafts survive switching', async ({ page }) => {
-  await mount(page)
-  await expect(page.getByText('Bob is typing…')).toBeVisible()
-  const editor = page.locator('[data-messenger-composer] [contenteditable="true"]')
+  await page.setViewportSize({ width: 1440, height: 800 })
+  await mount(page, false, true)
+  const alice = page.getByRole('group', { name: 'Conversation Alice' })
+  const listTyping = alice.getByRole('status')
+  const composer = page.locator('[data-messenger-composer]')
+  const chatTyping = composer.getByRole('status').filter({ hasText: 'Bob is typing' })
+  const editor = composer.locator('[contenteditable="true"]')
+
+  for (const indicator of [listTyping, chatTyping]) {
+    await expect(indicator).toHaveText('Bob is typing')
+    await expect(indicator).toBeVisible()
+    const dots = indicator.locator('[aria-hidden="true"] > span')
+    await expect(dots).toHaveCount(3)
+    for (const [index, delay] of ['0s', '0.12s', '0.24s'].entries()) {
+      await expect(dots.nth(index)).toHaveCSS('animation-name', 'bounce')
+      await expect(dots.nth(index)).toHaveCSS('animation-delay', delay)
+    }
+  }
+  const typingBounds = (await chatTyping.boundingBox())!
+  const composerBounds = (await composer.boundingBox())!
+  const editorBounds = (await editor.boundingBox())!
+  expect(typingBounds.x).toBeCloseTo(composerBounds.x, 0)
+  expect(typingBounds.y + typingBounds.height).toBeLessThan(editorBounds.y)
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(listTyping.locator('[aria-hidden="true"] > span').first()).toHaveCSS('animation-name', 'none')
+  await expect(chatTyping.locator('[aria-hidden="true"] > span').first()).toHaveCSS('animation-name', 'none')
+
   await editor.fill('Draft for Alice')
   await page.getByRole('group', { name: 'Conversation Bob' }).click()
-  await expect(page.getByText('Bob is typing…')).toHaveCount(0)
+  await expect(chatTyping).toHaveCount(0)
+  await expect(listTyping).toBeVisible()
   await editor.fill('Draft for Bob')
-  await page.getByRole('group', { name: 'Conversation Alice' }).click()
+  await alice.click()
   await expect(editor).toHaveText('Draft for Alice')
-  await expect(page.getByText('Bob is typing…')).toBeVisible()
+  await expect(chatTyping).toBeVisible()
+})
+
+test('shows provider presence on direct contacts and on individual group sender avatars', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await mount(page, true)
+  const conversations = page.getByRole('complementary', { name: 'Conversations' })
+  await expect(conversations.getByRole('group', { name: 'Conversation Alice' }).locator('[data-presence-dot="unavailable"]')).toBeVisible()
+  await expect(conversations.getByRole('group', { name: 'Conversation Bob' }).locator('[data-presence-dot="offline"]')).toBeVisible()
+  const group = conversations.getByRole('group', { name: 'Conversation Project group' })
+  await expect(group.locator('[data-presence-dot]')).toHaveCount(0)
+  await group.getByRole('button', { name: /^Project group/ }).click()
+  await expect(page.locator('[data-message-id="$one"] [data-presence-dot="offline"]')).toBeVisible()
+  await expect(page.locator('[data-message-id="$two"]')).toBeVisible()
+  await expect(page.locator('[data-message-id="$two"] [data-presence-dot]')).toHaveCount(0)
 })

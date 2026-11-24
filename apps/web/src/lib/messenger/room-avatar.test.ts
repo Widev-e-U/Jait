@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { MessengerRoom } from './model'
-import { chatListAvatarProps, messageAvatarUrl } from './room-avatar'
+import { chatListAvatarProps, messageAvatarProps, messageAvatarUrl } from './room-avatar'
 
 function room(overrides: Partial<MessengerRoom> = {}): MessengerRoom {
   return {
@@ -25,7 +25,7 @@ describe('chatListAvatarProps', () => {
       kind: 'chat',
       peer: { userId: '@alice:matrix', name: 'Alice', presence: 'online', avatarUrl: 'mxc://matrix/alice' },
     }))
-    expect(props).toEqual({ name: 'Alice', mxcUrl: 'mxc://matrix/alice' })
+    expect(props).toEqual({ name: 'Alice', mxcUrl: 'mxc://matrix/alice', presence: 'online' })
   })
 
   it('falls back to the room picture when the peer has none', () => {
@@ -71,4 +71,10 @@ describe('messageAvatarUrl', () => {
     expect(messageAvatarUrl(direct, '@other:matrix')).toBeUndefined()
     expect(messageAvatarUrl(direct, '@bob:matrix', 'mxc://matrix/sender')).toBe('mxc://matrix/sender')
   })
+})
+
+it('uses per-sender presence for a group avatar', () => {
+  const group = room({ service: 'Teams', avatarUrl: 'mxc://matrix/group' })
+  const message = { sender: 'Bob', senderId: '@bob:matrix', senderPresence: 'offline' } as const
+  expect(messageAvatarProps(group, message)).toEqual({ name: 'Bob', presence: 'offline', mxcUrl: undefined })
 })

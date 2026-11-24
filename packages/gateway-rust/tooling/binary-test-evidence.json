@@ -2122,6 +2122,56 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/projects/:id/members",
+      "tests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/members",
+      "tests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/projects/:id/members/:userId",
+      "tests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/sessions/:id/share",
+      "tests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/shared-stream",
+      "tests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/repos/:repoId/todos",
       "tests": [

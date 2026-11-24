@@ -332,7 +332,7 @@ describe('SessionSelector', () => {
     )
 
     expect(markup).toContain('aria-label="Editor mode active for Jait"')
-    expect(markup).not.toContain('aria-pressed')
+    expect(markup).not.toContain('aria-label="Toggle editor mode"')
     expect(markup).toContain('aria-label="Project actions"')
     expect(markup).not.toContain('sm:opacity-0')
   })
@@ -402,13 +402,13 @@ describe('SessionSelector', () => {
     const searchField = markup.indexOf('type="search"')
     const projectsHeader = markup.indexOf('Projects')
     const newProject = markup.indexOf('aria-label="New project"')
-    const personalHeader = markup.indexOf('Chats')
+    const personalHeader = markup.indexOf('>Chats<')
     const newPersonalChat = markup.indexOf('aria-label="New personal chat"')
 
     // The search field owns its whole row — no trailing + button anymore.
     expect(searchField).toBeGreaterThan(-1)
     expect(projectsHeader).toBeGreaterThan(searchField)
-    expect(markup.slice(searchField, projectsHeader)).not.toContain('<button')
+    expect(markup.slice(searchField, markup.indexOf('role="group" aria-label="Filter chats by status"'))).not.toContain('<button')
 
     // One + sits with "Projects & Chats", the other with "Chats".
     expect(newProject).toBeGreaterThan(projectsHeader)

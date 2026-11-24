@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
+import type { MessengerMessage } from '@jait/shared'
 
 test.use({ screenshot: 'off' })
 
@@ -10,7 +11,7 @@ const base = { encrypted: false, unableToDecrypt: false, pending: false, failed:
  * page must group channels under their team and open channels with a
  * channel-flavoured header, while plain chats keep the normal transcript.
  */
-async function mount(page: Page, roomId = '!general:test', service = 'Slack', earlier?: Promise<void>) {
+async function mount(page: Page, roomId = '!general:test', service = 'Slack', earlier?: Promise<void>, additionalMessages: MessengerMessage[] = []) {
   const calls: any[] = []
   const snapshot = {
     status: 'ready', error: null, notifications: false, assistantAccess: false, hasEarlier: !!earlier,
@@ -25,6 +26,7 @@ async function mount(page: Page, roomId = '!general:test', service = 'Slack', ea
       '!general:test': [
         { ...base, id: '$g1', sender: 'Carol', body: 'Deploy done', own: false, timestamp: Date.now() - 3_600_000 },
         { ...base, id: '$g2', sender: 'Alice', body: 'Nice work @channel', own: true, timestamp: Date.now() - 1_800_000 },
+        ...additionalMessages,
       ],
       '!random:test': [
         { ...base, id: '$r1', sender: 'Dan', body: 'Meme of the day', own: false, timestamp: Date.now() - 600_000 },
@@ -104,6 +106,31 @@ test('Teams can be filtered separately from WhatsApp', async ({ page }) => {
   await expect(page.getByRole('group', { name: 'Conversation Bob' })).toHaveCount(0)
 })
 
+
+test('Teams messages show bridge confirmations separately from reader receipts', async ({ page }) => {
+  const timestamp = Date.now()
+  const ownMessage = { ...base, sender: 'Alice', own: true, timestamp }
+  await mount(page, '!general:test', 'Teams', undefined, [
+    { ...ownMessage, id: '$sent', body: 'Confirmed by bridge', bridgeStatus: 'sent' },
+    { ...ownMessage, id: '$delivered', body: 'Delivered to recipient', bridgeStatus: 'delivered' },
+    { ...ownMessage, id: '$read', body: 'Opened by recipient', readBy: [{ userId: '@carol:test', name: 'Carol', timestamp, exact: true }] },
+  ])
+
+  const messages = page.locator('[data-messenger-bubble]')
+  const matrixOnly = messages.filter({ hasText: 'Nice work @channel' })
+  await expect(matrixOnly.getByText('Sent to Matrix', { exact: true })).toBeVisible()
+  const sent = messages.filter({ hasText: 'Confirmed by bridge' })
+  await expect(sent.getByText('Sent to Teams', { exact: true })).toBeVisible()
+  await expect(sent.getByRole('button', { name: 'Read; show receipts' })).toHaveCount(0)
+  const delivered = messages.filter({ hasText: 'Delivered to recipient' })
+  await expect(delivered.getByText('Delivered in Teams', { exact: true })).toBeVisible()
+  await expect(delivered.getByRole('button', { name: 'Read; show receipts' })).toHaveCount(0)
+  const read = messages.filter({ hasText: 'Opened by recipient' }).getByRole('button', { name: 'Read; show receipts' })
+  await expect(read).toHaveText('Read')
+  await read.click()
+  await expect(page.getByText('Read receipts', { exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog').getByText('Carol', { exact: true })).toBeVisible()
+})
 
 test('loading earlier Teams messages keeps the conversation viewport stable', async ({ page }) => {
   let finishLoading!: () => void

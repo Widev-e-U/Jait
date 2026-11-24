@@ -2,30 +2,30 @@
   "summary": {
     "httpTotal": 454,
     "mounted-fail-closed": 112,
-    "native-tested": 242,
-    "missing": 35,
-    "native-untested": 58,
+    "native-tested": 247,
+    "missing": 34,
+    "native-untested": 54,
     "mounted-incomplete": 7,
-    "nativeRouteReferencePct": 66.1,
-    "nativeTested": 275,
+    "nativeRouteReferencePct": 66.3,
+    "nativeTested": 280,
     "nativeTestedDenominator": 626,
-    "nativeTestedPct": 43.93,
+    "nativeTestedPct": 44.73,
     "wsTotal": 151,
     "wsInbound": 44,
     "wsOutboundCandidates": 107,
     "wsWithoutDirectionalRustReference": 76,
-    "clientPathCandidates": 262,
+    "clientPathCandidates": 263,
     "clientOnlyRoutes": 5,
-    "rustOnlyRoutes": 19,
-    "clientRequestCalls": 387,
-    "clientNonLiteralRequestCalls": 74,
-    "clientReviewedRequestSites": 69,
+    "rustOnlyRoutes": 18,
+    "clientRequestCalls": 388,
+    "clientNonLiteralRequestCalls": 75,
+    "clientReviewedRequestSites": 70,
     "backgroundServices": 21,
     "backgroundServicesMissing": 21,
     "httpRustStatus": {
-      "native-tested": 242,
-      "native-untested": 58,
-      "missing": 154
+      "native-tested": 247,
+      "native-untested": 54,
+      "missing": 153
     },
     "wsRustStatus": {
       "native-tested": 33,
@@ -360,10 +360,16 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "missing",
+      "status": "native-tested",
       "testPathReference": true,
-      "binaryTests": [],
-      "rustStatus": "missing"
+      "rustFile": "routes/projects.rs",
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "DELETE",
@@ -1899,11 +1905,16 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2550,11 +2561,16 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -3454,11 +3470,16 @@
       "nodeFiles": [
         "routes/sessions.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/sessions.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -5191,11 +5212,16 @@
       "nodeFiles": [
         "routes/projects.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/projects.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_project_membership.rs",
+          "name": "project_membership_is_owner_managed_and_revocable"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -8299,7 +8325,7 @@
       "name": "messengerConnection",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:860 setTimeout"
+        "services/messenger-service.ts:867 setTimeout"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8308,7 +8334,7 @@
       "name": "messengerPresence",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:1451 setInterval"
+        "services/messenger-service.ts:1463 setInterval"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8421,7 +8447,7 @@
     {
       "key": "services/messenger-service.ts|SafeMatrixClient.doRequest",
       "sites": [
-        "services/messenger-service.ts:193 while (true)"
+        "services/messenger-service.ts:195 while (true)"
       ],
       "reason": "reads one HTTP response body"
     },
@@ -9373,6 +9399,16 @@
       "serverRoutes": [
         "GET /api/messenger/bridge-status",
         "POST /api/messenger/bridge-status"
+      ]
+    },
+    {
+      "path": "/api/messenger/notification-image",
+      "files": [
+        "apps/web/src/lib/messenger/gateway-store.ts"
+      ],
+      "serverPathReference": true,
+      "serverRoutes": [
+        "POST /api/messenger/notification-image"
       ]
     },
     {
@@ -11532,6 +11568,11 @@
       "reason": "request() suffix '/media' under /api/messenger"
     },
     {
+      "key": "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.browserNotificationImage",
+      "count": 1,
+      "reason": "fetch(getApiUrl() + '/api/messenger/notification-image'): a literal /api path, concatenated rather than templated, so POST /api/messenger/notification-image is read from this file"
+    },
+    {
       "key": "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.connect",
       "count": 1,
       "reason": "request() empty suffix: the /api/messenger root"
@@ -11705,7 +11746,6 @@
     "ALL /api/sessions/{}/state",
     "ALL /api/sessions/{}/{}",
     "DELETE /api/plugins/scan",
-    "DELETE /api/projects/{}/members",
     "GET /api/consent/pending/approve",
     "GET /api/consent/pending/approve-all",
     "GET /api/consent/pending/reject",

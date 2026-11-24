@@ -126,18 +126,18 @@ export function MessengerPeerAvatar({ name, mxcUrl, presence = 'unknown', size =
   }, [store, scope, mxcUrl, cacheKey])
   const roundClass = rounded === 'lg' ? 'rounded-lg' : 'rounded-full'
   const withPresence = showPresence && presence !== 'unknown'
+  const status = presence === 'online' ? 'Online' : presence === 'unavailable' ? 'Away' : 'Offline'
   return <span
     data-presence={presence}
-    aria-hidden
     style={url ? undefined : fallbackTint(name)}
     className={'relative flex shrink-0 select-none items-center justify-center bg-primary/10 font-semibold text-primary ' + SIZE[size] + ' ' + roundClass}
   >
     {url
       ? <img src={url} alt="" className={'h-full w-full animate-in fade-in duration-200 object-cover ' + roundClass} />
-      : <span className="truncate px-1">{fallback ?? initials(name)}</span>}
-    {withPresence && <TooltipHint content={presence === 'online' ? 'Online' : presence === 'unavailable' ? 'Away' : 'Offline'}><span
+      : <span aria-hidden className="truncate px-1">{fallback ?? initials(name)}</span>}
+    {withPresence && <TooltipHint content={status}><span
       data-presence-dot={presence}
       className={'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ' + DOT[presence]}
-    /></TooltipHint>}
+    ><span className="sr-only">{status}</span></span></TooltipHint>}
   </span>
 }

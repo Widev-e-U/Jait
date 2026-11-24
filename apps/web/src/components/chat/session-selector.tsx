@@ -1,6 +1,6 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code, GripVertical } from 'lucide-react'
+import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code, GripVertical, ListFilter, CircleDot, Play, BellRing } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree, resolveProjectColor, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
@@ -147,6 +147,20 @@ export function moveSidebarItem(ids: string[], source: string, target: string, a
   return next
 }
 
+function getProjectReorderPosition(
+  source: { id: string; parentId?: string | null } | undefined,
+  target: { id: string; parentId?: string | null },
+  isFolder: boolean,
+  rect: DOMRect,
+  clientY: number,
+): boolean | null {
+  if (!source || source.id === target.id || (source.parentId ?? null) !== (target.parentId ?? null)) return null
+  const fraction = (clientY - rect.top) / rect.height
+  // Leave the center of a folder available for moving projects into it.
+  if (isFolder && fraction >= 0.25 && fraction <= 0.75) return null
+  return fraction >= 0.5
+}
+
 function readSidebarOrder(): SidebarOrder {
   try {
     const value: unknown = JSON.parse(window.localStorage.getItem(SIDEBAR_ORDER_KEY) || '{}')
@@ -291,17 +305,22 @@ export function SessionSelector({
   // Derive online node IDs from the nodes prop (already fetched by App.tsx)
   const onlineNodeIds = useMemo(() => new Set(nodes.filter((n) => !n.isGateway).map((n) => n.id)), [nodes])
   const [searchQuery, setSearchQuery] = useUrlSearchState('chat', view === 'projects' ? 'projectsQ' : 'q')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'unread' | 'running' | 'attention'>('all')
+  const matchesStatus = (session: ProjectSession) => statusFilter === 'all'
+    || (statusFilter === 'unread' && isSessionUnread(session))
+    || (statusFilter === 'running' && !!streamingSessionIds?.has(session.id))
+    || (statusFilter === 'attention' && (!!approvalSessionIds?.has(session.id) || !!questionSessionIds?.has(session.id)))
   const [manualOrder, setManualOrder] = useState<SidebarOrder>(readSidebarOrder)
   const [orderTarget, setOrderTarget] = useState<{ kind: 'project' | 'session'; id: string; after: boolean } | null>(null)
   const dragProjectRef = useRef<string | null>(null)
   const saveOrder = (key: string, ids: string[], source: string, target: string, after: boolean) => {
-    setManualOrder((current) => {
-      const reordered = moveSidebarItem(ids, source, target, after)
-      const unloaded = (current[key] ?? []).filter((id) => !ids.includes(id))
-      const next = { ...current, ...readSidebarOrder(), [key]: [...reordered, ...unloaded] }
-      try { window.localStorage.setItem(SIDEBAR_ORDER_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
-      return next
-    })
+    const reordered = moveSidebarItem(ids, source, target, after)
+    if (reordered.every((id, index) => id === ids[index])) return
+    const current = { ...manualOrder, ...readSidebarOrder() }
+    const unloaded = (current[key] ?? []).filter((id) => !ids.includes(id))
+    const next = { ...current, [key]: [...reordered, ...unloaded] }
+    try { window.localStorage.setItem(SIDEBAR_ORDER_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+    setManualOrder(next)
   }
   const sessionOrderIdsRef = useRef(new Map<string, string[]>())
   const moveSessionToTop = (sessionId: string, projectId: string | null) => {
@@ -372,9 +391,13 @@ export function SessionSelector({
     sourceProjectId: string | null } | null
   >(null)
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
-  const displayedProjects = normalizedSearchQuery && onSearch
-    ? ( searchResults?.projects ?? [])
-    : projects
+  const orderedProjects = useMemo(
+    () => orderSidebarProjects(sortSessionsByActivity(projects), manualOrder.projects),
+    [projects, manualOrder.projects],
+  )
+  const displayedProjects = normalizedSearchQuery
+    ? (onSearch ? searchResults?.projects ?? [] : projects)
+    : orderedProjects
   const displayedPersonalSessions = normalizedSearchQuery && onSearch
     ? ( searchResults?.personalSessions ?? [])
     : personalSessions
@@ -414,8 +437,20 @@ export function SessionSelector({
   }, [applySplitFromPointer, isDraggingSplit])
 
   const filteredProjects = useMemo(() => {
-    if (!normalizedSearchQuery || onSearch) return displayedProjects
+    const matchingIds = new Set(displayedProjects.filter((project) => project.sessions.some(matchesStatus)).map((project) => project.id))
+    if (statusFilter !== 'all') {
+      for (const project of displayedProjects) {
+        if (!matchingIds.has(project.id)) continue
+        let parentId = project.parentId
+        while (parentId && !matchingIds.has(parentId)) {
+          matchingIds.add(parentId)
+          parentId = displayedProjects.find((item) => item.id === parentId)?.parentId ?? null
+        }
+      }
+    }
     return displayedProjects.filter((project) => {
+      if (statusFilter !== 'all' && !matchingIds.has(project.id)) return false
+      if (!normalizedSearchQuery || onSearch) return true
       const repository = getProjectRepository(project, repositories)
       const remoteNode = project.nodeId && project.nodeId !== 'gateway'
         ? nodes.find((n) => n.id === project.nodeId)
@@ -429,7 +464,7 @@ export function SessionSelector({
       ]
       return terms.some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
     })
-  }, [displayedProjects, nodes, normalizedSearchQuery, onSearch, repositories])
+  }, [displayedProjects, nodes, normalizedSearchQuery, onSearch, repositories, statusFilter, streamingSessionIds, approvalSessionIds, questionSessionIds])
 
   const offlineProjectIds = useMemo(
     () => new Set(projects.filter((project) => isNodeOffline(project.nodeId, onlineNodeIds)).map((project) => project.id)),
@@ -467,8 +502,7 @@ export function SessionSelector({
     if (normalizedSearchQuery) {
       return filteredProjects.map((project) => ({ project, depth: 0, hasChildren: false, }))
     }
-    const orderedProjects = sortSessionsByActivity(filteredProjects)
-    const rows = flattenProjectTree(buildProjectTree(orderedProjects))
+    const rows = flattenProjectTree(buildProjectTree(filteredProjects))
     const hiddenUnder = new Set<string>()
     const out: Array<{ project: (typeof filteredProjects)[number]; depth: number; hasChildren: boolean }> = []
     for (const node of rows) {
@@ -482,7 +516,7 @@ export function SessionSelector({
       if (collapsedFolders.has(node.project.id)) hiddenUnder.add(node.project.id)
     }
     return out
-  }, [collapsedFolders, filteredProjects, normalizedSearchQuery, manualOrder.projects])
+  }, [collapsedFolders, filteredProjects, normalizedSearchQuery])
 
   /** Folders this project may legally be dropped into, per the shared rules. */
   const canDropProjectInto = useCallback((draggedId: string, targetId: string) => {
@@ -522,12 +556,16 @@ export function SessionSelector({
       if (source.kind === 'session') {
         if (target.kind === 'session') {
           if (target.projectId !== source.projectId || target.id === source.id) return null
-          return target.projectId === null ? { type: 'order', scope: 'sessions', storeKey: 'sessions:personal', ids: target.ids, source: source.id, target: target.id, after } : null
+          return { type: 'order', scope: 'sessions', storeKey: `sessions:${target.projectId ?? 'personal'}`, ids: target.ids, source: source.id, target: target.id, after }
         }
         if (!onMoveSession || source.streaming || source.projectId === target.id) return null
         return { type: 'move-session', sessionId: source.id, to: target.id, dropId: target.id }
       }
       if (target.kind !== 'project' || target.id === source.id) return null
+      const position = getProjectReorderPosition(source, target, target.isFolder, rect, clientY)
+      if (position !== null) {
+        return { type: 'order', scope: 'projects', storeKey: 'projects', ids: orderedProjects.map((project) => project.id), source: source.id, target: target.id, after: position }
+      }
       if (target.isFolder && canDropProjectInto(source.id, target.id)) {
         return { type: 'move-project', projectId: source.id, to: target.id, dropId: target.id }
       }
@@ -544,10 +582,7 @@ export function SessionSelector({
     },
     onCommit: (action) => {
       if (action.type === 'order') {
-        const ids = action.scope === 'projects'
-          ? orderSidebarProjects(projects, manualOrder.projects).map((item) => item.id)
-          : action.ids
-        saveOrder(action.storeKey, ids, action.source, action.target, action.after)
+        saveOrder(action.storeKey, action.ids, action.source, action.target, action.after)
       } else if (action.type === 'move-session') onMoveSession?.(action.sessionId, action.to)
       else onMoveProject?.(action.projectId, action.to)
     },
@@ -698,17 +733,22 @@ export function SessionSelector({
     return true
   }
 
+  const orderedPersonalSessions = useMemo(
+    () => orderSidebarItems(sortSessionsByActivity(personalSessions), manualOrder['sessions:personal']),
+    [personalSessions, manualOrder['sessions:personal']],
+  )
+  const personalOrderIds = orderedPersonalSessions.map((session) => session.id)
   const filteredPersonalSessions = useMemo(() => {
-    if (!normalizedSearchQuery || onSearch) return displayedPersonalSessions
-    return displayedPersonalSessions.filter((session) =>
-      [session.name, session.projectPath]
+    const sessions = normalizedSearchQuery ? displayedPersonalSessions : orderedPersonalSessions
+    return sessions.filter((session) => matchesStatus(session) && (
+      !normalizedSearchQuery || !!onSearch || [session.name, session.projectPath]
         .some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
-    )
-  }, [displayedPersonalSessions, normalizedSearchQuery, onSearch])
+    ))
+  }, [displayedPersonalSessions, orderedPersonalSessions, normalizedSearchQuery, onSearch, statusFilter, streamingSessionIds, approvalSessionIds, questionSessionIds])
   const recentPersonalSessions = normalizedSearchQuery
     ? filteredPersonalSessions
-    : orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).slice(0, visiblePersonalSessions)
-  sessionOrderIdsRef.current.set('sessions:personal', orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).map((item) => item.id))
+    : filteredPersonalSessions.slice(0, visiblePersonalSessions)
+  sessionOrderIdsRef.current.set('sessions:personal', personalOrderIds)
   const hasOlderPersonalSessions = !normalizedSearchQuery
     && filteredPersonalSessions.length > recentPersonalSessions.length
 
@@ -722,10 +762,7 @@ export function SessionSelector({
           {touchDrag.active.source.label}
         </div>
       )}
-      {/* The search field is the whole row: no side padding, no trailing
-          action buttons. New projects and chats are created from the section
-          headers below. */}
-      <div className="flex h-[35px] shrink-0 items-center gap-1.5 border-b bg-muted/60 px-2.5">
+      <div className="flex h-[35px] shrink-0 items-center gap-1.5 border-b bg-muted/60 px-2">
         {searchLoading && normalizedSearchQuery
           ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
           : <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
@@ -733,10 +770,27 @@ export function SessionSelector({
           type="search"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder={searchLabel}
+          placeholder="Search"
           aria-label={searchLabel}
-          className="h-full min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-xs leading-normal outline-none placeholder:text-muted-foreground"
         />
+        <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="Filter chats by status">
+          {([
+            ['all', 'All chats', ListFilter],
+            ['unread', 'Unread', CircleDot],
+            ['running', 'Running', Play],
+            ['attention', 'Needs attention', BellRing],
+          ] as const).map(([value, label, Icon]) => (
+            <Tooltip key={value}>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label={label} aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)} className={`rounded p-1.5 ${statusFilter === value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -859,13 +913,21 @@ export function SessionSelector({
                   const folderIconStyle = folderColor ? { color: folderColor } : undefined
                   const repository = getProjectRepository(project, repositories)
                   const hasUnreadSessions = project.sessions.some(session => isSessionUnread(session))
-                  const sortedSessions = sortSessionsByActivity(project.sessions)
-                  sessionOrderIdsRef.current.set(`sessions:${project.id}`, sortedSessions.map((item) => item.id))
+                  const byActivity = sortSessionsByActivity(project.sessions)
+                  const orderedSessions = normalizedSearchQuery ? byActivity : orderSidebarItems(byActivity, manualOrder[`sessions:${project.id}`])
+                  const orderedSessionIds = orderedSessions.map((session) => session.id)
+                  sessionOrderIdsRef.current.set(`sessions:${project.id}`, orderedSessionIds)
+                  const sortedSessions = orderedSessions.filter(matchesStatus)
                   const visibleSessionLimit = visibleSessionsByProject[project.id] ?? RECENT_SESSIONS_LIMIT
                   const recentSessions = normalizedSearchQuery
                     ? sortedSessions
                     : sortedSessions.slice(0, visibleSessionLimit)
                   const hasOlderSessions = !normalizedSearchQuery && sortedSessions.length > recentSessions.length
+                  const projectReorderPosition = (event: React.DragEvent<HTMLDivElement>) => {
+                    if (normalizedSearchQuery || !dragProjectRef.current) return null
+                    const source = projects.find((item) => item.id === dragProjectRef.current)
+                    return getProjectReorderPosition(source, project, isFolder, event.currentTarget.getBoundingClientRect(), event.clientY)
+                  }
                   touchTargetsRef.current.set(`project:${project.id}`, { kind: 'project', id: project.id, parentId: project.parentId ?? null, isFolder })
                   return (
                     <div key={project.id} style={{ marginLeft: depth * FOLDER_INDENT_PX }}>
@@ -895,6 +957,15 @@ export function SessionSelector({
                       }}
                       onDragEnd={() => { dragProjectRef.current = null; setOrderTarget(null) }}
                       onDragOver={(e) => {
+                        const position = projectReorderPosition(e)
+                        if (position !== null) {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          e.dataTransfer.dropEffect = 'move'
+                          setDropTargetId(null)
+                          setOrderTarget({ kind: 'project', id: project.id, after: position })
+                          return
+                        }
                         setOrderTarget(null)
                         const kind = getSidebarDragKind(e.dataTransfer.types)
                         if (kind === 'session') {
@@ -918,6 +989,14 @@ export function SessionSelector({
                       onDrop={(e) => {
                         setDropTargetId(null)
                         setOrderTarget(null)
+                        const position = projectReorderPosition(e)
+                        const sourceId = dragProjectRef.current
+                        if (position !== null && sourceId) {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          saveOrder('projects', orderedProjects.map((item) => item.id), sourceId, project.id, position)
+                          return
+                        }
                         const kind = getSidebarDragKind(e.dataTransfer.types)
                         if (kind === 'session') {
                           if (!onMoveSession) return
@@ -1233,7 +1312,7 @@ export function SessionSelector({
                         {recentSessions.map((session) => {
                           const isActiveSession = openSessionIds?.has(session.id) ?? (isActiveProject && session.id === activeSessionId)
                           const isStreaming = streamingSessionIds?.has(session.id) ?? false
-                          touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: project.id, ids: sortedSessions.map((item) => item.id) })
+                          touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: project.id, ids: orderedSessionIds })
                           return (
                             <SessionRow
                               key={session.id}
@@ -1246,7 +1325,7 @@ export function SessionSelector({
                               isAwaitingAnswer={questionSessionIds?.has(session.id)}
                               wait={waitBySessionId?.get(session.id)}
                               dragProps={{
-
+                                ...sessionOrderProps(session.id, project.id, orderedSessionIds),
                                 draggable: !isMobile,
                                 onDragStart: (e) => {
                                   e.dataTransfer.effectAllowed = 'copyMove'
@@ -1425,7 +1504,7 @@ export function SessionSelector({
                     {recentPersonalSessions.map((session) => {
                       const isActive = openSessionIds?.has(session.id) ?? (activeProjectId === null && session.id === activeSessionId)
                       const isStreaming = streamingSessionIds?.has(session.id) ?? false
-                  touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: null, ids: orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).map((item) => item.id) })
+                  touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: null, ids: personalOrderIds })
                   return (
                     <SessionRow
                       key={session.id}
@@ -1439,7 +1518,7 @@ export function SessionSelector({
                       wait={waitBySessionId?.get(session.id)}
                       fallbackLabel="Personal chat"
                       dragProps={{
-                        ...sessionOrderProps(session.id, null, orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).map((item) => item.id)),
+                        ...sessionOrderProps(session.id, null, personalOrderIds),
                         draggable: !isMobile,
                         onDragStart: (e) => {
                           e.dataTransfer.effectAllowed = 'copyMove'
@@ -1453,7 +1532,7 @@ export function SessionSelector({
                         },
                         onDragEnd: () => {
                           dragSessionRef.current = null
-                                  setOrderTarget(null)
+                          setOrderTarget(null)
                         },
                       }}
                       onRowClick={() => {
@@ -1500,7 +1579,7 @@ export function SessionSelector({
               onArchiveSession={onArchiveSession}
               onOpenInPanel={onOpenSessionInPanel}
               onRename={onRenameSession ? startRename : undefined}
-              onMoveToTop={normalizedSearchQuery || sessionContextMenu.projectId !== null ? undefined : (id) => moveSessionToTop(id, sessionContextMenu.projectId)}
+              onMoveToTop={normalizedSearchQuery ? undefined : (id) => moveSessionToTop(id, sessionContextMenu.projectId)}
               canMoveToTop={(sessionOrderIdsRef.current.get(`sessions:${sessionContextMenu.projectId ?? 'personal'}`)?.indexOf(sessionContextMenu.sessionId) ?? 0) > 0}
               onSearchProjects={onSearchProjects}
               onClose={() => setSessionContextMenu(null)}

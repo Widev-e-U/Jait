@@ -1,4 +1,3 @@
-import { messageAvatarUrl } from '@/lib/messenger/room-avatar'
 import { toast } from 'sonner'
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { automaticReadAllowed } from '@/lib/messenger/notification-actions'
@@ -23,7 +22,7 @@ import { appendTranscript } from '@/lib/transcript-merge'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { MessengerContext, useMessenger, useMessengerBadge } from './messenger-provider'
 import { MAX_ATTACHMENT_BYTES, isStatusRoom, messengerError, presenceLabel, type MessengerMessage, type MessengerRoom } from '@/lib/messenger/model'
-import { chatListAvatarProps } from '@/lib/messenger/room-avatar'
+import { chatListAvatarProps, messageAvatarProps } from '@/lib/messenger/room-avatar'
 import { MessengerPeerAvatar } from './messenger-peer'
 import { CenteredBadgeText } from './centered-badge-text'
 import { TooltipHint } from '@/components/ui/tooltip'
@@ -31,6 +30,19 @@ import { DeliveryIndicator } from '@/components/chat/delivery-indicator'
 import { useMessengerListHidden } from '@/lib/messenger/list-visibility'
 import { MessengerFilterBar, MessengerHeaderBar, type ChatFilter } from './messenger-services-bar'
 import { hasServiceLogo, ServiceLogo } from './service-logo'
+
+function MessengerTypingIndicator({ label, className }: { label: string; className: string }) {
+  return (
+    <span role="status" className={`flex min-w-0 items-center gap-1.5 text-xs leading-4 ${className}`}>
+      <span className="truncate">{label}</span>
+      <span aria-hidden="true" className="inline-flex shrink-0 items-center gap-0.5">
+        {[0, 120, 240].map(delay => (
+          <span key={delay} className="size-1 rounded-full bg-current motion-safe:animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+        ))}
+      </span>
+    </span>
+  )
+}
 
 function StagedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
   const [url, setUrl] = useState<string>()
@@ -241,7 +253,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const roomRow = (item: MessengerRoom, channel = false) => (
     <div key={item.id} role="group" aria-label={'Conversation ' + item.name} data-room-kind={item.kind ?? 'chat'} className={'group/room flex min-w-0 items-center border-b border-border/50 ' + (item.id === roomId ? 'bg-secondary' : 'hover:bg-muted/60 [&:has([data-state=open])]:bg-muted/60')}>
       <button onClick={() => { selectRoom(item.id); if (item.membership === 'invite' && item.service.toLowerCase() === 'teams') void act(() => store.join(item.id)) }} aria-pressed={item.id === roomId} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left">
-        <MessengerPeerAvatar size="list" showPresence={false} {...chatListAvatarProps(item, channel)} />
+        <MessengerPeerAvatar size="list" {...chatListAvatarProps(item, channel)} />
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium leading-4">{channel ? '#' + item.name : item.name}</span>
@@ -254,7 +266,10 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
             </TooltipHint>
           </span>
           {item.typing?.length
-            ? <span role="status" className="mt-0.5 block truncate text-xs leading-4 font-medium text-primary">{item.peer || item.typing.length === 1 && item.typing[0] === item.name ? 'typing' : item.typing.length === 1 ? `${item.typing[0]} is typing` : `${item.typing.length} people are typing`}<span aria-hidden="true">...</span></span>
+            ? <MessengerTypingIndicator
+                className="mt-0.5 font-medium text-primary"
+                label={item.peer || (item.typing.length === 1 && item.typing[0] === item.name) ? 'typing' : item.typing.length === 1 ? `${item.typing[0]} is typing` : `${item.typing.length} people are typing`}
+              />
             : <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs leading-4 text-muted-foreground">
               {item.latestDelivery && <DeliveryIndicator state={item.latestDelivery} label={LIST_DELIVERY_LABELS[item.latestDelivery]} tooltip={false} />}
               <span className="block min-w-0 truncate">{item.preview}</span>
@@ -430,8 +445,6 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
             onPointerUp={() => { listDrag.current = null; document.documentElement.classList.remove('is-dragging-col-resize') }}
             onPointerCancel={() => { listDrag.current = null; document.documentElement.classList.remove('is-dragging-col-resize') }} />
           <MessengerHeaderBar
-          service={service}
-          onService={item => setService(item === 'All' ? '' : item)}
           onOptions={() => setPane('options')}
           search={search}
           onSearch={setSearch}
@@ -486,7 +499,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                   return <div key={message.id} className={groupPositions[index + group.length - 1]?.end === false ? 'pb-1.5' : 'pb-3'}>
                     {needsDayDivider(messages[index - 1]?.timestamp, message.timestamp) && <p data-day-divider className="mx-auto my-2 w-fit rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">{dayDividerLabel(message.timestamp)}</p>}
                     <div className={album ? 'flex gap-1.5 ' + (message.own && room.kind !== 'channel' ? 'justify-end' : 'justify-start') : ''}>
-                      {album && !message.own && room.kind !== 'channel' && <div className="w-9 shrink-0 pt-0.5"><MessengerPeerAvatar name={message.sender} {...(messageAvatarUrl(room, message.senderId, message.senderAvatarUrl) ? { mxcUrl: messageAvatarUrl(room, message.senderId, message.senderAvatarUrl) } : {})} /></div>}
+                      {album && !message.own && room.kind !== 'channel' && <div className="w-9 shrink-0 pt-0.5"><MessengerPeerAvatar {...messageAvatarProps(room, message)} /></div>}
                       <div data-image-group={album ? 'true' : undefined} className={album ? 'w-[min(92%,420px)] min-w-0' : ''}>
                         {album && (!message.own || room.kind === 'channel') && <p className="mb-0.5 truncate text-[11px] font-semibold leading-4 text-primary">{message.sender}</p>}
                         <div className={album ? 'grid grid-cols-2 gap-1' : ''}>
@@ -495,6 +508,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                             imageTile={album}
                             {...(album ? { onOpenImage: () => setAlbumView({ groupId: message.id, index: offset }) } : {})}
                             variant={room.kind === 'channel' ? 'channel' : 'chat'}
+                            teams={room.service.toLowerCase() === 'teams'}
                             groupStart={groupPositions[index + offset]?.start ?? true}
                             groupEnd={groupPositions[index + offset]?.end ?? true}
                             onReply={target => {
@@ -502,7 +516,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                               composerRef.current?.focus()
                               requestAnimationFrame(() => composerRef.current?.focus())
                             }}
-                            avatar={{ name: item.sender, ...(room.peer && room.peer.userId === item.senderId ? { presence: room.peer.presence } : {}), ...(messageAvatarUrl(room, item.senderId, item.senderAvatarUrl) ? { mxcUrl: messageAvatarUrl(room, item.senderId, item.senderAvatarUrl) } : {}) }}
+                            avatar={messageAvatarProps(room, item)}
                           />)}
                         </div>
                       </div>
@@ -521,9 +535,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
               {loadingHistory && <p role="status" className="pointer-events-none absolute inset-x-0 top-2 z-10 mx-auto w-fit rounded-full border bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm">Loading earlier messages…</p>}
               </div>
               {snapshot.historyLimited && <p role="status" className="px-3 py-1 text-xs text-muted-foreground">10,000 events loaded. Open WhatsApp for older history.</p>}
-              {!!snapshot.typing?.length && <p role="status" className="px-4 pb-1 text-xs text-muted-foreground">{snapshot.typing.join(', ')} {snapshot.typing.length === 1 ? 'is' : 'are'} typing…</p>}
               <ChatComposerSurface className="shrink-0 px-3 pb-3">
                 <div data-messenger-composer className="mx-auto max-w-4xl">
+                  {!!snapshot.typing?.length && <MessengerTypingIndicator
+                    className="mb-1 text-muted-foreground"
+                    label={`${snapshot.typing.join(', ')} ${snapshot.typing.length === 1 ? 'is' : 'are'} typing`}
+                  />}
                   {replies[room.id] && <div data-reply-preview className="mb-1.5 flex items-center gap-2 rounded-lg border-l-2 border-primary bg-muted px-3 py-1.5">
                     <Reply className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">

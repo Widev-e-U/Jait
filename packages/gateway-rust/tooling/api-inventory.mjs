@@ -295,10 +295,11 @@ for (const f of walk(rustSrc, ['.rs'])) {
 for (const rel of ['routes/projects.rs']) {
   const text = readFileSync(join(rustSrc, rel), 'utf8');
   const markers = [
-    ...text.matchAll(/path\s*==\s*"(\/[^"]+)"|mid\(\s*&path\s*,\s*"([^"]+)"\s*,\s*"([^"]*)"\s*\)/g),
+    ...text.matchAll(/path\s*==\s*"(\/[^"]+)"|mid\(\s*&path\s*,\s*"([^"]+)"\s*,\s*"([^"]*)"\s*\)|rest\.split_once\(\s*"(\/[^"]+\/)"\s*\)/g),
   ];
   markers.forEach((m, i) => {
-    const path = m[1] ?? `${m[2]}{}${m[3]}`;
+    // `rest.split_once("/members/")` after `strip_prefix("/api/projects/")` serves `/api/projects/{id}/members/{target}`.
+    const path = m[1] ?? (m[4] === undefined ? `${m[2]}{}${m[3]}` : `/api/projects/{}${m[4]}{}`);
     const seg = text.slice(m.index, markers[i + 1]?.index ?? text.length);
     for (const mm of seg.matchAll(/Method::(GET|POST|PUT|PATCH|DELETE)/g)) {
       const key = `${mm[1]} ${norm(path)}`;

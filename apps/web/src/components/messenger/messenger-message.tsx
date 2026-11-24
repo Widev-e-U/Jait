@@ -155,7 +155,7 @@ function ReactionBar({ position, onPick, onSearch, disabled, barRef, actions }: 
   </div>, document.body)
 }
 
-export function MessengerBubble({ message, roomId, disabled, variant = 'chat', groupStart = true, groupEnd = true, avatar, onReply, imageTile = false, onOpenImage }: {
+export function MessengerBubble({ message, roomId, disabled, variant = 'chat', teams = false, groupStart = true, groupEnd = true, avatar, onReply, imageTile = false, onOpenImage }: {
   message: MessengerMessage
   imageTile?: boolean
   /** Album tiles open the shared carousel viewer instead of a per-image dialog. */
@@ -166,6 +166,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   roomId: string
   disabled: boolean
   variant?: 'chat' | 'channel'
+  teams?: boolean
   /** Opens a run from this sender: carries the name and the avatar. */
   groupStart?: boolean
   /** Closes a run, so the following run gets extra breathing room. */
@@ -360,7 +361,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           {message.edited && <span>Edited</span>}
           {message.pending && <span>Sending…</span>}{message.failed && <span className="text-destructive">Not sent</span>}
           <TooltipHint content={new Date(message.timestamp).toLocaleString()}><time dateTime={new Date(message.timestamp).toISOString()}>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
-          {message.own && (message.pending ? <DeliveryIndicator state="sending" /> : message.failed ? <DeliveryIndicator state="failed" /> : <MessageReadStatus inline readers={message.readBy ?? []} bridgeStatus={message.bridgeStatus} />)}
+          {message.own && (message.pending ? <DeliveryIndicator state="sending" /> : message.failed ? <DeliveryIndicator state="failed" /> : <MessageReadStatus inline readers={message.readBy ?? []} bridgeStatus={message.bridgeStatus} teams={teams} />)}
           <DropdownMenu><DropdownMenuTrigger asChild>
             <button type="button" disabled={unavailable} aria-label="Message options" className="-mr-1 mt-px rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" /></button>
           </DropdownMenuTrigger>

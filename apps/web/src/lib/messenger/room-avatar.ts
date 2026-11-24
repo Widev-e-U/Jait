@@ -1,9 +1,10 @@
-import type { MessengerRoom } from './model'
+import type { MessengerMessage, MessengerPresence, MessengerRoom } from './model'
 
 /** The subset of `MessengerPeerAvatar` props that a chats-panel row decides. */
 export interface RoomAvatarProps {
   name: string
   mxcUrl?: string
+  presence?: MessengerPresence
   rounded?: 'full' | 'lg'
   fallback?: string
 }
@@ -23,6 +24,8 @@ export function chatListAvatarProps(room: MessengerRoom, channel = false): RoomA
   if (channel) {
     props.rounded = 'lg'
     props.fallback = '#'
+  } else if (room.peer) {
+    props.presence = room.peer.presence
   }
   if (mxcUrl) props.mxcUrl = mxcUrl
   return props
@@ -33,4 +36,13 @@ export function messageAvatarUrl(room: MessengerRoom, senderId: string | undefin
   if (senderAvatarUrl) return senderAvatarUrl
   if (!senderId || room.peer?.userId !== senderId) return undefined
   return room.peer.avatarUrl || room.avatarUrl || undefined
+}
+
+export function messageAvatarProps(room: MessengerRoom, message: Pick<MessengerMessage, 'sender' | 'senderId' | 'senderAvatarUrl' | 'senderPresence'>): RoomAvatarProps {
+  const peer = room.peer?.userId === message.senderId ? room.peer : undefined
+  return {
+    name: message.sender,
+    mxcUrl: messageAvatarUrl(room, message.senderId, message.senderAvatarUrl),
+    presence: message.senderPresence ?? peer?.presence,
+  }
 }

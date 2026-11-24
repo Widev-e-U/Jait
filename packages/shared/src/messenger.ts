@@ -75,6 +75,8 @@ export interface MessengerMessage {
   senderId?: string
   /** Matrix media URL for the sender’s profile photo. */
   senderAvatarUrl?: string
+  /** Presence reported by the homeserver for this sender. */
+  senderPresence?: MessengerPresence
   body: string
   /** `body` rebuilt with Markdown links when the sender's rich text carried link targets. */
   linkedBody?: string

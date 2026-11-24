@@ -87,6 +87,28 @@ describe('Notification image retrieval', () => {
 });
 
 describe('Messenger message actions and history', () => {
+  it('shows synced presence for direct peers and group senders across providers', async () => {
+    const { c, room, message } = setup();
+    room.summary.service = 'Teams';
+    room.events.push(message('$bob', '@bob:test'), message('$carol', '@carol:test'), message('$dave', '@dave:test'));
+    c.rooms.set('!direct:test', {
+      summary: { id: '!direct:test', membership: 'join', service: 'WhatsApp' },
+      peer: { userId: '@bob:test', name: 'Bob' }, events: [], states: [], receipts: {},
+    });
+    const update = (bob: string) => c.sync({ presence: { events: [
+      { type: 'm.presence', sender: '@bob:test', content: { presence: bob } },
+      { type: 'm.presence', sender: '@carol:test', content: { presence: 'unavailable' } },
+    ] } });
+    await update('online');
+    const first = c.snapshot('!room:test');
+    expect(first.rooms.find((entry: { id: string }) => entry.id === '!direct:test')?.peer.presence).toBe('online');
+    expect(first.messages.map((entry: { senderPresence?: string }) => entry.senderPresence)).toEqual([undefined, 'online', 'unavailable', undefined]);
+    await update('offline');
+    expect(c.snapshot('!room:test').messages[1].senderPresence).toBe('offline');
+    c.resetPresence();
+    expect(c.snapshot('!room:test').messages[1].senderPresence).toBeUndefined();
+  });
+
   it('tracks other people typing and clears stale or stopped indicators', async () => {
     vi.useFakeTimers();
     try {

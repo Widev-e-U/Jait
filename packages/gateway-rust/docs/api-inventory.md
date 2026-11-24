@@ -8,30 +8,30 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 {
   "httpTotal": 454,
   "mounted-fail-closed": 112,
-  "native-tested": 242,
-  "missing": 35,
-  "native-untested": 58,
+  "native-tested": 247,
+  "missing": 34,
+  "native-untested": 54,
   "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 66.1,
-  "nativeTested": 275,
+  "nativeRouteReferencePct": 66.3,
+  "nativeTested": 280,
   "nativeTestedDenominator": 626,
-  "nativeTestedPct": 43.93,
+  "nativeTestedPct": 44.73,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
   "wsWithoutDirectionalRustReference": 76,
-  "clientPathCandidates": 262,
+  "clientPathCandidates": 263,
   "clientOnlyRoutes": 5,
-  "rustOnlyRoutes": 19,
-  "clientRequestCalls": 387,
-  "clientNonLiteralRequestCalls": 74,
-  "clientReviewedRequestSites": 69,
+  "rustOnlyRoutes": 18,
+  "clientRequestCalls": 388,
+  "clientNonLiteralRequestCalls": 75,
+  "clientReviewedRequestSites": 70,
   "backgroundServices": 21,
   "backgroundServicesMissing": 21,
   "httpRustStatus": {
-    "native-tested": 242,
-    "native-untested": 58,
-    "missing": 154
+    "native-tested": 247,
+    "native-untested": 54,
+    "missing": 153
   },
   "wsRustStatus": {
     "native-tested": 33,
@@ -70,7 +70,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | DELETE | `/api/plugins/:id` | missing | mounted-fail-closed |  | routes/plugins.ts |
 | DELETE | `/api/preview/devtools/:grantId` | missing | mounted-fail-closed |  | routes/browser-devtools.ts |
 | DELETE | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
-| DELETE | `/api/projects/:id/members/:userId` | missing | missing |  | routes/projects.ts |
+| DELETE | `/api/projects/:id/members/:userId` | native-tested | native-tested | `tests/binary_project_membership.rs::project_membership_is_owner_managed_and_revocable` | routes/projects.ts |
 | DELETE | `/api/projects/archived` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::permanent_archive_deletion_is_atomic_and_owner_scoped` | routes/projects.ts |
 | DELETE | `/api/provider-accounts/:id` | native-untested | native-untested |  | routes/providers.ts |
 | DELETE | `/api/reminders/:id` | missing | mounted-incomplete |  | routes/reminders.ts |
@@ -173,7 +173,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/project/stat` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | GET | `/api/projects` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
-| GET | `/api/projects/:id/members` | native-untested | native-untested |  | routes/projects.ts |
+| GET | `/api/projects/:id/members` | native-tested | native-tested | `tests/binary_project_membership.rs::project_membership_is_owner_managed_and_revocable` | routes/projects.ts |
 | GET | `/api/projects/:id/sessions` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/state` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | GET | `/api/projects/:id/subtree` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
@@ -216,7 +216,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | native-untested | native-untested |  | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/plan` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/runtime` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/shared-stream` | native-untested | native-untested |  | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/shared-stream` | native-tested | native-tested | `tests/binary_project_membership.rs::project_membership_is_owner_managed_and_revocable` | routes/chat.ts |
 | GET | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/:sessionId/stream` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | native-untested | native-untested |  | routes/chat.ts |
@@ -274,7 +274,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | PATCH | `/api/repos/:id` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | PATCH | `/api/repos/:id/pull-requests/:number` | native-untested | native-untested |  | routes/pull-requests.ts |
 | PATCH | `/api/sessions/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
-| PATCH | `/api/sessions/:id/share` | native-untested | native-untested |  | routes/sessions.ts |
+| PATCH | `/api/sessions/:id/share` | native-tested | native-tested | `tests/binary_project_membership.rs::project_membership_is_owner_managed_and_revocable` | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_thread_turns.rs::patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice` | routes/sessions.ts |
 | PATCH | `/api/skills/:id` | native-untested | native-untested |  | routes/skills.ts |
 | PATCH | `/api/threads/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
@@ -394,7 +394,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | POST | `/api/project/undo-all` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/project/write` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/project.ts |
 | POST | `/api/projects` | native-tested | native-tested | `tests/binary_reminders.rs::reminder_projects_use_owned_live_project_data` | routes/projects.ts |
-| POST | `/api/projects/:id/members` | native-untested | native-untested |  | routes/projects.ts |
+| POST | `/api/projects/:id/members` | native-tested | native-tested | `tests/binary_project_membership.rs::project_membership_is_owner_managed_and_revocable` | routes/projects.ts |
 | POST | `/api/projects/:id/move` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
 | POST | `/api/projects/:id/repository` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::assignment_uses_owned_existing_repositories_and_fails_closed_on_discovery` | routes/projects.ts |
 | POST | `/api/projects/:id/restore` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
@@ -524,8 +524,8 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `browserDevtoolsGrantCleanup` (service) — missing; Rust keyword hint present; Node: routes/browser-devtools.ts:36 setInterval
 - `threadRecoverySweep` (service) — missing; Rust keyword hint absent; Node: routes/threads.ts:297 setInterval
 - `teamsReauthFlowPoll` (flow-poll) — missing; Rust keyword hint present; Node: services/bridge-reauth.ts:104 setInterval
-- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:860 setTimeout
-- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1451 setInterval
+- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:867 setTimeout
+- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1463 setInterval
 - `orchestratorStandby` (service) — missing; Rust keyword hint absent; Node: services/orchestration/orchestrator.ts:624 setInterval
 - `providerUpdateChecks` (service) — missing; Rust keyword hint present; Node: services/provider-updates.ts:93 setInterval
 
@@ -542,7 +542,7 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `services/email/connection.ts|discoverMailSettings` — services/email/connection.ts:65 while (true) — reads one HTTP response body
 - `services/git-forge.ts|GitHubForge.prFileDiffsViaApi` — services/git-forge.ts:366 while (true) — pages through one pull request request
 - `services/git.ts|mapWithConcurrency` — services/git.ts:175 for (;;) — worker loop bounded by the item list
-- `services/messenger-service.ts|SafeMatrixClient.doRequest` — services/messenger-service.ts:193 while (true) — reads one HTTP response body
+- `services/messenger-service.ts|SafeMatrixClient.doRequest` — services/messenger-service.ts:195 while (true) — reads one HTTP response body
 - `services/preview-runner.ts|detectPackageManager` — services/preview-runner.ts:38 while (true) — walks up to the filesystem root
 - `services/subscription-usage-fetchers.ts|fetchOllamaSettingsUsage` — services/subscription-usage-fetchers.ts:84 while (true) — reads one HTTP response body
 - `tools/agent-loop.ts|parseOllamaStream` — tools/agent-loop.ts:1427 while (true) — parses one provider stream
@@ -632,6 +632,7 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/messenger/bridge-accounts/teams` — DELETE /api/messenger/bridge-accounts/teams — apps/web/src/components/messenger/teams-connection-card.tsx
 - `/api/messenger/bridge-reauth/teams` — DELETE /api/messenger/bridge-reauth/teams, GET /api/messenger/bridge-reauth/teams, POST /api/messenger/bridge-reauth/teams — apps/web/src/components/messenger/teams-connection-card.tsx
 - `/api/messenger/bridge-status` — GET /api/messenger/bridge-status, POST /api/messenger/bridge-status — apps/web/src/components/messenger/messenger-services-bar.tsx, apps/web/src/components/messenger/teams-connection-card.tsx
+- `/api/messenger/notification-image` — POST /api/messenger/notification-image — apps/web/src/lib/messenger/gateway-store.ts
 - `/api/messenger/presence` — GET /api/messenger/presence, PUT /api/messenger/presence — apps/web/src/components/messenger/messenger-services-bar.tsx
 - `/api/mobile-update/check` — GET /api/mobile-update/check — apps/web/src/hooks/useUpdateChecker.ts
 - `/api/mobile/devices/register` — POST /api/mobile/devices/register — apps/web/src/components/prompts/input-prompts.tsx
@@ -855,6 +856,7 @@ Each request call (fetch, apiFetch, request, this.request, getJson) whose path i
 - `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.action` (1) — request() suffix '/command' under /api/messenger
 - `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.attachmentBlob` (1) — request() suffix '/media' under /api/messenger
 - `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.avatarBlob` (1) — request() suffix '/media' under /api/messenger
+- `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.browserNotificationImage` (1) — fetch(getApiUrl() + '/api/messenger/notification-image'): a literal /api path, concatenated rather than templated, so POST /api/messenger/notification-image is read from this file
 - `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.connect` (1) — request() empty suffix: the /api/messenger root
 - `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.disconnect` (1) — request() empty suffix: the /api/messenger root
 - `apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.prefetchRecent` (1) — request() query suffix '?roomId=' under /api/messenger

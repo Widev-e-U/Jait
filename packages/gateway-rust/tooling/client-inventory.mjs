@@ -142,6 +142,7 @@ export const CLIENT_REQUEST_SITES = [
   { key: "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.action", count: 1, reason: "request() suffix '/command' under /api/messenger" },
   { key: "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.attachmentBlob", count: 1, reason: "request() suffix '/media' under /api/messenger" },
   { key: "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.avatarBlob", count: 1, reason: "request() suffix '/media' under /api/messenger" },
+  { key: "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.browserNotificationImage", count: 1, reason: "fetch(getApiUrl() + '/api/messenger/notification-image'): a literal /api path, concatenated rather than templated, so POST /api/messenger/notification-image is read from this file" },
   { key: "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.connect", count: 1, reason: "request() empty suffix: the /api/messenger root" },
   { key: "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.disconnect", count: 1, reason: "request() empty suffix: the /api/messenger root" },
   { key: "apps/web/src/lib/messenger/gateway-store.ts|GatewayMessengerStore.prefetchRecent", count: 1, reason: "request() query suffix '?roomId=' under /api/messenger" },

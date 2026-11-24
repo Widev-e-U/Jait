@@ -531,15 +531,15 @@ class Connection {
     }
   }
   /**
-   * `m.presence` is not part of the filter the Matrix SDK asks for, so ask the
-   * homeserver directly for the counterpart of the open conversation. Bridged
-   * contacts (WhatsApp & co.) usually expose no presence at all, in which case the
-   * result stays `unknown` and the UI simply omits the status dot.
+   * Prime presence for the open direct Matrix chat while waiting for sync.
+   * An untracked bridge account can look offline in a status lookup. For
+   * bridged contacts, use the presence updates the homeserver actually emits.
    */
   private probePresence(roomId: string) {
-    const peer = this.rooms.get(roomId)?.peer;
+    const room = this.rooms.get(roomId);
+    const peer = room?.peer;
     const client = this.client;
-    if (!peer || !client || this.status !== 'ready') return;
+    if (!peer || !client || this.status !== 'ready' || room.summary.service !== 'Matrix') return;
     const now = Date.now();
     const cached = this.presence.get(peer.userId);
     if (cached && now - cached.at < PRESENCE_TTL) return;
@@ -548,7 +548,7 @@ class Connection {
     this.presenceProbes.set(peer.userId, now);
     const generation = this.generation;
     const store = (value: unknown, lastActiveAgo?: unknown) => {
-      if (this.client !== client || generation !== this.generation) return;
+      if (this.client !== client || generation !== this.generation || this.presence.get(peer.userId) !== cached) return;
       this.presence.set(peer.userId, {
         presence:
           value === 'online' || value === 'unavailable' || value === 'offline'
@@ -580,7 +580,10 @@ class Connection {
         .map((r) => this.roomSummary(r))
         .sort((a, b) => b.timestamp - a.timestamp),
       selectedRoomId: roomId,
-      messages: roomId ? this.messages(roomId) : [],
+      messages: roomId ? this.messages(roomId).map(message => {
+        const presence = !message.own && message.senderId ? this.presence.get(message.senderId)?.presence : undefined;
+        return presence && presence !== 'unknown' ? { ...message, senderPresence: presence } : message;
+      }) : [],
       hasEarlier: !!roomId && !!this.rooms.get(roomId)?.previous && (this.rooms.get(roomId)?.events.length ?? 0) < MAX_EVENTS,
       historyLimited: !!roomId && !!this.rooms.get(roomId)?.previous && (this.rooms.get(roomId)?.events.length ?? 0) >= MAX_EVENTS,
       notifications: false,

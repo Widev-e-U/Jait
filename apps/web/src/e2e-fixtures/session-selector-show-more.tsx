@@ -1,8 +1,22 @@
 import { createRoot } from 'react-dom/client'
 import { SessionSelector } from '@/components/chat/session-selector'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useProjects, type ProjectRecord } from '@/hooks/useProjects'
+import { useProjects, type ProjectRecord, type ProjectSession } from '@/hooks/useProjects'
 import '@/index.css'
+
+const sessions = (prefix: string, projectId: string | null): ProjectSession[] => [2, 1, 3].map((index) => ({
+  id: `${prefix}-${index}`,
+  projectId,
+  name: `${prefix} ${index}`,
+  projectPath: null,
+  status: 'active',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  lastActiveAt: new Date(Date.UTC(2026, 6, 4 - index)).toISOString(),
+  viewedAt: null,
+  metadata: null,
+}))
+
+const personalSessions = sessions('Personal chat', null)
 
 const project = (name: number | string, lastActiveAt: string): ProjectRecord => ({
   id: `project-${name}`,
@@ -18,7 +32,7 @@ const project = (name: number | string, lastActiveAt: string): ProjectRecord => 
   createdAt: '2026-01-01T00:00:00.000Z',
   lastActiveAt,
   metadata: null,
-  sessions: [],
+  sessions: name === 1 ? sessions('Project chat', 'project-1') : [],
 })
 
 // Project 1 is the most recently active, project 12 the least.
@@ -34,7 +48,11 @@ window.fetch = async (input) => {
     const byActivity = [...gatewayProjects].sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt))
     data = { projects: byActivity.slice(0, limit), hasMore: byActivity.length > limit }
   } else if (url.pathname.endsWith('/api/sessions')) {
-    data = { sessions: [] }
+    data = { sessions: personalSessions }
+  } else if (url.pathname.startsWith('/api/sessions/')) {
+    const sessionId = decodeURIComponent(url.pathname.slice('/api/sessions/'.length))
+    data = personalSessions.find((session) => session.id === sessionId)
+    if (!data) return new Response(null, { status: 404 })
   } else if (url.pathname.endsWith('/api/projects/last-active')) {
     data = { project: null, session: null }
   }
@@ -54,7 +72,7 @@ function Harness() {
           loading={state.loading}
           hasMoreProjects={state.hasMoreProjects}
           showFewerProjects={state.projects.length > state.projectListLimit}
-          isMobile={false}
+          isMobile={new URLSearchParams(window.location.search).has('touch')}
           onSelectProject={() => {}}
           onCreateProject={() => {}}
           onRemoveProject={() => {}}

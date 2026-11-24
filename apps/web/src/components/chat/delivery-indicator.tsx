@@ -34,7 +34,7 @@ export function useSteppedDeliveryState(target: DeliveryState, stepMs = 450): De
 }
 
 /** The one send indicator: clock, one check, two grey checks, two blue checks. */
-export function DeliveryIndicator({ state, label, className, iconClassName, testId, tooltip = true }: {
+export function DeliveryIndicator({ state, label, className, iconClassName, testId, tooltip = true, showLabel = false }: {
   state: DeliveryState
   /** Overrides the default accessible/tooltip text, e.g. to say who received it. */
   label?: string
@@ -42,6 +42,7 @@ export function DeliveryIndicator({ state, label, className, iconClassName, test
   iconClassName?: string
   testId?: string
   tooltip?: boolean
+  showLabel?: boolean
 }) {
   const text = label ?? LABELS[state]
   const icon = cn('h-3.5 w-3.5', iconClassName)
@@ -53,12 +54,12 @@ export function DeliveryIndicator({ state, label, className, iconClassName, test
     <span
       role="img"
       aria-label={text}
-      className={cn('inline-flex shrink-0 items-center justify-center', state === 'read' ? 'text-blue-500' : state === 'failed' ? 'text-destructive' : state === 'sending' ? 'text-muted-foreground' : 'text-gray-400', className)}
+      className={cn('inline-flex shrink-0 items-center justify-center', showLabel && 'gap-1', state === 'read' ? 'text-blue-500' : state === 'failed' ? 'text-destructive' : state === 'sending' ? 'text-muted-foreground' : 'text-gray-400', className)}
       data-testid={testId}
       data-send-state={state}
     >
       {glyph}
-      <span className="sr-only">{text}</span>
+      <span className={showLabel ? undefined : 'sr-only'}>{text}</span>
     </span>
   )
   return tooltip ? <TooltipHint content={text}>{body}</TooltipHint> : body

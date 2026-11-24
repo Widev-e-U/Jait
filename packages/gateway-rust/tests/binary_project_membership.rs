@@ -156,6 +156,16 @@ async fn project_membership_is_owner_managed_and_revocable() {
             .status(),
         404
     );
+    assert_eq!(
+        client
+            .get(&members_url)
+            .bearer_auth(&member)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
     let select_url = url("/api/projects/select");
     assert_eq!(
         client
@@ -224,6 +234,28 @@ async fn project_membership_is_owner_managed_and_revocable() {
         .await
         .unwrap();
     assert_eq!(duplicate["members"].as_array().unwrap().len(), 2);
+    let owner_listing: Value = client
+        .get(&members_url)
+        .bearer_auth(&owner)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(owner_listing["members"].as_array().unwrap().len(), 2);
+    assert_eq!(owner_listing["canManage"], true);
+    let member_listing: Value = client
+        .get(&members_url)
+        .bearer_auth(&member)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(member_listing["members"].as_array().unwrap().len(), 2);
+    assert_eq!(member_listing["canManage"], false);
 
     assert!(
         added["members"]
