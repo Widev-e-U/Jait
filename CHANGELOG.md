@@ -4,6 +4,92 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.974](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.974) — 2026-11-24
+
+- fix: improve chat workflows and remote execution — 414e95b3
+- fix(gateway-rust): allow project members to select projects — 7e26950d
+- fix(gateway-rust): include shared sessions in project views — 36168e69
+- docs(gateway-rust): refresh API inventory — 9be13c6a
+- feat(gateway-rust): stream shared chat sessions — 7c57cd32
+- feat(gateway-rust): allow shared session message reads — 1c152f9b
+- feat(gateway-rust): allow shared session detail reads — 00ec1dcf
+- feat(gateway-rust): add project membership management — 3c3969f2
+- fix(gateway): use the gateway origin for internal chat turns — d573a233
+- feat: update chat experience and gateway tooling — ed54fbb8
+- fix(chat): preserve gutters and steering default — f214dcb3
+- fix(web): avoid duplicate saved chat messages — 7b22f447
+- fix(test): align registry and session schema tests — 48e0370f
+- feat: improve project chat sharing and session routing — 60228a7a
+- fix(contract): pass TurnSelection to the routes evidence ChatFactory double — 26dea230
+- feat(chat): steer is the default streaming send action, Alt+Enter queues — 7ef4dade
+- chore(contract): recapture interface manifest after ACP settle and delivery-state changes — 3273bc42
+- fix(workflow): settle ACP workers only after their agent process group is gone — 640bf14c
+- feat(team): show sent/received/read delivery state on the user's team chat messages — 5a27db9e
+- feat: messenger linked bodies, session selector show-more, preview and agent-loop fixes, gateway-rust fail-closed mounts — 05df9ebb
+- feat: one sent/received/read delivery indicator across chat and messenger list, with typing in the chat list — 1b1964f2
+- test(gateway-rust): map verified composed-application tests for browser screenshot and preview files — 2385a510
+- chore(gateway-rust): read Node routes and client request paths with the AST — 0b4841f4
+- chore(gateway-rust): review background services from the Node source with the AST — 9155ecad
+- chore(gateway-rust): read Node WebSocket frame candidates with the TypeScript AST — e542b4ec
+- feat(gateway-rust): apply the web response style to prompts and ACP turns — e8f21fcc
+- fix(gateway): expire idle ACP sessions for every provider, not just codex — 49c685a6
+- feat(gateway-rust): send ACP model and effort choices and fail refused ones — a6e9a8f4
+- feat(gateway-rust): queue chat sends and send-now through the binary — 8ce13743
+- feat(gateway-rust): honor the web chat options the binary can apply — 65234f9d
+- feat(gateway-rust): run scheduled job triggers through the consent executor — 3372b3c0
+- test(gateway): cover ACP session stops on real child processes — a1a83f4c
+- test(gateway): give the plan-run worktree setup a longer hook timeout — e758be6d
+- test(gateway): correct fixture types in the orchestration tests — ffe7532c
+- chore(contract): recapture interface manifest after the plan lease — bda38e4d
+- feat(web): show Git-observed scope evidence under plan attempts — cfd754f0
+- test(gateway): add a live-model check that halts a real request — 428bfaa3
+- test(gateway): stop an in-flight model request when the gateway closes — 5dfb1aad
+- fix(gateway): keep one owner of plan state per database — adcf18ba
+- feat(gateway): re-verify a stale writer against the integration head before it merges — af41f574
+- fix(gateway-rust): wake queued chat turns when a device change or capacity lease releases — 4a538cf2
+- test(gateway): recover an attempt left running by a restart when the gateway boots — 464e3eaa
+- test(gateway): add a live-model plan run that writes and integrates a file — 32297c1c
+- test(gateway): check dependency handoff and non-coding artifact gates — 1a10cf74
+- docs(gateway-rust): record the missing queued chat message path — 151df801
+- test(gateway-rust): map eleven WebSocket frames that binary tests read and check — c59739f3
+- test(gateway-rust): drive consent approve-all and repo proposal routes through the binary — fa41c09e
+- feat(gateway-rust): inventory voice-assistant, screen-share relay and client WebSocket frames — 62de62e2
+- feat(gateway-rust): inventory WebSocket frames sent outside ws.ts — 4ac98f32
+- test(gateway-rust): map built-in provider models and reset through the binary — 6aa01638
+- feat(gateway-rust): broadcast thread.status and make stop cancel the native turn — 2fba9141
+- fix(gateway-rust): run chat file tools through PathGuard and create missing files — a975b636
+- chore(contract): recapture interface manifest after the worker fix — 19629d9c
+- fix(orchestration): fail a workflow attempt whose model request returns no answer — 4f01c952
+- chore(contract): recapture interface manifest at HEAD — 1cdaf552
+- feat(gateway-rust): test thread send, steer, approve, stop and interrupt through the binary — 8f4770c0
+- feat(gateway-rust): serve commit-message generation through the composed binary — d70e3e9a
+- feat(gateway-rust): test local git routes through the composed binary — 83de8533
+- feat(gateway-rust): generate session titles through the composed runtime — 6de8f85d
+- docs(workflow): correct the manifest drift note for committed HEAD — 3684a4b9
+- feat(gateway-rust): serve WebSocket node grants from the composed runtime — 1fd49a6c
+- docs(workflow): correct the interface manifest drift note — 15ce8e04
+- feat(web): answer worker prompts from the plan run panel — 24367b15
+- fix(gateway): let a plan run's owner answer its worker consent prompts — 90a6a8a4
+- feat(web): add a plan-run panel to the plan dialog — 700a1d2f
+- feat(gateway): bind ACP coding agents as plan-run workers — a989d126
+- feat(gateway-rust): mount WebSocket consent decisions and map 42 more reviewed binary tests — bcd6d74b
+- build(gateway-rust): keep gate builds inside a small terminal cgroup — b3e8acc4
+- feat(gateway): let plans protect paths from workers and show each task's resources — e43bb358
+- test(gateway): run one plan twice and keep both runs' history — 1b992350
+- feat(gateway): add plan.run chat tools and make workflow stops reach commands and approvals — 62d31b39
+- test(gateway): run command gates through the real consent executor — 0f3e768a
+- test(gateway): show task dependencies, workers and cancel over the plan-run HTTP routes — 24ab9253
+- test(gateway): assert dependency edges in the end-to-end plan run view — b3f93539
+- test(gateway): check writer tool exposure through the real worker — 159fc50b
+- feat(gateway): run plan tasks in isolated worktrees with command gates and integration — 1acd8f73
+- fix(gateway): make browser back/forward skip redirect hops and no-op entries like Chrome — 2e39ce6f
+- perf(gateway): drop redundant click round trips and report per-step bench overhead — 13ab5372
+- fix(gateway): stop browser sessions falling back to the DuckDuckGo start tab — 7c6f1784
+- perf(gateway): cut browser tool overhead and add steering benchmark — f56c4b1f
+- fix(gateway): stop usage-limit warning notifications for provider subscriptions — 907898dd
+- fix(messenger): resolve direct room display names — 92976c83
+- fix(web): create project chats from sidebar action — 7a2d50d9
+
 ## [v0.1.973](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.973) — 2026-11-18
 
 - chore(contract): reconcile coverage with current source evidence — 252120b8
