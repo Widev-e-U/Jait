@@ -597,6 +597,9 @@ jobs:
           node packages/gateway/scripts/smoke-desktop.mjs
           cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml packaged_runtime_lifecycle -- --ignored
       - name: Build Linux AppImage
+        env:
+          # The bundled linuxdeploy strip can fail on modern ELF sections.
+          NO_STRIP: "true"
         run: |
           VERSION="${{ needs.auto-tag.outputs.version }}"
           if [ -z "$VERSION" ]; then
@@ -608,7 +611,7 @@ jobs:
           bunx vite build --base ./ --sourcemap false
           cd ../desktop/src-tauri
           cargo install tauri-cli --version '^2' --locked
-          cargo tauri build --config '{"bundle":{"resources":{"gateway/":"gateway/"},"createUpdaterArtifacts":false}}' --features shell,frontend --bundles appimage
+          cargo tauri build --config '{"bundle":{"resources":{"gateway/":"gateway/"},"createUpdaterArtifacts":false}}' --features shell,frontend --bundles appimage --verbose
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux-release-assets
