@@ -1,6 +1,6 @@
 import { handleMessengerNotification, parseMessengerReadLink } from './messenger/notification-actions'
 import { markNotificationsRead, onNotificationRead, recordNotification, type NotificationEntry } from './notification-center'
-import { showMessengerBrowserNotification, closeMessengerBrowserNotification } from './messenger/browser-notifications'
+import { showMessengerBrowserNotification, closeMessengerBrowserNotification, type BrowserNotificationOptions } from './messenger/browser-notifications'
 import { notificationPlatformNeedsAgentIdentityFallback, safeNotificationLink, type NotificationContext, type NotificationPlatformId } from '@jait/shared'
 import { openNotification, androidNotificationBridge } from './notification-navigation'
 import { getApiUrl } from './gateway-url'
@@ -17,8 +17,12 @@ export interface SystemNotificationInput extends NotificationContext {
   roomId?: string
   eventId?: string
   imageAvailable?: boolean
+  groupSender?: string
+  timestamp?: number
   /** Bounded, locally resolved sender image. */
   iconUrl?: string
+  /** Bounded attachment preview for the browser transport. */
+  browserImageUrl?: string
   /** Locally produced events have no gateway-selected native notification owner. */
   independentOfAttention?: boolean
 }
@@ -94,31 +98,30 @@ async function notifyWithBrowserApi(
     markReadLink?: string
     scope?: string
     iconUrl?: string
+    browserImageUrl?: string
   },
 ): Promise<void> {
   if (!NotificationCtor) return
 
-  if (notif.link && notif.markReadLink && NotificationCtor.permission === 'granted') {
-    try { if (await showMessengerBrowserNotification({ ...notif, link: notif.link, markReadLink: notif.markReadLink })) return } catch { /* Plain notification and in-app action remain available. */ }
+  const permission = NotificationCtor.permission === 'default'
+    ? await NotificationCtor.requestPermission()
+    : NotificationCtor.permission
+  if (permission !== 'granted') return
+
+  if (notif.link?.startsWith('/messenger?')) {
+    try { if (await showMessengerBrowserNotification({ ...notif, link: notif.link })) return } catch { /* Try the page notification as a fallback. */ }
   }
-  const options: NotificationOptions = {
+  const options: BrowserNotificationOptions = {
     body: notif.body,
     tag: notif.id,
     icon: notif.iconUrl || NOTIFICATION_ICON,
     badge: NOTIFICATION_BADGE,
+    ...(notif.browserImageUrl ? { image: notif.browserImageUrl } : {}),
   }
 
-  if (NotificationCtor.permission === 'granted') {
+  try {
     trackBrowserNotification(notif.id, new NotificationCtor(notif.title, options), notif.link)
-    return
-  }
-
-  if (NotificationCtor.permission === 'denied') return
-
-  const permission = await NotificationCtor.requestPermission()
-  if (permission === 'granted') {
-    trackBrowserNotification(notif.id, new NotificationCtor(notif.title, options), notif.link)
-  }
+  } catch { /* Some browsers only support service-worker notifications. */ }
 }
 
 function trackBrowserNotification(id: string, notification: Notification, link?: string): void {
@@ -216,11 +219,18 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
     ...(notif.replaceId ? { replaceId: notif.replaceId } : {}),
     ...(notif.sessionId ? { sessionId: notif.sessionId } : {}),
     ...(notif.kind ? { kind: notif.kind } : {}),
-    ...(notif.imageAvailable && notif.roomId && notif.eventId ? {
-      imageAvailable: true, roomId: notif.roomId, eventId: notif.eventId,
+    ...(notif.roomId && notif.eventId ? {
+      roomId: notif.roomId, eventId: notif.eventId,
+      ...(notif.imageAvailable ? { imageAvailable: true } : {}),
+      ...(notif.groupSender ? { groupSender: notif.groupSender } : {}),
+      ...(notif.timestamp ? { timestamp: notif.timestamp } : {}),
     } : {}),
   }
-  const browserInput = { ...nativeInput, id: notif.replaceId ?? notif.id }
+  const browserInput = {
+    ...nativeInput,
+    id: notif.replaceId ?? notif.id,
+    browserImageUrl: notif.browserImageUrl,
+  }
   const capacitorLocalNotifications = capacitorNotifications()
   const browserNotification = 'Notification' in window ? window.Notification : undefined
   const android = (window.Capacitor as { Plugins?: { AgentOverlay?: {

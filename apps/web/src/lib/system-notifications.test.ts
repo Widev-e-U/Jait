@@ -87,6 +87,31 @@ describe('normalizeSystemNotification', () => {
     expect(NotificationMock.instances.at(-1)?.options.icon).toBe('data:image/png;base64,iVBORw==')
   })
 
+  it('posts a Chrome Messenger notification with an avatar and photo even without a read action', async () => {
+    NotificationMock.permission = 'granted'
+    const showNotification = vi.fn(async () => {})
+    vi.stubGlobal('navigator', { serviceWorker: { register: vi.fn(async () => ({
+      active: {
+        state: 'activated',
+        postMessage: (_message: unknown, [port]: MessagePort[]) => { port?.postMessage('tab-1'); port?.close() },
+      },
+      showNotification,
+    })) } })
+    const icon = 'data:image/png;base64,iVBORw=='
+    const image = 'data:image/jpeg;base64,/9j/AQ=='
+    const link = '/messenger?roomId=!room'
+    await triggerSystemNotification({
+      id: 'matrix-message:$photo', replaceId: 'matrix-room:!room', title: 'Alice', body: 'Photo',
+      link, iconUrl: icon, browserImageUrl: image,
+    })
+
+    expect(showNotification).toHaveBeenCalledWith('Alice', {
+      body: 'Photo', tag: 'matrix-room:!room', icon, image, badge: '/favicon-32x32.png',
+      data: expect.objectContaining({ id: 'matrix-room:!room', link, markReadLink: undefined, clientId: 'tab-1' }),
+    })
+    expect(NotificationMock.instances).toHaveLength(0)
+  })
+
   it('uses the installed Android bridge when LocalNotifications is absent', async () => {
     const notify = vi.fn(async () => {})
     vi.stubGlobal('window', {
@@ -100,11 +125,11 @@ describe('normalizeSystemNotification', () => {
     const notify = vi.fn(async () => {})
     vi.stubGlobal('window', { Capacitor: { Plugins: { AgentOverlay: { notify } } } })
     await triggerSystemNotification({
-      id: 'matrix-message:$photo', replaceId: 'matrix-room:!room', title: 'Alice', body: 'Photo',
-      imageAvailable: true, roomId: '!room', eventId: '$photo',
+      id: 'matrix-message:$photo', replaceId: 'matrix-room:!room', title: 'Family', body: 'Alice: Photo',
+      imageAvailable: true, roomId: '!room', eventId: '$photo', groupSender: 'Alice', timestamp: 1234,
     })
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
-      imageAvailable: true, roomId: '!room', eventId: '$photo',
+      imageAvailable: true, roomId: '!room', eventId: '$photo', groupSender: 'Alice', timestamp: 1234,
     }))
   })
 

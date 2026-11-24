@@ -1,4 +1,5 @@
-import { messengerNotificationPreview } from '@jait/shared';
+import { Capacitor } from '@capacitor/core';
+import { messengerAttachmentNotificationText, messengerNotificationPreview } from '@jait/shared';
 import type { MessengerStoreApi, MessengerLogin } from './store';
 import { getApiUrl } from '@/lib/gateway-url';
 import { getAuthToken } from '@/lib/auth-token';
@@ -7,7 +8,7 @@ import { revokeSystemNotification, triggerSystemNotification } from '@/lib/syste
 import { messengerReadLink } from './notification-actions';
 import type { MessengerSnapshot, MessengerMessage, MessengerRoom } from './model';
 import { cachedBlob, clearBlobCache } from './blob-cache';
-import { notificationAvatarUrl } from './notification-avatar';
+import { notificationAvatarUrl, notificationImageDataUrl } from './notification-avatar';
 
 /** Bridge-generated IDs are not useful as notification sender names. */
 function notificationSenderName(value?: string): string | undefined {
@@ -274,29 +275,45 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         const message = snapshot.messages.at(-1);
         const sender = notificationSenderName(room.latestSender);
         const peerName = notificationSenderName(room.peer?.name);
+        const groupSender = room.peer ? undefined : sender?.slice(0, 60);
+        const preview = room.latestAttachment
+          ? messengerAttachmentNotificationText(room.preview, room.latestAttachment)
+          : room.preview || 'New message';
         const senderAvatar = room.latestSenderAvatarUrl || (room.peer && (!room.latestSender || room.latestSender === room.peer.name || room.latestSender === room.peer.userId) ? room.peer.avatarUrl || room.avatarUrl : undefined);
-        void notificationAvatarUrl(senderAvatar, url => this.avatarBlob(url)).then(iconUrl => {
+        const browserImage = room.latestAttachment?.image && room.latestEventId &&
+          window.Notification?.permission === 'granted' && !window.jaitDesktop?.notify && !Capacitor.isNativePlatform()
+          ? this.browserNotificationImage(room.id, room.latestEventId)
+          : undefined;
+        void Promise.all([
+          notificationAvatarUrl(senderAvatar, url => this.avatarBlob(url)),
+          browserImage,
+        ]).then(([iconUrl, browserImageUrl]) => {
           const current = this.remoteSnapshot.rooms.find(entry => entry.id === room.id);
           if (this.stopped || !this.remoteSnapshot.notifications || !current?.unread || current.timestamp !== room.timestamp ||
               (this.visible === room.id && document.visibilityState === 'visible' && document.hasFocus())) return;
           return triggerSystemNotification({
-          ...(iconUrl ? { iconUrl } : {}),
-          id: room.latestEventId ? 'matrix-message:' + room.latestEventId : 'matrix-room-event:' + room.id + ':' + room.timestamp,
-          replaceId: roomNotificationId(room.id),
-          title: room.peer ? sender ?? peerName ?? room.name : room.name,
-          body: messengerNotificationPreview(!room.peer && sender ? `${sender}: ${room.preview || 'New message'}` : room.preview || 'New message'),
-          independentOfAttention: true,
-          link: '/messenger?roomId=' + encodeURIComponent(room.id),
-          ...(message && snapshot.selectedRoomId === room.id && snapshot.session
-            ? {
-                markReadLink: messengerReadLink(
-                  room.id,
-                  message.id,
-                  snapshot.session.userId,
-                  snapshot.session.homeserver,
-                ),
-              }
-            : {}),
+            ...(iconUrl ? { iconUrl } : {}),
+            ...(browserImageUrl ? { browserImageUrl } : {}),
+            id: room.latestEventId ? 'matrix-message:' + room.latestEventId : 'matrix-room-event:' + room.id + ':' + room.timestamp,
+            replaceId: roomNotificationId(room.id),
+            title: room.peer ? sender ?? peerName ?? room.name : room.name,
+            body: messengerNotificationPreview(groupSender ? `${groupSender}: ${preview}` : preview),
+            ...(room.latestEventId ? {
+              roomId: room.id, eventId: room.latestEventId, imageAvailable: room.latestAttachment?.image,
+              groupSender, timestamp: room.timestamp,
+            } : {}),
+            independentOfAttention: true,
+            link: '/messenger?roomId=' + encodeURIComponent(room.id),
+            ...(message && snapshot.selectedRoomId === room.id && snapshot.session
+              ? {
+                  markReadLink: messengerReadLink(
+                    room.id,
+                    message.id,
+                    snapshot.session.userId,
+                    snapshot.session.homeserver,
+                  ),
+                }
+              : {}),
           });
         }).catch(() => {});
       }
@@ -561,6 +578,24 @@ export class GatewayMessengerStore implements MessengerStoreApi {
       const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
       return new Blob([bytes], { type: attachment.mime });
     });
+  }
+  private async browserNotificationImage(roomId: string, eventId: string): Promise<string | undefined> {
+    const token = getAuthToken();
+    if (!token) return undefined;
+    try {
+      const response = await fetch(getApiUrl() + '/api/messenger/notification-image', {
+        method: 'POST',
+        credentials: 'include',
+        redirect: 'error',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, eventId }),
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!response.ok || response.headers.get('content-type') !== 'image/jpeg') return undefined;
+      return await notificationImageDataUrl(await response.blob(), 256 * 1024);
+    } catch {
+      return undefined;
+    }
   }
   async avatarBlob(mxcUrl: string) {
     return cachedBlob(`avatar:${mxcUrl}`, async () => {

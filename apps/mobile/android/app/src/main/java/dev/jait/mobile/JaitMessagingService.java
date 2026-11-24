@@ -73,7 +73,8 @@ public class JaitMessagingService extends FirebaseMessagingService {
                 ChatNotifications.show(this, id,
                     message.getData().get("title"), message.getData().get("body"),
                     replaceId, message.getData().get("link"),
-                    NotificationNavigation.scope(this), message.getData().getOrDefault("sessionId", ""), true);
+                    NotificationNavigation.scope(this), message.getData().getOrDefault("sessionId", ""), true, null,
+                    message.getData().get("groupSender"), notificationTimestamp(message.getData().get("timestamp")));
                 NotificationImage.fetchAvatarNow(this, replaceId == null || replaceId.isEmpty() ? id : replaceId,
                     id, message.getData().get("roomId"), message.getData().get("eventId"));
                 if ("true".equals(message.getData().get("imageAvailable"))) {
@@ -98,6 +99,12 @@ public class JaitMessagingService extends FirebaseMessagingService {
             showAttention(new JSONObject(rawItem));
         } catch (JSONException ignored) {
         }
+    }
+
+    private static long notificationTimestamp(String raw) {
+        if (raw == null) return 0;
+        try { return Long.parseLong(raw); }
+        catch (NumberFormatException ignored) { return 0; }
     }
 
     /**

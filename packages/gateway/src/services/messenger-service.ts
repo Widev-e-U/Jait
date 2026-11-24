@@ -27,6 +27,7 @@ import {
 import {
   messengerCommandSchema,
   isStatusRoom,
+  messengerAttachmentNotificationText,
   messengerNotificationPreview,
   type MessengerSession,
   type MessengerSnapshot,
@@ -96,6 +97,7 @@ export interface IncomingMessengerMessage {
   body: string;
   timestamp: number;
   service: string;
+  groupSender?: string;
   /** Whether a preview can be fetched through the authenticated gateway. */
   image?: boolean;
 }
@@ -341,17 +343,22 @@ class Connection {
       room.states.find((s) => s.type === 'm.room.member' && s.state_key === event.sender)?.content
         ?.displayname ?? event.sender ?? '';
     const direct = !!room.peer && room.peer.userId === event.sender;
-    const body = failed ? 'New message' : text || 'Sent an attachment';
+    const groupSender = room.peer ? undefined : String(sender || 'Unknown').replace(/\s+/g, ' ').trim().slice(0, 60);
     const imageContent = event.type === 'm.room.message' && event.content?.msgtype === 'm.image';
     const imageUrl = event.content?.file?.url ?? event.content?.url;
     const image = imageContent && typeof imageUrl === 'string' && imageUrl.startsWith('mxc://')
       && (event.content?.info?.size === undefined || (typeof event.content.info.size === 'number' && event.content.info.size <= MAX_MEDIA))
       ? true : undefined;
+    const filename = event.content?.filename;
+    const body = failed ? 'New message' : typeof imageUrl === 'string' && imageUrl.startsWith('mxc://')
+      ? messengerAttachmentNotificationText(text, { name: typeof filename === 'string' ? filename : text, image: !!image })
+      : text || 'Sent an attachment';
     const message: IncomingMessengerMessage = {
       roomId: room.summary.id,
       eventId,
       title: String(direct && sender ? sender : room.summary.name).slice(0, 120),
-      body: messengerNotificationPreview(direct ? body : `${String(sender).slice(0, 60)}: ${body}`),
+      body: messengerNotificationPreview(groupSender ? `${groupSender}: ${body}` : body),
+      ...(groupSender ? { groupSender } : {}),
       timestamp,
       service: room.summary.service,
       ...(image ? { image } : {}),
@@ -1111,6 +1118,11 @@ class Connection {
         room.summary.latestSender = latest?.sender;
         room.summary.latestSenderAvatarUrl = latest?.senderAvatarUrl;
         room.summary.latestEventId = latest?.id;
+        const attachment = latest?.attachment;
+        room.summary.latestAttachment = attachment ? {
+          name: messengerNotificationPreview(attachment.name),
+          image: attachment.image && (attachment.size === undefined || attachment.size <= MAX_MEDIA),
+        } : undefined;
         if (latest?.own) room.summary.latestDelivery = messengerDeliveryState(latest);
         else delete room.summary.latestDelivery;
         room.summary.preview =

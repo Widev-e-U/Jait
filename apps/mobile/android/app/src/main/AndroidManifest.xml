@@ -75,6 +75,16 @@
         </activity>
 
         <provider
+            android:name=".NotificationPreviewProvider"
+            android:authorities="${applicationId}.notification-previews"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/notification_preview_paths" />
+        </provider>
+
+        <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"

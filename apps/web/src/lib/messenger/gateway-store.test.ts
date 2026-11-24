@@ -328,6 +328,66 @@ describe('gateway Messenger notifications', () => {
     }))
   })
 
+  it('forwards the latest attachment in a room even when it is not selected', async () => {
+    const notification = { permission: 'granted' }
+    Object.assign(browser, { Notification: notification })
+    vi.stubGlobal('Notification', notification)
+    const photo = new Uint8Array([0xff, 0xd8, 0xff, 1])
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => url.endsWith('/notification-image')
+      ? new Response(photo, { headers: { 'Content-Type': 'image/jpeg' } })
+      : json({ snapshot: remote }))
+    vi.stubGlobal('fetch', fetchMock)
+    await start()
+    remote = { ...remote, selectedRoomId: null, messages: [], rooms: [{
+      ...remote.rooms[0]!, timestamp: 2_000, unread: 1, latestEventId: '$photo', latestSender: 'Bob',
+      preview: 'beach.jpg', latestAttachment: { name: 'beach.jpg', image: true },
+    }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({
+      body: 'Bob: Photo', groupSender: 'Bob', imageAvailable: true, roomId: ROOM_ID, eventId: '$photo',
+      browserImageUrl: 'data:image/jpeg;base64,/9j/AQ==',
+    }))
+    expect(fetchMock).toHaveBeenCalledWith('http://gateway.test:8000/api/messenger/notification-image', expect.objectContaining({
+      method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer token' }),
+      body: JSON.stringify({ roomId: ROOM_ID, eventId: '$photo' }),
+    }))
+    remote = { ...remote, rooms: [{
+      ...remote.rooms[0]!, timestamp: 3_000, unread: 2, latestEventId: '$file',
+      preview: 'Please review', latestAttachment: { name: 'report.pdf', image: false },
+    }] }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({
+      body: 'Bob: report.pdf · Please review', imageAvailable: false, eventId: '$file',
+    }))
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/notification-image'))).toHaveLength(1)
+  })
+
+  it('ignores a photo preview when a newer room message has arrived', async () => {
+    const notification = { permission: 'granted' }
+    Object.assign(browser, { Notification: notification })
+    vi.stubGlobal('Notification', notification)
+    let resolvePhoto!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/notification-image')
+      ? new Promise<Response>(resolve => { resolvePhoto = resolve })
+      : json({ snapshot: remote })))
+    await start()
+    remote = { ...remote, rooms: [{
+      ...remote.rooms[0]!, timestamp: 2_000, unread: 1, latestEventId: '$photo',
+      preview: 'beach.jpg', latestAttachment: { name: 'beach.jpg', image: true },
+    }] }
+    await poll()
+    remote = { ...remote, rooms: [{
+      ...remote.rooms[0]!, timestamp: 3_000, unread: 2, latestEventId: '$new',
+      preview: 'See you soon', latestAttachment: undefined,
+    }] }
+    await poll()
+    resolvePhoto(new Response(new Uint8Array([0xff, 0xd8, 0xff]), { headers: { 'Content-Type': 'image/jpeg' } }))
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(triggerSystemNotification).toHaveBeenCalledTimes(1)
+    expect(triggerSystemNotification).toHaveBeenCalledWith(expect.objectContaining({ id: 'matrix-message:$new' }))
+  })
+
   it('includes group senders and uses direct sender names in notifications', async () => {
     await start()
     remote = { ...remote, rooms: [{ ...remote.rooms[0]!, timestamp: 2_000, unread: 1, name: 'Team-Chat', preview: 'Hello', latestSender: 'Bob' }] }

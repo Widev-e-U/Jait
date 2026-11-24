@@ -152,6 +152,8 @@ export interface MessengerRoom {
   preview: string
   /** Event ID of the latest message, for notification deduplication. */
   latestEventId?: string
+  /** Display metadata for the latest attachment, without a media URL or keys. */
+  latestAttachment?: { name: string; image: boolean }
   /** Sender of the latest message, for notification display. */
   latestSender?: string
   /** Avatar of the latest message sender (`mxc://`). */
@@ -189,6 +191,14 @@ export interface MessengerSnapshot {
   loaded?: boolean
   /** Names of other people currently typing in the selected room. */
   typing?: string[]
+}
+
+export function messengerAttachmentNotificationText(text: string, attachment: { name: string; image: boolean }): string {
+  const caption = text.trim()
+  const name = attachment.name.trim()
+  if (attachment.image) return caption && caption !== name ? caption : 'Photo'
+  if (!name) return caption || 'Attachment'
+  return caption && caption !== name ? `${name} · ${caption}` : name
 }
 
 /**

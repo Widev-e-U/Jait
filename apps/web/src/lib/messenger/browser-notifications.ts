@@ -1,8 +1,10 @@
+export type BrowserNotificationOptions = NotificationOptions & { image?: string }
+
 /** Service-worker notifications provide action buttons that Notification() cannot expose. */
 export async function showMessengerBrowserNotification(input: {
-  id: string; title: string; body: string; link: string; markReadLink: string; scope?: string; iconUrl?: string
+  id: string; title: string; body: string; link: string; markReadLink?: string; scope?: string; iconUrl?: string; browserImageUrl?: string
 }): Promise<boolean> {
-  if (!navigator.serviceWorker || !('Notification' in window) || Notification.permission !== 'granted') return false
+  if (!navigator.serviceWorker) return false
   const registration = await navigator.serviceWorker.register('/messenger-notifications-sw.js', { scope: '/messenger' })
   const worker = registration.active ?? registration.installing ?? registration.waiting
   if (!worker) return false
@@ -21,9 +23,10 @@ export async function showMessengerBrowserNotification(input: {
   })
   await registration.showNotification(input.title, {
     body: input.body, tag: input.id, icon: input.iconUrl || '/apple-touch-icon.png', badge: '/favicon-32x32.png',
-    data: { ...input, title: undefined, body: undefined, iconUrl: undefined, clientId },
-    actions: [{ action: 'mark-read', title: 'Mark as read' }],
-  } as NotificationOptions)
+    ...(input.browserImageUrl ? { image: input.browserImageUrl } : {}),
+    data: { id: input.id, link: input.link, markReadLink: input.markReadLink, scope: input.scope, clientId },
+    ...(input.markReadLink ? { actions: [{ action: 'mark-read', title: 'Mark as read' }] } : {}),
+  } as BrowserNotificationOptions)
   return true
 }
 

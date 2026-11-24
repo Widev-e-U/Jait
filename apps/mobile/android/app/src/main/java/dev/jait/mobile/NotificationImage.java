@@ -25,6 +25,12 @@ final class NotificationImage {
         WORKERS.execute(() -> fetchNow(app, cardId, notificationId, roomId, eventId));
     }
 
+    static void fetchAvatar(Context context, String cardId, String notificationId, String roomId, String eventId) {
+        if (roomId.isEmpty() || eventId.isEmpty()) return;
+        Context app = context.getApplicationContext();
+        WORKERS.execute(() -> fetchAvatarNow(app, cardId, notificationId, roomId, eventId));
+    }
+
     // Firebase invokes its message callback on a worker thread. Completing the fetch before
     // returning keeps the service alive while Android is delivering a background push.
     static void fetchNow(Context context, String cardId, String notificationId, String roomId, String eventId) {

@@ -199,20 +199,25 @@ public class AgentOverlayPlugin extends Plugin {
     public void notify(PluginCall call) {
         String id = call.getString("id", "");
         if (id.isEmpty()) { call.reject("Notification id is required"); return; }
-        ChatNotifications.show(getContext(), id, call.getString("title", "Jait"),
-            call.getString("body", ""), call.getString("replaceId", id),
-            call.getString("link", "/chat"), call.getString("scope", NotificationNavigation.scope(getContext())),
-            call.getString("sessionId", ""), "completion".equals(call.getString("kind", "")), call.getString("markReadLink", null));
-        String cardId = call.getString("replaceId", id);
-        if (call.getString("link", "").startsWith("/messenger?")) {
-            ChatNotifications.attachAvatar(getContext(), cardId == null || cardId.isEmpty() ? id : cardId,
-                id, NotificationAvatar.fallback(call.getString("title", "?")));
+        String replaceId = call.getString("replaceId", id);
+        String cardId = replaceId == null || replaceId.isEmpty() ? id : replaceId;
+        String link = call.getString("link", "/chat");
+        String title = call.getString("title", "Jait");
+        ChatNotifications.show(getContext(), id, title, call.getString("body", ""), replaceId,
+            link, call.getString("scope", NotificationNavigation.scope(getContext())),
+            call.getString("sessionId", ""), "completion".equals(call.getString("kind", "")),
+            call.getString("markReadLink", null), call.getString("groupSender"), call.getLong("timestamp", 0L));
+        boolean messenger = MessengerNotification.isMessage(cardId, link);
+        if (!messenger && link.startsWith("/messenger?")) {
+            ChatNotifications.attachAvatar(getContext(), cardId, id, NotificationAvatar.fallback(title));
         }
-        NotificationAvatar.attach(getContext(), cardId == null || cardId.isEmpty() ? id : cardId,
-            id, call.getString("iconUrl", ""));
+        String iconUrl = call.getString("iconUrl", "");
+        String roomId = call.getString("roomId", "");
+        String eventId = call.getString("eventId", "");
+        if (!iconUrl.isEmpty()) NotificationAvatar.attach(getContext(), cardId, id, iconUrl);
+        else if (messenger) NotificationImage.fetchAvatar(getContext(), cardId, id, roomId, eventId);
         if (Boolean.TRUE.equals(call.getBoolean("imageAvailable", false))) {
-            NotificationImage.fetch(getContext(), cardId == null || cardId.isEmpty() ? id : cardId,
-                id, call.getString("roomId", ""), call.getString("eventId", ""));
+            NotificationImage.fetch(getContext(), cardId, id, roomId, eventId);
         }
         call.resolve();
     }

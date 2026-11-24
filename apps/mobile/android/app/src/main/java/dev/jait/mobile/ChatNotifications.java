@@ -34,12 +34,17 @@ final class ChatNotifications {
         return values == null ? new ArrayList<>() : new ArrayList<>(values);
     }
 
-    private static void applyLines(NotificationCompat.Builder builder, ArrayList<String> ids, ArrayList<String> lines) {
+    private static void applyContent(Context context, NotificationCompat.Builder builder, ArrayList<String> ids,
+                                     ArrayList<String> lines, MessengerNotification conversation, boolean updateShortcut) {
         Bundle extras = new Bundle();
         extras.putStringArrayList(IDS, ids);
         extras.putStringArrayList(LINES, lines);
         extras.putString("jait.eventId", ids.get(ids.size() - 1));
         builder.addExtras(extras).setContentText(lines.get(lines.size() - 1));
+        if (conversation != null) {
+            conversation.apply(context, builder, ids, lines, updateShortcut);
+            return;
+        }
         if (lines.size() == 1) {
             builder.setStyle(new NotificationCompat.BigTextStyle().bigText(lines.get(0)));
         } else {
@@ -82,11 +87,20 @@ final class ChatNotifications {
         if (posted == null) return;
         ArrayList<String> ids = values(posted.getNotification().extras, IDS);
         ArrayList<String> lines = values(posted.getNotification().extras, LINES);
-        if (ids.isEmpty() || ids.size() != lines.size() || !eventId.equals(ids.get(ids.size() - 1))) return;
+        if (ids.isEmpty() || ids.size() != lines.size()) return;
+        MessengerNotification conversation = MessengerNotification.restore(posted.getNotification());
+        if (conversation != null) {
+            if (!ids.contains(eventId) || conversation.hasImage(eventId)) return;
+            android.net.Uri preview = NotificationPreviewProvider.store(context, image);
+            if (preview == null) return;
+            conversation.setImage(eventId, preview);
+        } else if (!eventId.equals(ids.get(ids.size() - 1))) return;
         NotificationCompat.Builder builder = rebuild(context, posted.getNotification());
-        applyLines(builder, ids, lines);
-        builder.setStyle(new NotificationCompat.BigPictureStyle().bigPicture(image)
-            .setSummaryText(lines.size() > 1 ? lines.size() + " messages" : lines.get(0)));
+        applyContent(context, builder, ids, lines, conversation, false);
+        if (conversation == null) {
+            builder.setStyle(new NotificationCompat.BigPictureStyle().bigPicture(image)
+                .setSummaryText(lines.size() > 1 ? lines.size() + " messages" : lines.get(0)));
+        }
         builder.setOnlyAlertOnce(true);
         manager.notify(cardId, 0, builder.build());
     }
@@ -99,11 +113,16 @@ final class ChatNotifications {
         ArrayList<String> lines = values(posted.getNotification().extras, LINES);
         if (ids.isEmpty() || ids.size() != lines.size() || !eventId.equals(ids.get(ids.size() - 1))) return;
         NotificationCompat.Builder builder = rebuild(context, posted.getNotification());
-        applyLines(builder, ids, lines);
-        android.os.Parcelable picture = posted.getNotification().extras.getParcelable(Notification.EXTRA_PICTURE);
-        if (picture instanceof android.graphics.Bitmap) builder.setStyle(new NotificationCompat.BigPictureStyle().bigPicture((android.graphics.Bitmap) picture)
-            .setSummaryText(lines.size() > 1 ? lines.size() + " messages" : lines.get(0)));
-        builder.setLargeIcon(avatar).setOnlyAlertOnce(true);
+        MessengerNotification conversation = MessengerNotification.restore(posted.getNotification());
+        if (conversation != null) conversation.setAvatar(eventId, avatar);
+        applyContent(context, builder, ids, lines, conversation, true);
+        if (conversation == null) {
+            android.os.Parcelable picture = posted.getNotification().extras.getParcelable(Notification.EXTRA_PICTURE);
+            if (picture instanceof android.graphics.Bitmap) builder.setStyle(new NotificationCompat.BigPictureStyle().bigPicture((android.graphics.Bitmap) picture)
+                .setSummaryText(lines.size() > 1 ? lines.size() + " messages" : lines.get(0)));
+            builder.setLargeIcon(avatar);
+        }
+        builder.setOnlyAlertOnce(true);
         manager.notify(cardId, 0, builder.build());
     }
 
@@ -153,7 +172,9 @@ final class ChatNotifications {
                 else {
                     NotificationCompat.Builder builder = rebuild(context, posted.getNotification());
                     if (removedLatest) builder.setLargeIcon((android.graphics.Bitmap) null);
-                    applyLines(builder, ids, lines);
+                    MessengerNotification conversation = MessengerNotification.restore(posted.getNotification());
+                    if (conversation != null) conversation.remove(eventId);
+                    applyContent(context, builder, ids, lines, conversation, removedLatest);
                     builder.setOnlyAlertOnce(true);
                     manager.notify(cardId, 0, builder.build());
                 }
@@ -174,8 +195,14 @@ final class ChatNotifications {
         show(context, id, title, body, replaceId, link, scope, sessionId, completion, null);
     }
 
-    static synchronized void show(Context context, String id, String title, String body, String replaceId,
+    static void show(Context context, String id, String title, String body, String replaceId,
                      String link, String scope, String sessionId, boolean completion, String markReadLink) {
+        show(context, id, title, body, replaceId, link, scope, sessionId, completion, markReadLink, null, 0);
+    }
+
+    static synchronized void show(Context context, String id, String title, String body, String replaceId,
+                     String link, String scope, String sessionId, boolean completion, String markReadLink,
+                     String groupSender, long timestamp) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         NotificationChannel channel = new NotificationChannel(CHANNEL, "Chat completions", NotificationManager.IMPORTANCE_HIGH);
         channel.enableVibration(true);
@@ -199,13 +226,21 @@ final class ChatNotifications {
             return;
         }
         StatusBarNotification previous = card(manager, cardId);
-        ArrayList<String> ids = previous == null ? new ArrayList<>() : values(previous.getNotification().extras, IDS);
-        ArrayList<String> lines = previous == null ? new ArrayList<>() : values(previous.getNotification().extras, LINES);
+        Notification previousNotification = previous == null ? null : previous.getNotification();
+        MessengerNotification conversation = MessengerNotification.isMessage(cardId, link)
+            ? MessengerNotification.start(previousNotification, cardId, link, scope, title) : null;
+        ArrayList<String> ids = previousNotification == null ? new ArrayList<>() : values(previousNotification.extras, IDS);
+        ArrayList<String> lines = previousNotification == null ? new ArrayList<>() : values(previousNotification.extras, LINES);
         // Legacy notifications have no history. Start a fresh bounded list in that case.
         if (ids.size() != lines.size()) { ids.clear(); lines.clear(); }
         ids.add(id);
         lines.add(body == null ? "" : body);
-        while (ids.size() > MAX_LINES) { ids.remove(0); lines.remove(0); }
+        if (conversation != null) conversation.append(id, groupSender, timestamp);
+        while (ids.size() > MAX_LINES) {
+            String expired = ids.remove(0);
+            lines.remove(0);
+            if (conversation != null) conversation.remove(expired);
+        }
         Intent intent = NotificationNavigation.intent(context, cardId, link, scope);
         PendingIntent open = PendingIntent.getActivity(context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -231,7 +266,7 @@ final class ChatNotifications {
         dismissed.setData(android.net.Uri.parse("jait-notification://dismiss/" + android.net.Uri.encode(cardId)));
         builder.setDeleteIntent(PendingIntent.getBroadcast(context, 0, dismissed,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
-        applyLines(builder, ids, lines);
+        applyContent(context, builder, ids, lines, conversation, true);
         manager.notify(cardId, 0, builder.build());
         updateSummary(context);
         PhoneWearListenerService.pushSnapshot(context);

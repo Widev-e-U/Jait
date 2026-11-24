@@ -294,6 +294,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
         roomId: message.roomId,
         eventId: message.eventId,
         imageAvailable: !!message.image,
+        groupSender: message.groupSender,
         timestamp: message.timestamp,
         link: `/messenger?roomId=${encodeURIComponent(message.roomId)}`,
       },
