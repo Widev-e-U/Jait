@@ -157,7 +157,8 @@ async fn handle(State(state): State<UpdateRoutes>, request: Request) -> Response
                 response(
                     200,
                     json!({"currentVersion":state.current_version,"latestVersion":latest,
-                    "hasUpdate":latest != state.current_version && compare_versions(latest, &state.current_version) > 0.0}),
+                    "hasUpdate":latest != state.current_version && compare_versions(latest, &state.current_version) > 0.0,
+                    "canApply":false}),
                 )
             }
             Err(error) => response(
@@ -718,6 +719,25 @@ mod native_update_backend_focused_tests {
             SECRET,
         )
         .expect("token");
+        let check = routes
+            .clone()
+            .router()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/update/check")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(check.status().as_u16(), 200);
+        let check: Value =
+            serde_json::from_slice(&to_bytes(check.into_body(), usize::MAX).await.expect("body"))
+                .expect("json");
+        assert_eq!(check["canApply"], false);
+        assert_eq!(check["latestVersion"], "0.9.0");
+
         let authorized = routes
             .router()
             .oneshot(
