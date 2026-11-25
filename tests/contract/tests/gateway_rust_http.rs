@@ -280,6 +280,12 @@ async fn settings_patch_filtering_nullable_fields_and_user_isolation_match_actua
         {"method":"GET","path":"/api/auth/settings","user":"other"},
         {"method":"PATCH","path":"/api/auth/settings","user":"owner","body":{"theme":"bad","stt_provider":"bad","chat_streaming_action":"bad","jait_backend":"bad","selected_model":null,"reasoning_effort":"invalid","project_picker_path":" ","project_picker_node_id":null,"recent_models":[]}},
         {"method":"PATCH","path":"/api/auth/settings","user":"owner","body":{"api_keys":[" one ",3," three "]}},
+        {"method":"PATCH","path":"/api/auth/settings","user":"owner","body":{"navigation_order":["chat","",3,"chat","資料","x".repeat(64),"x".repeat(65),"😀".repeat(32),"😀".repeat(33),null]}},
+        {"method":"GET","path":"/api/auth/settings","user":"owner"},
+        {"method":"PATCH","path":"/api/auth/settings","user":"owner","body":{"navigation_order":"chat","theme":"light"}},
+        {"method":"PATCH","path":"/api/auth/settings","user":"owner","body":{"navigation_order":(0..60).map(|i|format!("page-{}",i%55)).collect::<Vec<_>>()}},
+        {"method":"PATCH","path":"/api/auth/settings","user":"owner","body":{"navigation_order":[]}},
+        {"method":"GET","path":"/api/auth/settings","user":"other"},
         {"method":"GET","path":"/api/auth/settings/tools","user":"owner"},
         {"method":"PATCH","path":"/api/auth/settings/tools","user":"owner","body":{}},
         {"method":"DELETE","path":"/api/auth/settings/archive","user":"owner"}

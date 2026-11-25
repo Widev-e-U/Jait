@@ -30,6 +30,9 @@ pub struct UserSettings {
     pub reasoning_effort: Option<String>,
     pub project_picker_path: Option<String>,
     pub project_picker_node_id: Option<String>,
+    /// Absent only on the reference's first read, which inserts defaults without this field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub navigation_order: Option<Vec<String>>,
     pub updated_at: String,
 }
 
@@ -60,6 +63,7 @@ pub struct UserSettingsPatch {
     pub reasoning_effort: Patch<Option<String>>,
     pub project_picker_path: Patch<Option<String>>,
     pub project_picker_node_id: Patch<Option<String>>,
+    pub navigation_order: Option<Vec<String>>,
 }
 fn normalize_username(value: &str) -> String {
     crate::text::js_trim(value).to_lowercase()
@@ -279,7 +283,7 @@ impl<'a> UserService<'a> {
         )? > 0)
     }
     pub fn get_settings(&self, user_id: &str) -> rusqlite::Result<UserSettings> {
-        let row=self.db.query_row("SELECT theme,api_keys,disabled_tools,stt_provider,chat_streaming_action,chat_provider,jait_backend,recent_models,selected_model,reasoning_effort,project_picker_path,project_picker_node_id,updated_at FROM user_settings WHERE user_id=?",[user_id],|r|{
+        let row=self.db.query_row("SELECT theme,api_keys,disabled_tools,stt_provider,chat_streaming_action,chat_provider,jait_backend,recent_models,selected_model,reasoning_effort,project_picker_path,project_picker_node_id,updated_at,navigation_order FROM user_settings WHERE user_id=?",[user_id],|r|{
             let stt:String=r.get(3)?;
             let action:String=r.get(4)?;
             let reasoning:Option<String>=r.get(9)?;
@@ -288,14 +292,16 @@ impl<'a> UserService<'a> {
                 chat_streaming_action:if ["steer","queue","thread"].contains(&action.as_str()){action}else{"steer".into()},
                 chat_provider:fallback(r.get(5)?,"jait"),jait_backend:fallback(r.get(6)?,"openai"),recent_models:strings(r.get(7)?),
                 selected_model:r.get(8)?,reasoning_effort:reasoning.filter(|s|["minimal","low","medium","high"].contains(&s.as_str())),
-                project_picker_path:r.get(10)?,project_picker_node_id:r.get(11)?,updated_at:r.get(12)?})
+                project_picker_path:r.get(10)?,project_picker_node_id:r.get(11)?,navigation_order:Some(strings(r.get(13)?)),updated_at:r.get(12)?})
         }).optional()?;
         if let Some(row) = row {
             return Ok(row);
         }
         let now = self.now()?;
         self.db.execute("INSERT INTO user_settings(user_id,theme,api_keys,disabled_tools,stt_provider,chat_streaming_action,chat_provider,jait_backend,recent_models,updated_at) VALUES(?,'system','{}','[]','whisper','steer','jait','openai','[]',?)",params![user_id,now])?;
-        self.get_settings(user_id)
+        let mut inserted = self.get_settings(user_id)?;
+        inserted.navigation_order = None;
+        Ok(inserted)
     }
     pub fn update_settings(
         &self,
@@ -325,8 +331,12 @@ impl<'a> UserService<'a> {
             project_picker_path,
             project_picker_node_id
         );
-        self.db.execute("UPDATE user_settings SET theme=?,api_keys=?,disabled_tools=?,stt_provider=?,chat_streaming_action=?,chat_provider=?,jait_backend=?,recent_models=?,selected_model=?,reasoning_effort=?,project_picker_path=?,project_picker_node_id=?,updated_at=? WHERE user_id=?",
-            params![s.theme,serde_json::to_string(&s.api_keys).expect("JSON string map"),serde_json::to_string(&s.disabled_tools).expect("JSON strings"),s.stt_provider,s.chat_streaming_action,s.chat_provider,s.jait_backend,serde_json::to_string(&s.recent_models).expect("JSON strings"),s.selected_model,s.reasoning_effort,s.project_picker_path,s.project_picker_node_id,self.now()?,user_id])?;
+        let navigation_order = patch
+            .navigation_order
+            .or(s.navigation_order.take())
+            .unwrap_or_default();
+        self.db.execute("UPDATE user_settings SET theme=?,api_keys=?,disabled_tools=?,stt_provider=?,chat_streaming_action=?,chat_provider=?,jait_backend=?,recent_models=?,selected_model=?,reasoning_effort=?,project_picker_path=?,project_picker_node_id=?,navigation_order=?,updated_at=? WHERE user_id=?",
+            params![s.theme,serde_json::to_string(&s.api_keys).expect("JSON string map"),serde_json::to_string(&s.disabled_tools).expect("JSON strings"),s.stt_provider,s.chat_streaming_action,s.chat_provider,s.jait_backend,serde_json::to_string(&s.recent_models).expect("JSON strings"),s.selected_model,s.reasoning_effort,s.project_picker_path,s.project_picker_node_id,serde_json::to_string(&navigation_order).expect("JSON strings"),self.now()?,user_id])?;
         self.get_settings(user_id)
     }
     pub fn get_last_selection(

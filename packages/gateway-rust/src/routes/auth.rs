@@ -251,7 +251,8 @@ fn settings_response(s: UserSettings) -> Value {
     json!({"theme":s.theme,"api_keys":s.api_keys,"disabled_tools":s.disabled_tools,"stt_provider":s.stt_provider,
         "chat_streaming_action":s.chat_streaming_action,"chat_provider":s.chat_provider,"jait_backend":s.jait_backend,
         "recent_models":s.recent_models,"selected_model":s.selected_model,"reasoning_effort":s.reasoning_effort,
-        "project_picker_path":s.project_picker_path,"project_picker_node_id":s.project_picker_node_id,"updated_at":s.updated_at})
+        "project_picker_path":s.project_picker_path,"project_picker_node_id":s.project_picker_node_id,
+        "navigation_order":s.navigation_order.unwrap_or_default(),"updated_at":s.updated_at})
 }
 fn trimmed(body: &Value, key: &str) -> String {
     crate::text::js_trim(body[key].as_str().unwrap_or("")).into()
@@ -349,7 +350,20 @@ fn settings_patch(body: &Value) -> UserSettingsPatch {
         reasoning_effort,
         project_picker_path: nullable_patch(body, "project_picker_path"),
         project_picker_node_id: nullable_patch(body, "project_picker_node_id"),
+        navigation_order: navigation_order(body),
     }
+}
+/// First occurrence of each 1-64 UTF-16 unit string, at most 50, as the reference route keeps.
+fn navigation_order(body: &Value) -> Option<Vec<String>> {
+    let items = body["navigation_order"].as_array()?;
+    let mut order: Vec<String> = Vec::new();
+    for item in items.iter().filter_map(Value::as_str) {
+        if (1..=64).contains(&item.encode_utf16().count()) && !order.iter().any(|v| v == item) {
+            order.push(item.into());
+        }
+    }
+    order.truncate(50);
+    Some(order)
 }
 enum PasswordWork {
     None,
