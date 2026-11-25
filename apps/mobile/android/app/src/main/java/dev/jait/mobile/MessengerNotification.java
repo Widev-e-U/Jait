@@ -99,7 +99,7 @@ final class MessengerNotification {
         boolean group = state.getBoolean("group");
         Bitmap avatar = state.getParcelable("avatar");
         IconCompat conversationIcon = IconCompat.createWithBitmap(
-            group || avatar == null ? NotificationAvatar.fallback(title) : avatar);
+            avatar == null ? NotificationAvatar.fallback(title) : avatar);
         Person peer = new Person.Builder().setName(title).setIcon(conversationIcon).build();
         NotificationCompat.MessagingStyle style = new NotificationCompat.MessagingStyle(
             new Person.Builder().setName("You").build());

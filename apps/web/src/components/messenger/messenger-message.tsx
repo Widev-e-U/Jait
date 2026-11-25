@@ -441,7 +441,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
       {hasReactions && <div
         data-reaction-pills
         className={'relative z-10 col-start-1 flex max-w-full flex-wrap items-center gap-1 ' +
-          (standaloneImage ? 'justify-center ' : message.own ? 'justify-end pr-1 ' : 'justify-start pl-1 ') +
+          (message.own ? 'justify-end pr-1 ' : 'justify-start pl-1 ') +
           (standaloneImage ? '-mt-3.5' : emojiOnly ? 'mt-1' : '-mt-1.5')}
       >
         {(message.reactions ?? []).map(reaction => <TooltipHint key={reaction.key} content={reaction.senders.join(', ')}><button

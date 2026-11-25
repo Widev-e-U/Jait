@@ -309,11 +309,14 @@ for (const emoji of ['👍', '😂', '🔥']) {
 }
 
 
-test('image reactions overlap the center of the bottom edge', async ({ page }) => {
+test('image reactions overlap the bottom-left edge like text messages', async ({ page }) => {
   await mount(page)
   const image = page.locator('[data-message-id="$image"]')
   const bubble = (await image.locator('[data-messenger-bubble]').boundingBox())!
   const reaction = (await image.locator('[data-reaction-pills] button').boundingBox())!
-  expect(Math.abs((reaction.x + reaction.width / 2) - (bubble.x + bubble.width / 2))).toBeLessThan(1)
+  const textBubble = (await page.locator('[data-message-id="$one"] [data-messenger-bubble]').boundingBox())!
+  const textReaction = (await page.locator('[data-message-id="$one"] [data-reaction-pills] button').boundingBox())!
+  expect(Math.abs((reaction.x - bubble.x) - (textReaction.x - textBubble.x))).toBeLessThan(1)
+  expect(reaction.x + reaction.width).toBeLessThan(bubble.x + bubble.width / 2)
   expect(Math.abs((reaction.y + reaction.height / 2) - (bubble.y + bubble.height))).toBeLessThan(1)
 })
