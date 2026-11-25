@@ -1,6 +1,12 @@
 use super::{ContentMatch, FileMatch};
+use icu_collator::{Collator, CollatorBorrowed, options::CollatorOptions};
 use regex::Regex;
 use std::sync::LazyLock;
+
+static PATH_COLLATOR: LazyLock<CollatorBorrowed<'static>> = LazyLock::new(|| {
+    Collator::try_new(Default::default(), CollatorOptions::default())
+        .expect("compiled root collation")
+});
 
 pub fn cleaned_file_query(query: &str) -> String {
     query
@@ -96,7 +102,7 @@ pub fn rank_file_paths(
     files.sort_by(|a, b| {
         b.score
             .cmp(&a.score)
-            .then_with(|| a.relative_path.cmp(&b.relative_path))
+            .then_with(|| PATH_COLLATOR.compare(&a.relative_path, &b.relative_path))
     });
     files.truncate(limit);
     files
@@ -142,7 +148,7 @@ pub fn rank_content_matches(matches: &mut Vec<ContentMatch>, query: &str, limit:
     matches.sort_by(|a, b| {
         b.score
             .cmp(&a.score)
-            .then_with(|| a.relative_path.cmp(&b.relative_path))
+            .then_with(|| PATH_COLLATOR.compare(&a.relative_path, &b.relative_path))
             .then(a.line.cmp(&b.line))
     });
     matches.truncate(limit);

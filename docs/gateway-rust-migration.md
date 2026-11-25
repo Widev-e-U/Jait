@@ -36,6 +36,21 @@ through the native remote-provider adapter and the TypeScript adapter with a
 scripted transport. This does not verify production remote-node composition or
 a real Codex installation; coverage manifests remain unchanged.
 
+## Project-search ranking compatibility — 2026-11-25
+
+Native file and content search now use the existing ICU collator for equal-score
+path comparisons instead of byte order, matching the TypeScript ranking exports
+under the reference harness's default locale. Scores still take precedence;
+content line numbers break collation ties, and equal comparisons remain stable.
+The result limit is applied after ranking, as before.
+
+Live differential checks in `tests/contract/tests/verify_project_search.rs`
+cover mixed case, accents, canonically equivalent names, duplicate matches,
+line-number ties, and top-three clipping. A filesystem fixture also compares
+native, auto, and fallback backend results with the live ranking exports.
+Operator-selected locales and differences across ICU versions remain unverified;
+this is not full project-search parity or a coverage-ledger update.
+
 ## Native compatibility checks for ownership and failed writes
 
 The Rust session tool endpoints return only the authenticated caller's sessions

@@ -7,10 +7,14 @@
 //! parity of the native and auto (ripgrep-optional) backends, cancellation, and
 //! the deliberate fallback refusal of regular expressions.
 
+#[path = "../src/internal_driver.rs"]
+mod internal_driver;
+
 use jait_gateway::services::project_search::{
-    Budgets, Cancellation, Error, PROJECT_SEARCH_DEFAULT_RESULTS, PROJECT_SEARCH_MAX_RESULTS,
-    ProjectRoot, SearchMode, SearchOptions, SearchResult, candidate_limit, normalize_limit,
-    search_project, search_project_auto, search_project_fallback,
+    Budgets, Cancellation, ContentMatch, Error, PROJECT_SEARCH_DEFAULT_RESULTS,
+    PROJECT_SEARCH_MAX_RESULTS, ProjectRoot, SearchMode, SearchOptions, SearchResult,
+    candidate_limit, normalize_limit, ranking, search_project, search_project_auto,
+    search_project_fallback,
 };
 use serde_json::{Value, json};
 use std::{
@@ -69,6 +73,163 @@ fn files_of(result: &SearchResult) -> (Vec<String>, bool) {
             *limited,
         ),
         other => panic!("expected files result, got {other:?}"),
+    }
+}
+
+fn reference_rankings(calls: &[Value]) -> Value {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let directory = root
+        .join(".jait/artifacts/gateway-rust/project-search-ranking")
+        .join(uuid::Uuid::new_v4().to_string());
+    internal_driver::call(
+        &root,
+        &directory,
+        json!({"version":1,"calls":calls}),
+        &|| false,
+    )
+    .unwrap()
+}
+
+#[test]
+fn file_ranking_ties_match_live_typescript_before_result_limits() {
+    let paths = vec![
+        "src/Zeta.ts",
+        "src/alpha.ts",
+        "src/Álpha.ts",
+        "src/Alpha.ts",
+        "src/A\u{0301}lpha.ts",
+        "src/ábaco.ts",
+        "src/_alpha.ts",
+        "src/alpha-2.ts",
+        "src/alpha-10.ts",
+        "src/alpha.ts",
+    ];
+    let calls = [3, paths.len()].map(
+        |limit| json!({"op":"nativeprojectsearch.files","paths":paths,"query":"ts","limit":limit}),
+    );
+    let expected = reference_rankings(&calls);
+    let paths: Vec<String> = paths.into_iter().map(String::from).collect();
+    for (index, call) in calls.iter().enumerate() {
+        let actual: Vec<Value> = ranking::rank_file_paths(
+            &paths,
+            call["query"].as_str().unwrap(),
+            call["limit"].as_u64().unwrap() as usize,
+            false,
+        )
+        .into_iter()
+        .map(|hit| json!({"relativePath":hit.relative_path,"score":hit.score}))
+        .collect();
+        assert_eq!(json!(actual), expected[index], "file ranking {index}");
+    }
+}
+
+#[test]
+fn content_ranking_ties_match_live_typescript_and_keep_line_order() {
+    let matches: Vec<Value> = [
+        ("src/Zeta.ts", 1, "needle z"),
+        ("src/alpha.ts", 3, "needle third"),
+        ("src/Álpha.ts", 5, "needle composed"),
+        ("src/Alpha.ts", 1, "needle uppercase"),
+        ("src/A\u{0301}lpha.ts", 2, "needle decomposed"),
+        ("src/alpha.ts", 1, "needle first"),
+        ("src/alpha.ts", 1, "needle same line"),
+    ]
+    .into_iter()
+    .map(|(relative_path, line, content)| {
+        json!({"relativePath":relative_path,"line":line,"content":content})
+    })
+    .collect();
+    let calls = [3, matches.len()].map(|limit| {
+        json!({"op":"nativeprojectsearch.content","matches":matches,"query":"needle","limit":limit})
+    });
+    let expected = reference_rankings(&calls);
+    for (index, call) in calls.iter().enumerate() {
+        let mut actual: Vec<ContentMatch> = matches
+            .iter()
+            .map(|hit| ContentMatch {
+                file: String::new(),
+                relative_path: hit["relativePath"].as_str().unwrap().into(),
+                line: hit["line"].as_u64().unwrap() as usize,
+                content: hit["content"].as_str().unwrap().into(),
+                score: 0,
+            })
+            .collect();
+        ranking::rank_content_matches(
+            &mut actual,
+            "needle",
+            call["limit"].as_u64().unwrap() as usize,
+        );
+        let actual: Vec<Value> = actual
+            .iter()
+            .map(|hit| {
+                json!({"relativePath":hit.relative_path,"line":hit.line,"content":hit.content,"score":hit.score})
+            })
+            .collect();
+        assert_eq!(json!(actual), expected[index], "content ranking {index}");
+    }
+}
+
+#[test]
+fn search_backends_return_the_same_top_ranked_paths_as_typescript() {
+    let fixture = Fixture::new();
+    let paths = [
+        "src/Zeta.ts",
+        "src/alpha.ts",
+        "src/Álpha.ts",
+        "src/Alpha.ts",
+        "src/ábaco.ts",
+    ];
+    for path in &paths {
+        fixture.put(path, "needle\n");
+    }
+    let root = fixture.root();
+    let calls = [
+        json!({"op":"nativeprojectsearch.files","paths":paths,"query":"ts","limit":3}),
+        json!({
+            "op":"nativeprojectsearch.content",
+            "matches":paths.iter().map(|path| json!({"relativePath":path,"line":1,"content":"needle"})).collect::<Vec<_>>(),
+            "query":"needle","limit":3,
+        }),
+    ];
+    let expected = reference_rankings(&calls);
+    for (index, (mode, query, hits_key)) in [
+        (SearchMode::Files, "ts", "files"),
+        (SearchMode::Content, "needle", "matches"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let options = SearchOptions {
+            limit: Some(3),
+            ..options(query, mode)
+        };
+        let budgets = Budgets::default();
+        let cancel = Cancellation::default();
+        for (backend, result) in [
+            ("native", search_project(&root, &options, &budgets, &cancel)),
+            (
+                "auto",
+                search_project_auto(&root, &options, &budgets, &cancel),
+            ),
+            (
+                "fallback",
+                search_project_fallback(&root, &options, &budgets, &cancel),
+            ),
+        ] {
+            let mut result = serde_json::to_value(result.unwrap()).unwrap();
+            assert_eq!(result["limited"], true, "{backend} must report clipping");
+            let hits = result[hits_key].as_array_mut().unwrap();
+            for hit in hits.iter_mut() {
+                let hit = hit.as_object_mut().unwrap();
+                hit.remove("path");
+                hit.remove("file");
+                hit.remove("name");
+            }
+            assert_eq!(json!(hits), expected[index], "{backend} {mode:?}");
+        }
     }
 }
 
