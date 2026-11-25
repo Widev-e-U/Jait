@@ -104,7 +104,10 @@ describe('Messenger message actions and history', () => {
     expect(first.rooms.find((entry: { id: string }) => entry.id === '!direct:test')?.peer.presence).toBe('online');
     expect(first.messages.map((entry: { senderPresence?: string }) => entry.senderPresence)).toEqual([undefined, 'online', 'unavailable', undefined]);
     await update('offline');
-    expect(c.snapshot('!room:test').messages[1].senderPresence).toBe('offline');
+    // Bridged services never report real presence, so a homeserver "offline" is hidden, not shown as a grey dot.
+    const offline = c.snapshot('!room:test');
+    expect(offline.messages[1].senderPresence).toBeUndefined();
+    expect(offline.rooms.find((entry: { id: string }) => entry.id === '!direct:test')?.peer.presence).toBe('unknown');
     c.resetPresence();
     expect(c.snapshot('!room:test').messages[1].senderPresence).toBeUndefined();
   });
