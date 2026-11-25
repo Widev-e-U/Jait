@@ -2,8 +2,8 @@
 //!
 //! The mobile collaborator traits are synchronous, and the router calls them on the
 //! blocking pool, so waiting on the database worker here cannot stall the runtime. Any
-//! failed lookup denies access. Push devices, routines and the active-session list have
-//! no native backend yet, so they stay empty.
+//! failed lookup denies access. Push devices and routines have no native backend yet.
+//! Active sessions are listed through the owner-scoped database service.
 use crate::{
     routes::{
         auth::AuthState,

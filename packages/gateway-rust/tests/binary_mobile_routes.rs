@@ -170,6 +170,16 @@ async fn mobile_routes_through_the_binary() {
         let rows = body["sessions"].as_array().unwrap();
         assert_eq!(rows.len(), 1, "{body}");
         assert_eq!(rows[0]["id"], *expected);
+        let regular: Value = client
+            .get(url("/api/sessions?status=active"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(body["sessions"], regular["sessions"]);
     }
 
     let (st, b) = call(M::GET, "/api/mobile/devices".into(), owner.clone(), None).await;
