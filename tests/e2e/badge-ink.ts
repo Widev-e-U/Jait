@@ -14,7 +14,9 @@ export async function expectBadgeInkCentered(badge: Locator, kind: 'count' | 're
     context.drawImage(image, 0, 0)
     const pixels = context.getImageData(0, 0, image.width, image.height).data
     let left = image.width, right = -1, top = image.height, bottom = -1
-    for (let y = 1; y < image.height - 1; y++) for (let x = 1; x < image.width - 1; x++) {
+    // Ignore the antialiased top and bottom border of rounded reaction pills.
+    const verticalInset = kind === 'reaction' ? 3 : 1
+    for (let y = verticalInset; y < image.height - verticalInset; y++) for (let x = 1; x < image.width - 1; x++) {
       const index = (y * image.width + x) * 4
       const red = pixels[index]!, green = pixels[index + 1]!, blue = pixels[index + 2]!
       const low = Math.min(red, green, blue), high = Math.max(red, green, blue)

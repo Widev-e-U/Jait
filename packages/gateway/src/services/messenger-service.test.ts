@@ -183,6 +183,15 @@ describe('Messenger message actions and history', () => {
     room.events.push({ event_id: '$edit', type: 'm.room.message', sender: room.events[0].sender, content: { 'm.relates_to': { rel_type: 'm.replace', event_id: '$one' }, 'm.new_content': { body: 'updated' } } } as any);
     expect(c.messages('!room:test')[1].replyTo).toEqual({ id: '$one', sender: room.events[0].sender, body: 'updated' });
   });
+  it('projects Matrix thread roots independently of quoted replies and loaded history', () => {
+    const { c, room, message } = setup();
+    room.events.push({ ...message('$thread-reply'), content: { body: 'thread reply', 'm.relates_to': {
+      rel_type: 'm.thread', event_id: '$unloaded-root', is_falling_back: true, 'm.in_reply_to': { event_id: '$one' },
+    } } });
+    const reply = c.messages('!room:test').find(item => item.id === '$thread-reply');
+    expect(reply?.threadRootId).toBe('$unloaded-root');
+    expect(reply?.replyTo).toBeUndefined();
+  });
   it('ignores forged edits and redacted reactions', () => {
     const { c, room } = setup();
     room.events.push({ event_id: '$edit', type: 'm.room.message', sender: '@other:test', content: { 'm.relates_to': { rel_type: 'm.replace', event_id: '$one' }, 'm.new_content': { body: 'forged' } } } as any);

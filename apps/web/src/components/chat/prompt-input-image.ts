@@ -24,7 +24,7 @@ export function createInlineImageNode(image: UserImageAttachment, onRemove: (ref
   preview.src = image.data.startsWith('data:') ? image.data : `data:${image.mimeType};base64,${image.data}`
   preview.alt = image.name
   preview.draggable = false
-  preview.className = 'h-[1em] w-[1em] shrink-0 rounded-sm object-contain'
+  preview.className = 'h-12 w-12 shrink-0 rounded-sm object-contain'
   chip.appendChild(preview)
 
   const label = document.createElement('span')

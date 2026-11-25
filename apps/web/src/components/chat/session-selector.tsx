@@ -1,6 +1,6 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code, GripVertical, ListFilter, CircleDot, Play, BellRing } from 'lucide-react'
+import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, FolderPlus, Settings2, CornerUpLeft, Code, GripVertical, ListFilter, CircleDot, Play, BellRing } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree, resolveProjectColor, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
@@ -172,6 +172,9 @@ function readSidebarOrder(): SidebarOrder {
 const RECENT_SESSIONS_LIMIT = 5
 /** Chats shown before "Show older" — long enough to scroll, short enough to scan. */
 const PERSONAL_SESSIONS_LIMIT = 20
+const SIDEBAR_HEADER_HEIGHT = 'h-[35px]'
+const SIDEBAR_HEADER_ACTION = 'rounded p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-50 disabled:hover:bg-transparent'
+
 const COLLAPSED_FOLDERS_STORAGE_KEY = 'jait.sidebar.collapsedFolders'
 /** Per nesting level; deep enough to read, shallow enough for a 256px sidebar. */
 const FOLDER_INDENT_PX = 12
@@ -306,6 +309,7 @@ export function SessionSelector({
   const onlineNodeIds = useMemo(() => new Set(nodes.filter((n) => !n.isGateway).map((n) => n.id)), [nodes])
   const [searchQuery, setSearchQuery] = useUrlSearchState('chat', view === 'projects' ? 'projectsQ' : 'q')
   const [statusFilter, setStatusFilter] = useState<'all' | 'unread' | 'running' | 'attention'>('all')
+  const revealUnreadProjects = statusFilter === 'unread'
   const matchesStatus = (session: ProjectSession) => statusFilter === 'all'
     || (statusFilter === 'unread' && isSessionUnread(session))
     || (statusFilter === 'running' && !!streamingSessionIds?.has(session.id))
@@ -483,6 +487,18 @@ export function SessionSelector({
     [openMenuProjectId, projects]
   )
 
+  const setProjectsCollapsed = (collapsed: boolean) => {
+    const next = new Set<string>()
+    if (collapsed) {
+      for (const project of projects) {
+        if (project.parentId) next.add(project.parentId)
+        if (project.sessions.length) next.add(project.id)
+      }
+    }
+    setCollapsedFolders(next)
+    writeCollapsedFolders(next)
+  }
+
   const toggleFolder = useCallback((projectId: string) => {
     setCollapsedFolders((current) => {
       const next = new Set(current)
@@ -513,10 +529,10 @@ export function SessionSelector({
         continue
       }
       out.push({ project: node.project, depth: node.depth, hasChildren: node.children.length > 0, })
-      if (collapsedFolders.has(node.project.id)) hiddenUnder.add(node.project.id)
+      if (!revealUnreadProjects && collapsedFolders.has(node.project.id)) hiddenUnder.add(node.project.id)
     }
     return out
-  }, [collapsedFolders, filteredProjects, normalizedSearchQuery])
+  }, [collapsedFolders, filteredProjects, normalizedSearchQuery, revealUnreadProjects])
 
   /** Folders this project may legally be dropped into, per the shared rules. */
   const canDropProjectInto = useCallback((draggedId: string, targetId: string) => {
@@ -762,7 +778,7 @@ export function SessionSelector({
           {touchDrag.active.source.label}
         </div>
       )}
-      <div className="flex h-[35px] shrink-0 items-center gap-1.5 border-b bg-muted/60 px-2">
+      <div className={`flex ${isMobile ? 'h-11' : SIDEBAR_HEADER_HEIGHT} shrink-0 items-center gap-1.5 border-b bg-muted/60 px-2`}>
         {searchLoading && normalizedSearchQuery
           ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
           : <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
@@ -783,7 +799,7 @@ export function SessionSelector({
           ] as const).map(([value, label, Icon]) => (
             <Tooltip key={value}>
               <TooltipTrigger asChild>
-                <button type="button" aria-label={label} aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)} className={`rounded p-1.5 ${statusFilter === value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                <button type="button" aria-label={label} aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)} className={`grid shrink-0 place-items-center rounded-md ${isMobile ? 'size-10' : 'size-7'} ${statusFilter === value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
                   <Icon className="h-3.5 w-3.5" />
                 </button>
               </TooltipTrigger>
@@ -803,7 +819,7 @@ export function SessionSelector({
           <div className="flex min-h-0 flex-1 flex-col">
             {showProjects && (
               <div
-                className={`flex h-8 shrink-0 items-center justify-between px-3 text-left transition-colors hover:bg-muted/30 ${
+                className={`flex ${SIDEBAR_HEADER_HEIGHT} shrink-0 items-center justify-between pl-3 pr-2 text-left transition-colors hover:bg-muted/30 ${
                   dropTargetId === '__root__' ? 'bg-primary/10 ring-2 ring-inset ring-primary' : ''
                 }`}
                 // Dropping on the section header is the desktop equivalent of
@@ -846,20 +862,22 @@ export function SessionSelector({
                 <span className="text-2xs font-medium text-muted-foreground">
                   {view === 'projects' ? 'Projects' : 'Projects'}
                 </span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="ml-1 h-6 w-6 shrink-0 rounded-md p-1"
-                      aria-label="New project"
-                      onClick={onCreateProject}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">New project</TooltipContent>
-                </Tooltip>
+                <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="Project actions">
+                  {([
+                    ['Collapse projects', ChevronsDownUp, () => setProjectsCollapsed(true), !!normalizedSearchQuery || revealUnreadProjects || projects.length === 0],
+                    ['Expand projects', ChevronsUpDown, () => setProjectsCollapsed(false), !!normalizedSearchQuery || revealUnreadProjects || collapsedFolders.size === 0],
+                    ['New project', Plus, onCreateProject, false],
+                  ] as const).map(([label, Icon, onClick, disabled]) => (
+                    <Tooltip key={label}>
+                      <TooltipTrigger asChild>
+                        <button type="button" aria-label={label} onClick={onClick} disabled={disabled} className={SIDEBAR_HEADER_ACTION}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>{label}</TooltipContent>
+                    </Tooltip>
+                  ))}
+                </div>
               </div>
             )}
             <div ref={paneContainerRef} className="flex min-h-0 flex-1 flex-col">
@@ -897,7 +915,7 @@ export function SessionSelector({
                   // Only the open menu needs targets; validating every row on
                   // every render would be O(projects × folders × projects).
                   const moveTargets = openMenuProjectId === project.id ? openMenuMoveTargets : []
-                  const isCollapsed = collapsedFolders.has(project.id)
+                  const isCollapsed = !normalizedSearchQuery && !revealUnreadProjects && collapsedFolders.has(project.id)
                   const isDropTarget = dropTargetId === project.id
                   const isActiveProject = project.id === activeProjectId
                   const latestSessionId = getLatestProjectSessionId(project)
@@ -934,7 +952,7 @@ export function SessionSelector({
                     <div
                       data-dnd-key={`project:${project.id}`}
                       style={orderTarget?.kind === 'project' && orderTarget.id === project.id ? { boxShadow: `inset 0 ${orderTarget.after ? '-2px' : '2px'} 0 hsl(var(--primary))` } : undefined}
-                      className={`group grid w-full grid-cols-[auto,auto,minmax(0,1fr),auto] items-center gap-1.5 px-1.5 py-0.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
+                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-center gap-1.5 px-1.5 py-0.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
                       // Workspaces stay draggable as a project *reference* (the
                       // existing prompt-attachment gesture). Every row is also
                       // draggable as a move within the sidebar.
@@ -1022,27 +1040,33 @@ export function SessionSelector({
                       }}
                       {...projectRowMenuHandlers(project.id)}
                     >
-                      {touchHandle({ kind: 'project', id: project.id, parentId: project.parentId ?? null, label: project.title || (isFolder ? 'folder' : 'project') })}
-                      {hasChildren ? (
-                        <button
-                          type="button"
-                          aria-label={isCollapsed ? 'Expand folder' : 'Collapse folder'}
-                          aria-expanded={!isCollapsed}
-                          // Touch devices widen labelled buttons to 2.5rem; keep the
-                          // icon slot as narrow as a folder icon and grow the hit area instead.
-                          className="relative mt-0.5 flex h-3.5 w-3.5 !min-w-0 shrink-0 items-center justify-center rounded text-muted-foreground before:absolute before:-inset-2 hover:text-foreground"
-                          style={folderIconStyle}
-                          onClick={(e) => { e.stopPropagation(); toggleFolder(project.id) }}
-                        >
-                          {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        </button>
-                      ) : pathMissing ? (
-                        <FolderX className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
-                      ) : isActiveProject ? (
-                        <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" style={folderIconStyle} />
-                      ) : (
-                        <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" style={folderIconStyle} />
-                      )}
+                      <div className="flex items-center gap-1">
+                        {touchHandle({ kind: 'project', id: project.id, parentId: project.parentId ?? null, label: project.title || (isFolder ? 'folder' : 'project') })}
+                        {!normalizedSearchQuery && (hasChildren || project.sessions.length > 0) ? (
+                          <button
+                            type="button"
+                            aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${isFolder ? 'folder' : 'project'}`}
+                            aria-expanded={!isCollapsed}
+                            aria-disabled={revealUnreadProjects || undefined}
+                            // Touch devices widen labelled buttons to 2.5rem; keep the
+                            // icon slot as narrow as a folder icon and grow the hit area instead.
+                            className="relative flex h-3.5 w-3.5 !min-w-0 shrink-0 items-center justify-center rounded text-muted-foreground before:absolute before:-inset-y-2 before:-left-1 before:-right-2 hover:text-foreground"
+                            style={folderIconStyle}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (!revealUnreadProjects) toggleFolder(project.id)
+                            }}
+                          >
+                            {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                          </button>
+                        ) : pathMissing ? (
+                          <FolderX className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                        ) : isActiveProject ? (
+                          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" style={folderIconStyle} />
+                        ) : (
+                          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" style={folderIconStyle} />
+                        )}
+                      </div>
                       <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap">
                           {project.sessions.some(session => approvalSessionIds?.has(session.id)) && (
                             <TooltipHint content="Chat waiting for approval">
@@ -1307,7 +1331,7 @@ export function SessionSelector({
                         </DropdownMenu>
                       </div>
                     </div>
-                    {recentSessions.length > 0 && (
+                    {!isCollapsed && recentSessions.length > 0 && (
                       <div className="ml-[22px] space-y-0.5 border-l pl-1.5">
                         {recentSessions.map((session) => {
                           const isActiveSession = openSessionIds?.has(session.id) ?? (isActiveProject && session.id === activeSessionId)

@@ -155,7 +155,7 @@ function ReactionBar({ position, onPick, onSearch, disabled, barRef, actions }: 
   </div>, document.body)
 }
 
-export function MessengerBubble({ message, roomId, disabled, variant = 'chat', teams = false, groupStart = true, groupEnd = true, avatar, onReply, imageTile = false, onOpenImage }: {
+export function MessengerBubble({ message, roomId, disabled, variant = 'chat', groupStart = true, groupEnd = true, avatar, onReply, imageTile = false, onOpenImage }: {
   message: MessengerMessage
   imageTile?: boolean
   /** Album tiles open the shared carousel viewer instead of a per-image dialog. */
@@ -166,7 +166,6 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', t
   roomId: string
   disabled: boolean
   variant?: 'chat' | 'channel'
-  teams?: boolean
   /** Opens a run from this sender: carries the name and the avatar. */
   groupStart?: boolean
   /** Closes a run, so the following run gets extra breathing room. */
@@ -248,10 +247,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', t
     return () => { document.removeEventListener('messenger-actions-open', closeOthers); document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', escape); window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close) }
   }, [position])
 
-  // WhatsApp keeps reactions in a small pill row that sits on the bubble's
-  // bottom edge instead of inside the timestamp line.
   const hasReactions = !!message.reactions?.length
-  const pillsOverlap = hasReactions && !emojiOnly
 
   return <article
     ref={root}
@@ -322,14 +318,34 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', t
         setPosition({ x: event.clientX, y: event.clientY })
       }}
       style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset ? 'none' : 'transform 180ms ease-out', width: editing && editWidth ? editWidth : undefined }}
-      className={'relative [touch-action:pan-y] ' + (editing ? 'min-w-44 ' : 'min-w-0 ') + (imageTile ? 'w-full max-w-full' : wide
+      className={'relative grid grid-cols-[minmax(0,1fr)_auto] [touch-action:pan-y] ' + (message.own ? 'gap-x-1 ' : '') + (editing ? 'min-w-44 ' : 'min-w-0 ') + (imageTile ? 'w-full max-w-full' : wide
       ? (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[92%] sm:max-w-[420px]')
       : (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[88%] sm:max-w-[74%]'))}>
+      <div className="col-start-1 flex min-w-0 items-baseline justify-end gap-x-1.5 text-[11px] leading-4 text-muted-foreground">
+        {showSenderName && <p className="mr-auto min-w-0 truncate font-semibold text-primary">{message.sender}</p>}
+        <div className="flex flex-wrap items-center justify-end gap-x-1.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" disabled={unavailable} aria-label="Message options" className="rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" /></button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onCloseAutoFocus={event => { if (replyingFromMenu.current) { event.preventDefault(); replyingFromMenu.current = false } }}><DropdownMenuItem onSelect={() => void run(() => navigator.clipboard.writeText(message.body))}>Copy text</DropdownMenuItem>
+              {onReply && !message.own && !message.unableToDecrypt && <DropdownMenuItem onSelect={() => { replyingFromMenu.current = true; onReply(message) }}><Reply className="mr-2 h-4 w-4" />Reply</DropdownMenuItem>}
+              <DropdownMenuItem onSelect={() => setForwardOpen(true)}><Forward className="mr-2 h-4 w-4" />Forward</DropdownMenuItem>
+              {store.react && <DropdownMenuItem onSelect={() => setPickerOpen(true)}><Smile className="mr-2 h-4 w-4" />React…</DropdownMenuItem>}
+              {store.edit && message.own && !message.attachment && <DropdownMenuItem onSelect={startEditing}>Edit message</DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {message.edited && <span>Edited</span>}
+          {message.pending && <span>Sending…</span>}
+          {message.failed && <span className="text-destructive">Not sent</span>}
+          <TooltipHint content={new Date(message.timestamp).toLocaleString()}><time dateTime={new Date(message.timestamp).toISOString()}>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
+        </div>
+      </div>
       <div
         data-messenger-bubble
         data-message-style={variant}
         data-standalone={standaloneImage ? 'image' : emojiOnly ? 'emoji' : undefined}
-        className={'relative min-w-0 select-text transition-colors ' +
+        className={'relative col-start-1 row-start-2 min-w-0 select-text transition-colors ' +
           (emojiOnly
             ? 'border-transparent bg-transparent px-1 py-1'
             : standaloneImage
@@ -339,7 +355,6 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', t
                 : ' shadow-sm border ' + (message.own ? 'border-primary/20 bg-primary/10' : 'border-border bg-muted')))
           }
       >
-        {showSenderName && <p className="mb-0.5 truncate text-[11px] font-semibold leading-4 text-primary">{message.sender}</p>}
         {message.replyTo && <button
           type="button"
           data-reply-quote
@@ -355,31 +370,15 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', t
           <div className="flex gap-2"><Button size="sm" type="submit" disabled={busy || !text.trim()}>Save</Button><Button size="sm" variant="ghost" type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</Button></div>
         </form> : standaloneImage ? null : <p className={'whitespace-pre-wrap break-words [overflow-wrap:anywhere] ' + (emojiOnly ? 'text-5xl leading-tight' : 'text-sm leading-[1.35]') + ' ' + (message.unableToDecrypt ? 'italic text-muted-foreground' : '')}><MessageText>{message.linkedBody ?? message.body}</MessageText></p>}
         {message.attachment && <MessengerAttachment key={message.attachment.url} attachment={message.attachment} large={standaloneImage} tile={imageTile} {...(onOpenImage ? { onOpen: onOpenImage } : {})} />}
-        <div className={standaloneImage
-          ? 'absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] leading-4 text-white shadow-sm'
-          : 'mt-0.5 flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 text-[10px] leading-4 text-muted-foreground'}>
-          {message.edited && <span>Edited</span>}
-          {message.pending && <span>Sending…</span>}{message.failed && <span className="text-destructive">Not sent</span>}
-          <TooltipHint content={new Date(message.timestamp).toLocaleString()}><time dateTime={new Date(message.timestamp).toISOString()}>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
-          {message.own && (message.pending ? <DeliveryIndicator state="sending" /> : message.failed ? <DeliveryIndicator state="failed" /> : <MessageReadStatus inline readers={message.readBy ?? []} bridgeStatus={message.bridgeStatus} teams={teams} />)}
-          <DropdownMenu><DropdownMenuTrigger asChild>
-            <button type="button" disabled={unavailable} aria-label="Message options" className="-mr-1 mt-px rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" /></button>
-          </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onCloseAutoFocus={event => { if (replyingFromMenu.current) { event.preventDefault(); replyingFromMenu.current = false } }}><DropdownMenuItem onSelect={() => void run(() => navigator.clipboard.writeText(message.body))}>Copy text</DropdownMenuItem>
-              {onReply && !message.own && !message.unableToDecrypt && <DropdownMenuItem onSelect={() => { replyingFromMenu.current = true; onReply(message) }}><Reply className="mr-2 h-4 w-4" />Reply</DropdownMenuItem>}
-              <DropdownMenuItem onSelect={() => setForwardOpen(true)}><Forward className="mr-2 h-4 w-4" />Forward</DropdownMenuItem>
-              {store.react && <DropdownMenuItem onSelect={() => setPickerOpen(true)}><Smile className="mr-2 h-4 w-4" />React…</DropdownMenuItem>}
-              {store.edit && message.own && !message.attachment && <DropdownMenuItem onSelect={startEditing}>Edit message</DropdownMenuItem>}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        {error && <p role="alert" className="mt-1 text-xs text-destructive">{error}</p>}
       </div>
+      {message.own && <div className="col-start-2 row-start-2 mb-0.5 flex items-center self-end">
+        {message.pending ? <DeliveryIndicator state="sending" /> : message.failed ? <DeliveryIndicator state="failed" /> : <MessageReadStatus inline readers={message.readBy ?? []} bridgeStatus={message.bridgeStatus} />}
+      </div>}
       {hasReactions && <div
         data-reaction-pills
-        className={'relative z-10 flex max-w-full flex-wrap items-center gap-1 ' +
+        className={'relative z-10 col-start-1 flex max-w-full flex-wrap items-center gap-1 ' +
           (standaloneImage ? 'justify-center ' : message.own ? 'justify-end pr-1 ' : 'justify-start pl-1 ') +
-          (pillsOverlap ? '-mt-3 ' : 'mt-1 ')}
+          (standaloneImage ? '-mt-3.5' : emojiOnly ? 'mt-1' : '-mt-1.5')}
       >
         {(message.reactions ?? []).map(reaction => <TooltipHint key={reaction.key} content={reaction.senders.join(', ')}><button
 
@@ -388,17 +387,17 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', t
           aria-pressed={reaction.own}
           aria-label={`${reaction.key} reaction${reaction.count === 1 ? '' : 's'}${reaction.senders.length ? ` by ${reaction.senders.join(', ')}` : ''}`}
           onClick={() => react(reaction.key)}
-          className={'inline-flex h-6 shrink-0 select-none items-center justify-center rounded-full border text-center text-[11px] shadow-sm backdrop-blur transition active:scale-95 ' +
-            (reaction.count > 1 ? 'min-w-6 gap-1 px-1.5 ' : 'w-6 p-0 ') +
+          className={'inline-flex h-7 shrink-0 select-none items-center justify-center rounded-full border text-center text-[11px] shadow-sm backdrop-blur transition active:scale-95 ' +
+            (reaction.count > 1 ? 'min-w-7 gap-1 px-1.5 ' : 'w-7 p-0 ') +
             (reaction.own
               ? 'border-primary/40 bg-primary/15 hover:bg-primary/25'
               : 'border-border/70 bg-background/95 hover:bg-muted')}
         >
           {/* Centre the glyph's rendered pixels; line-box and advance-width centring is always a bit off for colour emoji. */}
-          <span className="grid size-4 shrink-0 place-items-center overflow-visible">
+          <span className="flex size-4 shrink-0 items-center justify-center overflow-visible">
             <CenteredEmoji
               emoji={reaction.key}
-              className="text-[13px]"
+              className="text-[15px]"
               fontFamily='"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'
             />
           </span>
@@ -408,6 +407,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', t
           />}
         </button></TooltipHint>)}
       </div>}
+      {error && <p role="alert" className="col-start-1 mt-1 text-xs text-destructive">{error}</p>}
       {position && <ReactionBar
         position={position} barRef={barRef} disabled={unavailable || !store.react}
         onPick={react} onSearch={() => { setPosition(null); setPickerOpen(true) }}

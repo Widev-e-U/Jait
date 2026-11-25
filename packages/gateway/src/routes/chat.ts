@@ -3507,6 +3507,19 @@ export function registerChatRoutes(
     }
   }
 
+  function publishChatActivity(sessionId: string, userId: string) {
+    const session = sessionService?.getById(sessionId, userId);
+    if (session) {
+      ws?.broadcastToUser(userId, {
+        type: "chat.updated",
+        sessionId: "",
+        timestamp: session.lastActiveAt,
+        payload: { session },
+      });
+    }
+    return session;
+  }
+
   function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string, persona?: PersonaChatSnapshot, clientMessageId?: string, authorUserId?: string): void {
     if (!db) return;
     try {
@@ -4281,6 +4294,8 @@ export function registerChatRoutes(
       if (sessionRecord?.projectId) {
         projectService?.touch(sessionRecord.projectId);
       }
+      // Update the sidebar as soon as the prompt is recorded.
+      if (ws && !systemNotification) publishChatActivity(sessionId, authUser.id);
     } catch { /* session may not exist */ }
 
     const streamAbort = new AbortController();
@@ -5887,15 +5902,7 @@ export function registerChatRoutes(
     } catch (error) {
       app.log.error({ error, sessionId }, "Failed to touch session on turn end");
     }
-    const completedSession = sessionService?.getById(sessionId, authUser.id);
-    if (completedSession) {
-      ws?.broadcastToUser(authUser.id, {
-        type: "chat.updated",
-        sessionId: "",
-        timestamp: completedSession.lastActiveAt,
-        payload: { session: completedSession },
-      });
-    }
+    const completedSession = publishChatActivity(sessionId, authUser.id);
 
     // Preserve completed tool-call/result pairs for the next request. If a
     // cancellation genuinely interrupted a call, synthesize only its missing

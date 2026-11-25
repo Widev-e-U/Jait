@@ -11,6 +11,10 @@ import { MessengerStatusView } from './messenger-status-view'
 import { MessengerOptions } from './messenger-options'
 import { dayDividerLabel, needsDayDivider } from '@/lib/messenger/dates'
 import { messageGroupPositions } from '@/lib/messenger/grouping'
+import { channelThreads } from '@/lib/messenger/channel-threads'
+import type { UserMessageSegment } from '@/lib/user-message-segments'
+import { collectAttachments } from '@/components/chat/attachment-list'
+import type { ChatAttachment } from '@/hooks/useChat'
 import { imageMessageGroups } from '@/lib/messenger/image-groups'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -63,15 +67,20 @@ function StagedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
 type MessengerComposerHandle = { reset: () => void; setDraft: (value: string) => void; focus: () => void }
 
 /** Keep keystrokes local to the editor instead of rerendering the timeline. */
-const MessengerComposer = forwardRef<MessengerComposerHandle, Omit<ComponentProps<typeof PromptInput>, 'value' | 'onChange'> & { initialDraft: string; onDraftChange: (value: string) => void }>(function MessengerComposer({ initialDraft, onDraftChange, ...props }, ref) {
+const MessengerComposer = forwardRef<MessengerComposerHandle, Omit<ComponentProps<typeof PromptInput>, 'value' | 'onChange'> & { initialDraft: string; initialSegments?: UserMessageSegment[]; onDraftChange: (value: string, segments: UserMessageSegment[]) => void }>(function MessengerComposer({ initialDraft, initialSegments, onDraftChange, ...props }, ref) {
   const [value, setValue] = useState(initialDraft)
+  const [segments, setSegments] = useState(initialSegments)
   const input = useRef<PromptInputHandle>(null)
   useImperativeHandle(ref, () => ({
-    reset: () => { input.current?.reset(); setValue('') },
-    setDraft: setValue,
+    reset: () => { input.current?.reset(); setSegments(undefined); setValue('') },
+    setDraft: next => { setSegments(undefined); setValue(next) },
     focus: () => input.current?.focus(),
   }), [])
-  return <PromptInput {...props} ref={input} value={value} onChange={next => { setValue(next); onDraftChange(next) }} />
+  return <PromptInput {...props} ref={input} value={value} segments={segments} onChange={next => {
+    setSegments(undefined)
+    setValue(next)
+    onDraftChange(next, input.current?.getSegments() ?? [])
+  }} />
 })
 
 /** Provider name for a chat row; a tenant-based provider names its tenant, e.g. "Teams (EVN Tenant)". */
@@ -137,7 +146,7 @@ export default function MessengerPage(props: { token?: string | null; sttProvide
 
 function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token?: string | null; sttProvider?: SttProvider }) {
   const { store, snapshot } = useMessenger()
-  const { excluded, setExcluded } = useMessengerBadge()
+  const { count: unreadCount, excluded, setExcluded } = useMessengerBadge()
   const confirm = useConfirmDialog()
   const historyBusy = useRef(false)
   const initialHistoryPrepared = useRef(false)
@@ -182,7 +191,13 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const service = serviceValue || 'All'
   const [filterValue, setFilterValue] = useUrlSearchState('messenger', 'filter')
   const chatFilter: ChatFilter = (['unread', 'direct', 'groups', 'hidden'] as const).find(item => item === filterValue) ?? 'all'
-  const setChatFilter = (filter: ChatFilter) => setFilterValue(filter === 'all' ? '' : filter)
+  const setChatFilter = (filter: ChatFilter) => {
+    if (filter === 'unread') {
+      setSearch('')
+      setService('')
+    }
+    setFilterValue(filter === 'all' ? '' : filter)
+  }
   const hiddenOpen = chatFilter === 'hidden'
   const drafts = useRef<Record<string, string>>({})
   const [replies, setReplies] = useState<Record<string, NonNullable<MessengerMessage['replyTo']>>>({})
@@ -194,6 +209,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     if (snapshot.error) toast.error(snapshot.error, { id: 'messenger-connection-error' })
     else toast.dismiss('messenger-connection-error')
   }, [snapshot.error])
+  const draftSegments = useRef<Record<string, UserMessageSegment[]>>({})
   const composerRef = useRef<MessengerComposerHandle>(null)
   const mobile = useIsMobile()
   const roomId = snapshot.selectedRoomId
@@ -223,15 +239,18 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const connected = !!snapshot.session
   const matchesSearch = (message: MessengerMessage) => !search || (!message.unableToDecrypt && message.body.toLowerCase().includes(search.toLowerCase()))
   const messages = snapshot.messages.filter(matchesSearch)
+  const threads = room?.kind === 'channel' && !search
+    ? channelThreads(messages, room.service.toLowerCase() === 'teams') : null
+  const timeline = threads?.roots ?? messages
   // Consecutive messages from the same sender render as one run: one avatar, tighter spacing.
-  const groupPositions = messageGroupPositions(messages)
-  const imageGroups = imageMessageGroups(snapshot.messages, matchesSearch)
+  const groupPositions = messageGroupPositions(timeline)
+  const imageGroups = threads ? imageMessageGroups(timeline) : imageMessageGroups(snapshot.messages, matchesSearch)
   // Message hits are independent of the conversation-name filter: only the service filter narrows them.
   const searchResults = store.searchLoadedMessages(search).filter(item => excluded.includes(item.roomId) === hiddenOpen && (service === 'All' || snapshot.rooms.some(room => room.id === item.roomId && room.service === service)))
-  const isUnread = (room: MessengerRoom) => room.unread > 0 || !!room.markedUnread
+  const isUnread = (room: MessengerRoom) => room.kind !== 'team' && (room.unread > 0 || !!room.markedUnread)
   const matchesChatFilter = (room: MessengerRoom) => chatFilter === 'all' || chatFilter === 'hidden' || (chatFilter === 'unread' ? isUnread(room) : chatFilter === 'direct' ? !!room.peer : (room.kind ?? 'chat') === 'chat' && !room.peer)
-  const unreadCount = snapshot.rooms.filter(room => excluded.includes(room.id) === hiddenOpen && (service === 'All' || room.service === service) && isUnread(room)).length
-  const rooms = snapshot.rooms.filter(room => excluded.includes(room.id) === hiddenOpen && (service === 'All' || room.service === service) && matchesChatFilter(room) && (room.name + ' ' + room.network + ' ' + (room.team ?? '')).toLowerCase().includes(search.toLowerCase()))
+  const visibleRooms = snapshot.rooms.filter(room => excluded.includes(room.id) === hiddenOpen && (service === 'All' || room.service === service) && (room.name + ' ' + room.network + ' ' + (room.team ?? '')).toLowerCase().includes(search.toLowerCase()))
+  const rooms = visibleRooms.filter(matchesChatFilter)
   // Teams (Matrix spaces or bridge workspaces) group their channels instead of listing them flat.
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(() => new Set())
   const toggleTeam = (name: string) => setCollapsedTeams(current => {
@@ -241,13 +260,18 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     return next
   })
   const teams = new Map<string, { hub: MessengerRoom | null; channels: MessengerRoom[] }>()
-  for (const room of rooms) if (room.kind === 'team') teams.set(room.name, { hub: room, channels: [] })
+  for (const room of chatFilter === 'unread' ? visibleRooms : rooms) if (room.kind === 'team') teams.set(room.name, { hub: room, channels: [] })
   for (const room of rooms) {
     if (room.kind !== 'channel') continue
     const name = room.team ?? room.network ?? 'Channels'
     const entry = teams.get(name) ?? { hub: null, channels: [] }
     entry.channels.push(room)
     teams.set(name, entry)
+  }
+  if (chatFilter === 'unread') {
+    for (const [name, entry] of teams) {
+      if (entry.channels.length === 0) teams.delete(name)
+    }
   }
   const chatRooms = rooms.filter(room => room.kind !== 'channel' && room.kind !== 'team')
   const roomRow = (item: MessengerRoom, channel = false) => (
@@ -321,7 +345,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   }, [store, roomId, room?.id, snapshot.messages.at(-1)?.id, ready, statusRoom])
 
   useEffect(() => {
-    if (!snapshot.session) { drafts.current = {}; setReplies({}) }
+    if (!snapshot.session) { drafts.current = {}; draftSegments.current = {}; setReplies({}) }
   }, [snapshot.session])
   const act = async (action: () => Promise<unknown>, errorText?: string) => {
     setBusy(true)
@@ -341,6 +365,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     if (id && !hadRoom) window.history.pushState(window.history.state, '', target)
     else window.history.replaceState(window.history.state, '', target)
   }
+  const replyToMessage = (target: MessengerMessage) => {
+    if (!roomId) return
+    setReplies(current => ({ ...current, [roomId]: { id: target.id, sender: target.sender, body: target.body.slice(0, 300) } }))
+    composerRef.current?.focus()
+    requestAnimationFrame(() => composerRef.current?.focus())
+  }
   const stageFiles = (target: string, files: File[]) => setStaged(current => ({ ...current, [target]: [...(current[target] ?? []), ...files] }))
   const unstageFile = (target: string, file: File) => setStaged(current => {
     const rest = (current[target] ?? []).filter(item => item !== file)
@@ -348,8 +378,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     const { [target]: _empty, ...others } = current
     return others
   })
-  const sendStaged = (target: string) => {
-    const files = staged[target] ?? []
+  const sendStaged = (target: string, inline = collectAttachments(undefined, draftSegments.current[target])) => {
+    const pasted = inline.map(({ data, name, mimeType }) => {
+      const bytes = Uint8Array.from(atob(data.replace(/^data:[^,]*,/, '')), byte => byte.charCodeAt(0))
+      return new File([bytes], name, { type: mimeType })
+    })
+    const files = [...pasted, ...(staged[target] ?? [])]
     if (!files.length) return
     const text = (drafts.current[target] ?? '').trim()
     const once = viewOnce
@@ -366,9 +400,9 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
       } catch (error) { toast.error(messengerError(error)) }
     })()
   }
-  const send = () => {
+  const send = (_chips?: unknown, inline: ChatAttachment[] = []) => {
     if (!roomId || busy || !ready) return
-    if (staged[roomId]?.length) { sendStaged(roomId); return }
+    if (inline.length || staged[roomId]?.length) { sendStaged(roomId, inline); return }
     const target = roomId
     const text = drafts.current[target] ?? ''
     if (!text.trim()) return
@@ -458,9 +492,9 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
             </div>}
             {[...teams.entries()].map(([name, entry]) => {
               const unread = entry.channels.reduce((sum, item) => sum + (item.unread || 0) + (item.markedUnread ? 1 : 0), 0)
-              const collapsed = collapsedTeams.has(name)
+              const collapsed = chatFilter !== 'unread' && collapsedTeams.has(name)
               return <div key={'team:' + name} data-team-section={name} className="border-b border-border/50">
-                <button type="button" onClick={() => toggleTeam(name)} aria-expanded={!collapsed} aria-label={'Team ' + name} className="flex w-full min-w-0 items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50">
+                <button type="button" onClick={() => toggleTeam(name)} disabled={chatFilter === 'unread'} aria-expanded={!collapsed} aria-label={'Team ' + name} className="flex w-full min-w-0 items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50">
                   <MessengerPeerAvatar
                     name={name}
                     size="md"
@@ -488,38 +522,46 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                 key={room.id}
                 variant="messenger"
                 mobile={mobile}
-                messageContents={imageGroups.map(group => group.messages.map(message => message.body).join(' '))}
-                messageEstimateInputs={imageGroups.map(group => ({ content: group.messages.map(message => message.body).join(' '), role: group.messages[0]!.own ? 'user' : 'assistant' }))}
+                messageContents={imageGroups.map(group => group.messages.flatMap(message => [message.body, ...(threads?.replies.get(message.id) ?? []).map(reply => reply.body)]).join(' '))}
+                messageEstimateInputs={imageGroups.map(group => ({ content: group.messages.flatMap(message => [message.body, ...(threads?.replies.get(message.id) ?? []).map(reply => reply.body)]).join(' '), role: group.messages[0]!.own ? 'user' : 'assistant' }))}
                 hasMore={ready && historyFailedRoom !== room.id && !!snapshot.hasEarlier}
                 onLoadMore={() => void loadEarlier()}
               >
                 {imageGroups.map(({ messages: group, startIndex: index }) => {
                   const message = group[0]!
                   const album = group.length > 1
+                  const hasReplies = group.some(item => threads?.replies.has(item.id))
                   return <div key={message.id} className={groupPositions[index + group.length - 1]?.end === false ? 'pb-1.5' : 'pb-3'}>
-                    {needsDayDivider(messages[index - 1]?.timestamp, message.timestamp) && <p data-day-divider className="mx-auto my-2 w-fit rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">{dayDividerLabel(message.timestamp)}</p>}
-                    <div className={album ? 'flex gap-1.5 ' + (message.own && room.kind !== 'channel' ? 'justify-end' : 'justify-start') : ''}>
-                      {album && !message.own && room.kind !== 'channel' && <div className="w-9 shrink-0 pt-0.5"><MessengerPeerAvatar {...messageAvatarProps(room, message)} /></div>}
-                      <div data-image-group={album ? 'true' : undefined} className={album ? 'w-[min(92%,420px)] min-w-0' : ''}>
-                        {album && (!message.own || room.kind === 'channel') && <p className="mb-0.5 truncate text-[11px] font-semibold leading-4 text-primary">{message.sender}</p>}
-                        <div className={album ? 'grid grid-cols-2 gap-1' : ''}>
-                          {group.map((item, offset) => <MessengerBubble
-                            key={item.id} messageId={item.id} message={item} roomId={room.id} disabled={!ready || busy}
-                            imageTile={album}
-                            {...(album ? { onOpenImage: () => setAlbumView({ groupId: message.id, index: offset }) } : {})}
-                            variant={room.kind === 'channel' ? 'channel' : 'chat'}
-                            teams={room.service.toLowerCase() === 'teams'}
-                            groupStart={groupPositions[index + offset]?.start ?? true}
-                            groupEnd={groupPositions[index + offset]?.end ?? true}
-                            onReply={target => {
-                              setReplies(current => ({ ...current, [room.id]: { id: target.id, sender: target.sender, body: target.body.slice(0, 300) } }))
-                              composerRef.current?.focus()
-                              requestAnimationFrame(() => composerRef.current?.focus())
-                            }}
-                            avatar={messageAvatarProps(room, item)}
-                          />)}
+                    {needsDayDivider(timeline[index - 1]?.timestamp, message.timestamp) && <p data-day-divider className="mx-auto my-2 w-fit rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">{dayDividerLabel(message.timestamp)}</p>}
+                    <div className={hasReplies ? 'rounded-lg border bg-card p-2' : undefined}>
+                      <div className={album ? 'flex gap-1.5 ' + (message.own && room.kind !== 'channel' ? 'justify-end' : 'justify-start') : ''}>
+                        {album && !message.own && room.kind !== 'channel' && <div className="w-9 shrink-0 pt-0.5"><MessengerPeerAvatar {...messageAvatarProps(room, message)} /></div>}
+                        <div data-image-group={album ? 'true' : undefined} className={album ? 'w-[min(92%,420px)] min-w-0' : ''}>
+                          {album && (!message.own || room.kind === 'channel') && <p className="mb-0.5 truncate text-[11px] font-semibold leading-4 text-primary">{message.sender}</p>}
+                          <div className={album ? 'grid grid-cols-2 gap-1' : ''}>
+                            {group.map((item, offset) => <MessengerBubble
+                              key={item.id} messageId={item.id} message={item} roomId={room.id} disabled={!ready || busy}
+                              imageTile={album}
+                              {...(album ? { onOpenImage: () => setAlbumView({ groupId: message.id, index: offset }) } : {})}
+                              variant={room.kind === 'channel' ? 'channel' : 'chat'}
+                              groupStart={groupPositions[index + offset]?.start ?? true}
+                              groupEnd={groupPositions[index + offset]?.end ?? true}
+                              onReply={replyToMessage}
+                              avatar={messageAvatarProps(room, item)}
+                            />)}
+                          </div>
                         </div>
                       </div>
+                      {group.map(item => {
+                        const replies = threads?.replies.get(item.id)
+                        if (!replies?.length) return null
+                        return <section key={item.id} aria-label="Thread replies" className="mt-2 space-y-2 border-t pt-2 pl-3 sm:pl-8">
+                          {replies.map(reply => <MessengerBubble key={reply.id} messageId={reply.id}
+                            message={reply.replyTo?.id === item.id ? { ...reply, replyTo: undefined } : reply}
+                            roomId={room.id} disabled={!ready || busy} variant="channel"
+                            onReply={replyToMessage} avatar={messageAvatarProps(room, reply)} />)}
+                        </section>
+                      })}
                     </div>
                   </div>
                 })}
@@ -567,7 +609,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                     ref={composerRef}
                     variant="messenger"
                     initialDraft={drafts.current[room.id] ?? ''}
-                    onDraftChange={value => { drafts.current[room.id] = value }}
+                    initialSegments={draftSegments.current[room.id]}
+                    onDraftChange={(value, segments) => {
+                      drafts.current[room.id] = value
+                      draftSegments.current[room.id] = segments
+                    }}
+                    maxPastedImageBytes={MAX_ATTACHMENT_BYTES}
                     onSubmit={send}
                     clearOnSubmit={false}
                     disabled={!ready || busy}

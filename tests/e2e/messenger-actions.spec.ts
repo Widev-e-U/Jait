@@ -53,6 +53,12 @@ for (const width of [1280, 390, 320]) {
     const own = page.locator('[data-message-id="$two"] [data-messenger-bubble]')
     await expect(incoming).toBeVisible()
     await expect(own).toBeVisible()
+    const sender = (await incoming.locator('..').getByText('Bob', { exact: true }).boundingBox())!
+    const bubble = (await incoming.boundingBox())!
+    expect(sender.y + sender.height).toBeLessThanOrEqual(bubble.y)
+    const body = (await incoming.getByText('Incoming message', { exact: true }).boundingBox())!
+    const reaction = (await incoming.locator('..').locator('[data-reaction-pills] button').boundingBox())!
+    expect(reaction.y).toBeGreaterThan(body.y + body.height)
     expect(await incoming.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
     await expect(page.getByRole('img', { name: 'photo.png' })).toBeVisible()
     await expect(page.getByRole('button', { name: /forward/i })).toHaveCount(0)
@@ -64,7 +70,14 @@ for (const width of [1280, 390, 320]) {
 test('Outgoing message status uses compact checks and retains read details', async ({ page }) => {
   await mount(page)
   const own = page.locator('[data-message-id="$two"]')
-  await expect(own.getByRole('img', { name: 'Sent', exact: true })).toBeVisible()
+  const status = own.getByRole('img', { name: 'Sent', exact: true })
+  await expect(status).toBeVisible()
+  const bubble = (await own.locator('[data-messenger-bubble]').boundingBox())!
+  const timestamp = (await own.locator('time').boundingBox())!
+  const indicator = (await status.boundingBox())!
+  expect(timestamp.y + timestamp.height).toBeLessThanOrEqual(bubble.y)
+  expect(indicator.x).toBeGreaterThanOrEqual(bubble.x + bubble.width)
+  expect(indicator.y + indicator.height).toBeLessThanOrEqual(bubble.y + bubble.height)
   await expect(own).not.toContainText('Sent')
   await mount(page, false, 1, '❤️', true)
   const receipt = own.getByRole('button', { name: 'Read; show receipts' })
@@ -91,7 +104,9 @@ test('React, remove reaction, and edit own message', async ({ page }) => {
   await own.getByRole('textbox', { name: 'Edit message' }).fill('Updated message')
   await own.getByRole('button', { name: 'Save' }).click()
   await expect(own).toContainText('Updated message')
-  await expect(own).toContainText('Edited')
+  const edited = (await own.getByText('Edited', { exact: true }).boundingBox())!
+  const bubble = (await own.locator('[data-messenger-bubble]').boundingBox())!
+  expect(edited.y + edited.height).toBeLessThanOrEqual(bubble.y)
   expect(calls.filter(c => c.action === 'react')).toHaveLength(2)
   expect(calls).toContainEqual({ action: 'edit', roomId: '!room:test', eventId: '$two', text: 'Updated message' })
 })

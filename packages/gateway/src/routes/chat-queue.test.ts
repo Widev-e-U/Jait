@@ -7,6 +7,7 @@ import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
 import { AuditWriter } from "../services/audit.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { WsControlPlane } from "../ws.js";
 import {
   createServer as createHttpServer,
   type IncomingMessage,
@@ -106,6 +107,42 @@ describe("server-side queued chat processing", () => {
 
   afterAll(async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
+  });
+
+  it("publishes chat recency when the prompt is accepted while the reply is still pending", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl, jwtSecret: "test-jwt-secret" };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("chat-recency-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Older chat" });
+    const oldActivity = "2026-01-01T00:00:00.000Z";
+    sqlite.prepare("UPDATE sessions SET last_active_at = ? WHERE id = ?").run(oldActivity, session.id);
+    recordSelection(sessionState, session.id);
+    const ws = new WsControlPlane(config, db);
+    const broadcast = vi.spyOn(ws, "broadcastToUser");
+    app = await createServer(config, { db, sqlite, sessionService, sessionState, userService, ws });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const started = new Promise<void>(resolve => { slowOllamaStarted = resolve; });
+    const active = app.inject({ method: "POST", url: "/api/chat", headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "slow first" } });
+    await started;
+    try {
+      const current = sessionService.getById(session.id, user.id)!;
+      expect(Date.parse(current.lastActiveAt)).toBeGreaterThan(Date.parse(oldActivity));
+      expect(broadcast).toHaveBeenCalledWith(user.id, {
+        type: "chat.updated",
+        sessionId: "",
+        timestamp: current.lastActiveAt,
+        payload: { session: expect.objectContaining({ id: session.id, lastActiveAt: current.lastActiveAt, viewedAt: current.lastActiveAt }) },
+      });
+    } finally {
+      releaseSlowOllama?.();
+      await active;
+    }
   });
 
   it("returns browser control for accepted user messages", async () => {

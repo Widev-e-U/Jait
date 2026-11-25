@@ -26,13 +26,14 @@ async function mount(page: Page, roomId = '!general:test', service = 'Slack', ea
       '!general:test': [
         { ...base, id: '$g1', sender: 'Carol', body: 'Deploy done', own: false, timestamp: Date.now() - 3_600_000 },
         { ...base, id: '$g2', sender: 'Alice', body: 'Nice work @channel', own: true, timestamp: Date.now() - 1_800_000 },
-        ...additionalMessages,
+        ...(roomId === '!general:test' ? additionalMessages : []),
       ],
       '!random:test': [
         { ...base, id: '$r1', sender: 'Dan', body: 'Meme of the day', own: false, timestamp: Date.now() - 600_000 },
       ],
       '!bob:test': [
         { ...base, id: '$b1', sender: 'Bob', body: 'Plain chat message', own: false, timestamp: Date.now() - 60_000 },
+        ...(roomId === '!bob:test' ? additionalMessages : []),
       ],
     },
   }
@@ -44,6 +45,7 @@ async function mount(page: Page, roomId = '!general:test', service = 'Slack', ea
       if (command.action === 'earlier' && earlier) await earlier
       return route.fulfill({ json: { ok: true } })
     }
+    if (url.pathname.endsWith('/search')) return route.fulfill({ json: { results: [] } })
     if (url.pathname.endsWith('/media')) return route.fulfill({ json: { data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZksAAAAASUVORK5CYII=' } })
     return route.fulfill({ json: { snapshot: { ...snapshot, messages: snapshot.messagesByRoom[roomId as '!general:test'] ?? [], selectedRoomId: roomId } } })
   })
@@ -107,30 +109,40 @@ test('Teams can be filtered separately from WhatsApp', async ({ page }) => {
 })
 
 
-test('Teams messages show bridge confirmations separately from reader receipts', async ({ page }) => {
-  const timestamp = Date.now()
-  const ownMessage = { ...base, sender: 'Alice', own: true, timestamp }
-  await mount(page, '!general:test', 'Teams', undefined, [
-    { ...ownMessage, id: '$sent', body: 'Confirmed by bridge', bridgeStatus: 'sent' },
-    { ...ownMessage, id: '$delivered', body: 'Delivered to recipient', bridgeStatus: 'delivered' },
-    { ...ownMessage, id: '$read', body: 'Opened by recipient', readBy: [{ userId: '@carol:test', name: 'Carol', timestamp, exact: true }] },
-  ])
+for (const [service, roomId] of [['Teams', '!general:test'], ['WhatsApp', '!bob:test']]) {
+  test(`${service} messages use icon-only delivery status and open read receipts`, async ({ page }) => {
+    const timestamp = Date.now()
+    const ownMessage = { ...base, sender: 'Alice', own: true, timestamp }
+    await mount(page, roomId, service, undefined, [
+      { ...ownMessage, id: '$unconfirmed', body: 'Awaiting bridge confirmation' },
+      { ...ownMessage, id: '$sent', body: 'Confirmed by bridge', bridgeStatus: 'sent' },
+      { ...ownMessage, id: '$delivered', body: 'Delivered to recipient', bridgeStatus: 'delivered' },
+      { ...ownMessage, id: '$read', body: 'Opened by recipient', readBy: [{ userId: '@carol:test', name: 'Carol', timestamp, exact: true }] },
+    ])
 
-  const messages = page.locator('[data-messenger-bubble]')
-  const matrixOnly = messages.filter({ hasText: 'Nice work @channel' })
-  await expect(matrixOnly.getByText('Sent to Matrix', { exact: true })).toBeVisible()
-  const sent = messages.filter({ hasText: 'Confirmed by bridge' })
-  await expect(sent.getByText('Sent to Teams', { exact: true })).toBeVisible()
-  await expect(sent.getByRole('button', { name: 'Read; show receipts' })).toHaveCount(0)
-  const delivered = messages.filter({ hasText: 'Delivered to recipient' })
-  await expect(delivered.getByText('Delivered in Teams', { exact: true })).toBeVisible()
-  await expect(delivered.getByRole('button', { name: 'Read; show receipts' })).toHaveCount(0)
-  const read = messages.filter({ hasText: 'Opened by recipient' }).getByRole('button', { name: 'Read; show receipts' })
-  await expect(read).toHaveText('Read')
-  await read.click()
-  await expect(page.getByText('Read receipts', { exact: true })).toBeVisible()
-  await expect(page.getByRole('dialog').getByText('Carol', { exact: true })).toBeVisible()
-})
+    const messages = page.locator('[data-messenger-bubble]')
+    for (const body of ['Awaiting bridge confirmation', 'Confirmed by bridge']) {
+      const sent = messages.filter({ hasText: body }).getByRole('img', { name: 'Sent', exact: true })
+      await expect(sent).toHaveAttribute('data-send-state', 'sent')
+      await expect(sent).toHaveClass(/text-gray-400/)
+      await expect(sent.locator('svg.lucide-check')).toBeVisible()
+      await expect(sent).toHaveText('')
+    }
+    const delivered = messages.filter({ hasText: 'Delivered to recipient' }).getByRole('img', { name: 'Delivered', exact: true })
+    await expect(delivered).toHaveAttribute('data-send-state', 'received')
+    await expect(delivered).toHaveClass(/text-gray-400/)
+    await expect(delivered.locator('svg.lucide-check-check')).toBeVisible()
+    await expect(delivered).toHaveText('')
+    const read = messages.filter({ hasText: 'Opened by recipient' }).getByRole('button', { name: 'Read; show receipts' })
+    const readIndicator = read.locator('[data-send-state="read"]')
+    await expect(readIndicator).toHaveClass(/text-blue-500/)
+    await expect(readIndicator.locator('svg.lucide-check-check')).toBeVisible()
+    await expect(read).toHaveText('')
+    await read.click()
+    await expect(page.getByText('Read receipts', { exact: true })).toBeVisible()
+    await expect(page.getByRole('dialog').getByText('Carol', { exact: true })).toBeVisible()
+  })
+}
 
 test('loading earlier Teams messages keeps the conversation viewport stable', async ({ page }) => {
   let finishLoading!: () => void
@@ -150,4 +162,64 @@ test('loading earlier Teams messages keeps the conversation viewport stable', as
   await expect(page.getByRole('status').filter({ hasText: 'Loading earlier messages' })).toHaveCount(0)
   expect(await viewport.boundingBox()).toEqual(before)
   expect(await message.boundingBox()).toEqual(messageBefore)
+})
+
+test('Unread reveals counted conversations across services and collapsed teams', async ({ page }) => {
+  await mount(page, '!bob:test')
+  const team = page.getByRole('button', { name: 'Team Engineering' })
+  const channel = page.getByRole('group', { name: 'Conversation general' })
+  const filters = page.getByRole('group', { name: 'Filter conversations' })
+  await team.click()
+  await expect(channel).toHaveCount(0)
+  await filters.getByRole('button', { name: 'WhatsApp', exact: true }).click()
+  const search = page.getByRole('textbox', { name: 'Search conversations and messages' })
+  await search.fill('Bob')
+
+  const unread = filters.getByRole('button', { name: /^Unread/ })
+  await expect(unread).toHaveText('Unread 2')
+  await unread.click()
+  await expect(search).toHaveValue('')
+  await expect(channel).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Conversation random' })).toHaveCount(0)
+  await expect(page.getByRole('group', { name: 'Conversation Bob' })).toHaveCount(0)
+})
+
+test('Teams channel groups thread replies under their post and keeps replies with unloaded roots visible', async ({ page }) => {
+  const reply = { ...base, sender: 'Bob', own: false, timestamp: Date.now() }
+  await mount(page, '!general:test', 'Teams', undefined, [
+    { ...reply, id: '$thread', body: 'Native thread reply', threadRootId: '$g1' },
+    { ...reply, id: '$bridged', body: 'Bridged channel reply', replyTo: { id: '$thread', sender: 'Bob', body: 'Native thread reply' } },
+    { ...reply, id: '$unloaded', body: 'Reply with older root', threadRootId: '$older' },
+  ])
+  const thread = page.getByRole('region', { name: 'Thread replies' })
+  await expect(thread).toHaveCount(1)
+  await expect(thread.locator('..')).toContainText('Deploy done')
+  await expect(thread.locator('[data-message-id]')).toHaveCount(2)
+  await expect(thread.locator('[data-message-id="$bridged"]')).toContainText('Bridged channel reply')
+  await expect(page.locator('[data-message-id="$unloaded"]')).toBeVisible()
+})
+
+test('Messenger pastes an image inside the draft at the caret and sends it as an attachment', async ({ page }) => {
+  const calls = await mount(page)
+  const editor = page.locator('[data-messenger-composer] [contenteditable="true"]')
+  await editor.fill('Before after')
+  await editor.evaluate(el => {
+    const range = document.createRange()
+    range.setStart(el.firstChild!, 7)
+    range.collapse(true)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+    const clipboardData = new DataTransfer()
+    const png = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZksAAAAASUVORK5CYII=')
+    clipboardData.items.add(new File([Uint8Array.from(png, byte => byte.charCodeAt(0))], 'paste.png', { type: 'image/png' }))
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }))
+  })
+  const image = editor.locator('[data-segment-type="image"]')
+  await expect(image).toBeVisible()
+  expect(await image.evaluate(el => [el.previousSibling?.textContent, el.nextSibling?.textContent])).toEqual(['Before ', 'after'])
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(image).toHaveCount(0)
+  await expect.poll(() => calls.find(call => call.action === 'attachment')).toMatchObject({
+    name: 'paste.png', mime: 'image/png', caption: 'Before after',
+  })
 })

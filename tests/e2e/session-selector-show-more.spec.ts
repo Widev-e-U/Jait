@@ -51,6 +51,51 @@ test('a project newer than the arranged ones still appears on top', async ({ pag
   await expect.poll(() => projectIds(page)).toEqual(['project-new', 'project-3', 'project-1', 'project-2', 'project-4'])
 })
 
+test('project header actions collapse and expand projects with search-bar alignment', async ({ page }) => {
+  await openSidebar(page)
+  const sidebar = page.getByRole('complementary', { name: 'Projects and chats' })
+  const header = sidebar.locator('[data-dnd-key="zone:root"]')
+  const search = sidebar.getByRole('searchbox').locator('..')
+  const collapse = header.getByRole('button', { name: 'Collapse projects', exact: true })
+  const expand = header.getByRole('button', { name: 'Expand projects', exact: true })
+  const project = projectRow(page, 'project-1')
+  const chat = sidebar.locator('[data-dnd-key="session:Project chat-1"]')
+  const personalChat = sidebar.locator('[data-dnd-key="session:Personal chat-1"]')
+
+  await expect(chat).toBeVisible()
+  await collapse.click()
+  await expect(project).toBeVisible()
+  await expect(chat).toHaveCount(0)
+  await expect(personalChat).toBeVisible()
+  const projectToggle = project.getByRole('button', { name: 'Expand project', exact: true })
+  const projectBox = (await project.boundingBox())!
+  const toggleBox = (await projectToggle.boundingBox())!
+  const gripBox = (await project.locator('.lucide-grip-vertical').boundingBox())!
+  const rowCenter = projectBox.y + projectBox.height / 2
+  for (const box of [toggleBox, gripBox]) {
+    expect(Math.abs(box.y + box.height / 2 - rowCenter)).toBeLessThan(0.5)
+  }
+  expect(toggleBox.x - (gripBox.x + gripBox.width)).toBeLessThanOrEqual(5)
+  await projectToggle.click()
+  await expect(chat).toBeVisible()
+  await collapse.click()
+  await page.reload()
+  await loadSidebar(page)
+  await expect(project).toBeVisible()
+  await expect(chat).toHaveCount(0)
+  await expand.click()
+  await expect(chat).toBeVisible()
+
+  const headerBox = (await header.boundingBox())!
+  expect(headerBox.height).toBe((await search.boundingBox())!.height)
+  for (const button of await header.getByRole('button').all()) {
+    const box = (await button.boundingBox())!
+    expect(Math.abs(box.y + box.height / 2 - (headerBox.y + headerBox.height / 2))).toBeLessThanOrEqual(1)
+  }
+  await page.mouse.move(400, 100)
+  await sidebar.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/projects-header.png') })
+})
+
 for (const touch of [false, true]) {
   test(`reorders projects and chats with the ${touch ? 'touch' : 'desktop'} drag handler`, async ({ page }) => {
     await openSidebar(page, { touch })
@@ -92,3 +137,30 @@ for (const touch of [false, true]) {
     await expectManualOrder()
   })
 }
+
+test.describe('mobile status filters', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
+
+  test('center each icon and reveal unread chats in collapsed projects', async ({ page }) => {
+    await openSidebar(page, { touch: true })
+    await page.setViewportSize({ width: 390, height: 844 })
+    const project = projectRow(page, 'project-1')
+    const chat = page.locator('[data-dnd-key="session:Project chat-1"]')
+    await project.getByRole('button', { name: 'Collapse project', exact: true }).click()
+    await expect(chat).toHaveCount(0)
+
+    const filters = page.getByRole('group', { name: 'Filter chats by status' })
+    for (const button of await filters.getByRole('button').all()) {
+      const box = (await button.boundingBox())!
+      const icon = (await button.locator('svg').boundingBox())!
+      expect(box.width).toBeCloseTo(box.height)
+      expect(icon.x + icon.width / 2).toBeCloseTo(box.x + box.width / 2)
+      expect(icon.y + icon.height / 2).toBeCloseTo(box.y + box.height / 2)
+    }
+
+    await filters.getByRole('button', { name: 'Unread', exact: true }).click()
+    await expect(chat).toBeVisible()
+    await filters.getByRole('button', { name: 'All chats' }).click()
+    await expect(chat).toHaveCount(0)
+  })
+})

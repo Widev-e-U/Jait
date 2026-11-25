@@ -92,6 +92,7 @@ interface PromptInputProps {
   variant?: 'assistant' | 'messenger'
   /** Optional direct file transport, e.g. encrypted Matrix uploads (never the AI attachment path). */
   onFilesSelected?: (files: File[]) => void
+  maxPastedImageBytes?: number
 
   value: string
   onChange: (value: string) => void
@@ -1041,6 +1042,7 @@ function ComposerSendSplitButton({
 export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(function PromptInput({
   variant = 'assistant',
   onFilesSelected,
+  maxPastedImageBytes,
   value,
   onChange,
   onSubmit,
@@ -2122,9 +2124,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     })
   }, [])
 
-  const addFilesAsAttachments = useCallback(async (files: FileList | File[]) => {
+  const addFilesAsAttachments = useCallback(async (files: FileList | File[], inline = false) => {
     if (composerDisabled) return
-    if (onFilesSelected) {
+    if (onFilesSelected && !inline) {
       onFilesSelected(Array.from(files))
       return
     }
@@ -2225,7 +2227,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
     if (imageFiles.length > 0) {
       e.preventDefault()
-      void addFilesAsAttachments(imageFiles)
+      if (maxPastedImageBytes !== undefined && imageFiles.some(file => file.size > maxPastedImageBytes)) {
+        setAttachmentError(`Attachment exceeds ${maxPastedImageBytes / (1024 * 1024)} MB.`)
+        return
+      }
+      void addFilesAsAttachments(imageFiles, true)
       return
     }
     if (!el) return
@@ -2273,7 +2279,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     scrollCaretIntoView(el)
 
     resolveChatId(text, pastedNode)
-  }, [variant, addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments, resolveChatId])
+  }, [variant, addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments, resolveChatId, maxPastedImageBytes])
 
   // Drag-and-drop handlers
   const onDragEnter = useCallback((e: React.DragEvent) => {

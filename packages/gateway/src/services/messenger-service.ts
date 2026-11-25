@@ -701,7 +701,7 @@ class Connection {
         (e) =>
           e.event_id &&
           ['m.room.message', 'm.room.encrypted'].includes(e.type) &&
-          !e.content?.['m.relates_to']?.rel_type &&
+          (!e.content?.['m.relates_to']?.rel_type || e.content['m.relates_to'].rel_type === 'm.thread') &&
           !e.unsigned?.redacted_because,
       )
       .map((e) => {
@@ -716,7 +716,11 @@ class Connection {
         const member = room?.states.find(
           (s) => s.type === 'm.room.member' && s.state_key === e.sender,
         );
-        const replyId = e.content?.['m.relates_to']?.['m.in_reply_to']?.event_id;
+        const relation = e.content?.['m.relates_to'];
+        const threadRootId = relation?.rel_type === 'm.thread' && typeof relation.event_id === 'string'
+          ? relation.event_id : undefined;
+        const replyId = relation?.is_falling_back === true && threadRootId
+          ? undefined : relation?.['m.in_reply_to']?.event_id;
         const replied = typeof replyId === 'string' ? originals.get(replyId) : undefined;
         const repliedEdit = replied?.event_id ? edits.get(replied.event_id) : undefined;
         const replyBody = repliedEdit?.content?.['m.new_content']?.body ?? replied?.content?.body;
@@ -734,6 +738,7 @@ class Connection {
                 }));
         return {
           id: e.event_id!,
+          ...(threadRootId ? { threadRootId } : {}),
           ...(replied && typeof replyId === 'string' ? { replyTo: {
             id: replyId,
             sender: readerName(replied.sender ?? 'Unknown'),

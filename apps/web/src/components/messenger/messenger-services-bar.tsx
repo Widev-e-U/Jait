@@ -78,7 +78,7 @@ function OwnPresenceControl({ service }: { service: string }) {
   }, [state, keep])
   return <div className="space-y-2 border-t pt-3">
     <div className="flex items-center justify-between gap-3">
-      <span className="text-sm font-medium">My status</span>
+      <span className="text-sm font-medium">My Matrix status</span>
       <Select disabled={busy} value={state} onValueChange={value => void save(value as OwnState, keep)}>
         <SelectTrigger aria-label="My status" className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent align="end">
@@ -92,7 +92,11 @@ function OwnPresenceControl({ service }: { service: string }) {
       Keep this status
       <Switch disabled={busy} checked={keep} onCheckedChange={value => void save(state, value)} aria-label="Keep this status" />
     </label>
-    <p className="text-2xs text-muted-foreground">Applies to your Matrix account and is re-sent every minute while kept. {service} may not mirror it; check {service} to confirm your status.</p>
+    <p className="text-2xs text-muted-foreground">
+      {service === 'Teams'
+        ? 'Jait refreshes your Matrix status every minute while kept. Set your Teams availability in Microsoft Teams.'
+        : `Jait refreshes your Matrix status every minute while kept. ${service} may not mirror it.`}
+    </p>
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
   </div>
 }
