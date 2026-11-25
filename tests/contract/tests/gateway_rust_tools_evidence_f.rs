@@ -119,6 +119,7 @@ mod agent_acp_runner {
             tool_calls: vec![json!({ "tool": "read_file" })],
             duration_ms: 1234,
             performative: None,
+            turn_completed: None,
         };
         let bare = serde_json::to_value(&data).expect("serialize");
         let object = bare.as_object().expect("object");
@@ -141,10 +142,12 @@ mod agent_acp_runner {
 
         let with_performative = AcpSpecialistData {
             performative: Some("inform".into()),
+            turn_completed: Some(true),
             ..data
         };
         let tagged = serde_json::to_value(&with_performative).expect("serialize");
         assert_eq!(tagged["performative"], json!("inform"));
+        assert_eq!(tagged["turnCompleted"], json!(true));
     }
 
     #[test]
@@ -170,6 +173,7 @@ mod agent_acp_runner {
                 tool_calls: vec![],
                 duration_ms: 5,
                 performative: None,
+                turn_completed: None,
             }),
         };
         let value = serde_json::to_value(&succeeded).expect("serialize");

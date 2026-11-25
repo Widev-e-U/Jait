@@ -249,6 +249,10 @@ pub struct AcpSpecialistData {
     pub duration_ms: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub performative: Option<String>,
+    /// Set only when the agent finished its turn; timeouts, aborts and failures leave it
+    /// unset, so a caller can tell an answer from an unknown outcome.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_completed: Option<bool>,
 }
 
 /// Tool result shape returned to the caller.
@@ -718,6 +722,7 @@ pub async fn run_acp_specialist_turn(
                     tool_calls,
                     duration_ms,
                     performative: Some(parsed.performative.to_string()),
+                    turn_completed: Some(true),
                 }),
             }
         }
@@ -736,6 +741,7 @@ pub async fn run_acp_specialist_turn(
                     tool_calls,
                     duration_ms,
                     performative: None,
+                    turn_completed: None,
                 }),
             }
         }
@@ -763,6 +769,7 @@ pub async fn run_acp_specialist_turn(
                     tool_calls,
                     duration_ms,
                     performative: None,
+                    turn_completed: None,
                 }),
             }
         }
@@ -779,6 +786,7 @@ pub async fn run_acp_specialist_turn(
                     tool_calls,
                     duration_ms,
                     performative: None,
+                    turn_completed: None,
                 }),
             }
         }
@@ -971,6 +979,7 @@ mod tests {
             ]
         );
         assert_eq!(data.performative.as_deref(), Some("inform"));
+        assert_eq!(data.turn_completed, Some(true));
         assert_eq!(data.provider, "claude-code");
         assert_eq!(data.sub_agent_id, "thread-9");
         assert_eq!(lock(&provider.calls).stops, 1);
@@ -1207,6 +1216,7 @@ mod tests {
         let data = result.data.expect("data");
         assert_eq!(data.content, "half");
         assert_eq!(data.duration_ms, 0);
+        assert_eq!(data.turn_completed, None);
     }
 
     #[tokio::test]
@@ -1225,7 +1235,9 @@ mod tests {
 
         assert!(!result.ok);
         assert_eq!(result.message, "Cancelled before the specialist finished.");
-        assert_eq!(result.data.expect("data").content, "half");
+        let data = result.data.expect("data");
+        assert_eq!(data.content, "half");
+        assert_eq!(data.turn_completed, None);
         assert_eq!(lock(&provider.calls).stops, 1);
     }
 
