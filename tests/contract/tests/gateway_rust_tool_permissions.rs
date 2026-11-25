@@ -247,5 +247,8 @@ fn renamed_browser_tools_preserve_legacy_policy_and_canonical_override_for_both_
         json!({"op":"nativepermission.resolve","name":"browser.open","entries":[["preview.open",legacy]]}),
         json!({"op":"nativepermission.resolve","name":"preview.open","entries":[["preview.open",legacy],["browser.open",canonical]]}),
         json!({"op":"nativepermission.resolve","name":"browser.open","entries":[["preview.open",legacy],["browser.open",canonical]]}),
+        json!({"op":"nativepermission.resolve","name":"browser.inspect","entries":[["preview.open",legacy]]}),
+        json!({"op":"nativepermission.resolve","name":"preview.inspect","entries":[["preview.inspect",legacy],["browser.open",canonical]]}),
+        json!({"op":"nativepermission.resolve","name":"browser.open","entries":[["browser.inspect",legacy]]}),
     ]);
 }

@@ -7,6 +7,10 @@ export async function dispatch(call:any) {
     return JSON.parse(JSON.stringify([a.createAgentMessageTool(),g.createGatewayStatusTool({} as any),e.createProjectEditorOpenTool(),v.createVoiceSpeakTool({} as any)]));
   }
   if(call.op==='nativeruntime.names')return (await import('../../../packages/gateway/src/tools/tool-names.ts')).ToolName;
+  if(call.op==='nativeruntime.policy'){
+    const n=await import('../../../packages/gateway/src/tools/tool-names.ts');
+    return call.names.map((name:string)=>({names:n.toolPolicyNames(name),disabled:call.disabled.map((set:string[])=>n.isToolDisabled(name,new Set(set)))}));
+  }
   if(call.op==='nativeruntime.intents'){
     const m=await import('../../../packages/gateway/src/tools/agent-communication.ts');
     return {performatives:m.PERFORMATIVES,values:call.values.map((s:string)=>({parsed:m.parsePerformative(s),stripped:m.stripPerformativeTag(s)})),

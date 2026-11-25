@@ -52,6 +52,57 @@ fn canonical_names_and_runtime_metadata_match_reference_without_duplicate_names(
     }
 }
 #[test]
+fn browser_policy_aliases_and_disabled_checks_match_reference() {
+    // Prototype keys such as `constructor` are excluded: the reference resolves them through
+    // `Object.prototype`, which is a JavaScript artifact rather than a policy alias.
+    let names = [
+        "browser.open",
+        "preview.open",
+        "browser.inspect",
+        "preview.inspect",
+        "browser.close",
+        "preview.stop",
+        "browser.restart",
+        "preview.restart",
+        "browser.status",
+        "preview.status",
+        "browser.logs",
+        "preview.logs",
+        "preview.start",
+        "browser.navigate",
+        "terminal.run",
+        "",
+        "BROWSER.OPEN",
+        "unknown.tool",
+    ];
+    let disabled = [
+        vec![],
+        vec!["browser.open"],
+        vec!["preview.open"],
+        vec!["browser.inspect"],
+        vec!["preview.inspect"],
+        vec!["preview.stop"],
+        vec!["browser.status", "terminal.run"],
+        vec!["preview.start"],
+        vec![""],
+    ];
+    let native: Vec<Value> = names
+        .iter()
+        .map(|name| {
+            json!({
+                "names": policy_names(name),
+                "disabled": disabled.iter().map(|set| {
+                    is_tool_disabled(name, &set.iter().map(|s| s.to_string()).collect())
+                }).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    assert_eq!(
+        json!(native),
+        reference(json!({"op":"nativeruntime.policy","names":names,"disabled":disabled}))
+    );
+}
+#[test]
 fn communication_intent_tags_whitespace_unknown_tags_descriptions_and_success() {
     let mut values = vec![
         "raw without tag".to_string(),

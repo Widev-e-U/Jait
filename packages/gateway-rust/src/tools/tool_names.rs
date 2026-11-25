@@ -382,17 +382,31 @@ pub const ALL_TOOL_NAMES: &[ToolName] = &[
     ToolName::CoreJait,
 ];
 
+/// Legacy name to canonical name, in the reference's `BROWSER_TOOL_REPLACEMENTS` order.
+pub const BROWSER_TOOL_REPLACEMENTS: &[(&str, &str)] = &[
+    ("preview.open", "browser.open"),
+    ("preview.stop", "browser.close"),
+    ("preview.restart", "browser.restart"),
+    ("preview.status", "browser.status"),
+    ("preview.logs", "browser.logs"),
+    ("preview.inspect", "browser.open"),
+    ("browser.inspect", "browser.open"),
+];
+
 /// Canonical policies win when explicitly configured; legacy policies remain a fallback.
 pub fn policy_names(name: &str) -> Vec<&str> {
-    match name {
-        "browser.open" | "preview.open" => vec!["browser.open", "preview.open"],
-        "browser.close" | "preview.stop" => vec!["browser.close", "preview.stop"],
-        "browser.restart" | "preview.restart" => vec!["browser.restart", "preview.restart"],
-        "browser.status" | "preview.status" => vec!["browser.status", "preview.status"],
-        "browser.logs" | "preview.logs" => vec!["browser.logs", "preview.logs"],
-        "browser.inspect" | "preview.inspect" => vec!["browser.inspect", "preview.inspect"],
-        _ => vec![name],
-    }
+    let canonical = BROWSER_TOOL_REPLACEMENTS
+        .iter()
+        .find(|(legacy, _)| *legacy == name)
+        .map_or(name, |(_, canonical)| *canonical);
+    std::iter::once(canonical)
+        .chain(
+            BROWSER_TOOL_REPLACEMENTS
+                .iter()
+                .filter(|(_, target)| *target == canonical)
+                .map(|(legacy, _)| *legacy),
+        )
+        .collect()
 }
 pub fn is_tool_disabled(name: &str, disabled: &std::collections::HashSet<String>) -> bool {
     policy_names(name)
