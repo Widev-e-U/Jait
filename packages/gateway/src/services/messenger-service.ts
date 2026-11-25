@@ -504,11 +504,15 @@ class Connection {
     const peer = room.peer;
     if (!peer) return base;
     const cached = this.presence.get(peer.userId);
+    // Bridged ghosts (Teams, WhatsApp…) have no real homeserver presence: Synapse reports
+    // them as "offline" regardless of their actual status, so only trust positive signals.
+    const bridged = room.summary.service !== 'Matrix';
+    const presence = bridged && cached?.presence === 'offline' ? 'unknown' : (cached?.presence ?? 'unknown');
     return {
       ...base,
       peer: {
         ...peer,
-        presence: cached?.presence ?? 'unknown',
+        presence,
         ...(cached?.lastActiveAgo !== undefined
           ? { lastActiveAgo: cached.lastActiveAgo }
           : {}),
@@ -581,7 +585,8 @@ class Connection {
         .sort((a, b) => b.timestamp - a.timestamp),
       selectedRoomId: roomId,
       messages: roomId ? this.messages(roomId).map(message => {
-        const presence = !message.own && message.senderId ? this.presence.get(message.senderId)?.presence : undefined;
+        const cachedPresence = !message.own && message.senderId ? this.presence.get(message.senderId)?.presence : undefined;
+        const presence = cachedPresence === 'offline' && this.rooms.get(roomId)?.summary.service !== 'Matrix' ? undefined : cachedPresence;
         return presence && presence !== 'unknown' ? { ...message, senderPresence: presence } : message;
       }) : [],
       hasEarlier: !!roomId && !!this.rooms.get(roomId)?.previous && (this.rooms.get(roomId)?.events.length ?? 0) < MAX_EVENTS,
