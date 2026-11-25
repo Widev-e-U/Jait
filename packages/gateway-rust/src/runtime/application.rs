@@ -302,7 +302,11 @@ fn gateway_node_platform() -> crate::services::node_state_manager::NodePlatform 
     }
 }
 
-fn composed_filesystem_routes(auth: AuthState, project_root: &std::path::Path) -> FilesystemRoutes {
+fn composed_filesystem_routes(
+    auth: AuthState,
+    project_root: &std::path::Path,
+    nodes: Arc<GatewayFilesystemNodes>,
+) -> FilesystemRoutes {
     let environment = BrowseEnvironment {
         home: std::env::var_os("HOME")
             .map(PathBuf::from)
@@ -320,9 +324,32 @@ fn composed_filesystem_routes(auth: AuthState, project_root: &std::path::Path) -
     FilesystemRoutes::new(
         auth,
         environment,
-        Some(Arc::new(GatewayFilesystemNodes::default())),
+        Some(nodes),
         chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
     )
+}
+
+struct EnvironmentNodes {
+    registry: Arc<crate::runtime::node_ws::ComposedNodes>,
+    filesystem: Arc<GatewayFilesystemNodes>,
+}
+
+impl crate::routes::environment::EnvironmentControlPlane for EnvironmentNodes {
+    fn nodes(&self) -> Result<Vec<serde_json::Value>, String> {
+        self.registry
+            .live_nodes()?
+            .into_iter()
+            .map(|node| serde_json::to_value(node).map_err(|error| error.to_string()))
+            .collect()
+    }
+
+    fn filesystem_nodes(&self) -> Result<Vec<serde_json::Value>, String> {
+        self.filesystem
+            .0
+            .lock()
+            .map(|node| node.iter().cloned().collect())
+            .map_err(|_| "filesystem node registry lock poisoned".to_owned())
+    }
 }
 
 pub struct Application {
@@ -333,6 +360,7 @@ pub struct Application {
     store_supervisor: Option<StoreOwner>,
     ws_transport: Option<crate::runtime::ws_transport::WsTransport>,
     repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>>,
+    nodes: Arc<crate::runtime::node_ws::ComposedNodes>,
     consent: Option<crate::security::consent_manager::ConsentManager>,
     /// WebSocket `consent.approve` / `consent.reject` handler: the composed HTTP consent
     /// routes themselves, so a socket decision takes the same session-ownership check,
@@ -535,6 +563,13 @@ impl Application {
         let consent = crate::security::consent_manager::ConsentManager::default();
         // Network Git prompts go through the same queue and need the owner's approval.
         let git_network = super::git_network::NetworkGuard::new(consent.clone());
+        let nodes = Arc::new(crate::runtime::node_ws::ComposedNodes::new(
+            auth.worker(),
+            tokio::runtime::Handle::current(),
+            &gateway_hostname(),
+            gateway_node_platform(),
+        ));
+        let filesystem_nodes = Arc::new(GatewayFilesystemNodes::default());
         let repository_hub: Arc<Mutex<Option<Arc<crate::ws::WsHub>>>> = Arc::new(Mutex::new(None));
         let question_observer = |kind: &'static str| {
             let hub = repository_hub.clone();
@@ -734,7 +769,7 @@ impl Application {
                 .router(),
             )
             .merge(ReminderRoutes::new(auth.clone()).with_native_projects().with_native_threads().router())
-            .merge(composed_filesystem_routes(auth.clone(), &config.project_root).router())
+            .merge(composed_filesystem_routes(auth.clone(), &config.project_root, filesystem_nodes.clone()).router())
             .merge(AssistantProfileRoutes { auth: auth.clone() }.router())
             .merge(ArchitectureRoutes { auth: auth.clone() }.router())
             .merge(
@@ -809,7 +844,7 @@ impl Application {
                     repositories: Some(auth.worker()),
                     network_hosts: Some(auth.worker()),
                     providers: Some(provider_registry.clone()),
-                    nodes: None,
+                    nodes: Some(Arc::new(EnvironmentNodes { registry: nodes.clone(), filesystem: filesystem_nodes.clone() })),
                     clock: crate::time::default_clock(),
                 }
                 .router(),
@@ -1054,6 +1089,7 @@ impl Application {
                 store_supervisor: None,
                 ws_transport: None,
                 repository_hub,
+                nodes,
                 consent: settings_chat.then_some(consent),
                 consent_decisions,
                 questions,
@@ -1148,15 +1184,11 @@ impl Application {
             crate::runtime::terminal_ws::ComposedWsAuthorizer::new(self.terminals.clone()),
         ));
         // Node grants run on this runtime's own database, like the HTTP node routes, so an
-        // embedder cannot substitute its own permission store.
-        let runtime = tokio::runtime::Handle::try_current()
+        // embedder cannot substitute its own permission store. The output pump below also
+        // needs a runtime; retain the explicit error instead of panicking without one.
+        tokio::runtime::Handle::try_current()
             .map_err(|_| "websocket hub requires a tokio runtime")?;
-        config.nodes = Some(Arc::new(crate::runtime::node_ws::ComposedNodes::new(
-            self.auth.worker(),
-            runtime,
-            &gateway_hostname(),
-            gateway_node_platform(),
-        )));
+        config.nodes = Some(self.nodes.clone());
         let hub = Arc::new(crate::ws::WsHub::new(config));
         crate::runtime::terminal_ws::spawn_output_pump(self.terminals.clone(), &hub);
         let transport = crate::runtime::ws_transport::WsTransport::new(hub, max_connections);

@@ -77,7 +77,7 @@ impl ComposedNodes {
             .map_err(|error| error.to_string())
     }
 
-    fn live_nodes(&self) -> Result<Vec<NodeState>, String> {
+    pub(crate) fn live_nodes(&self) -> Result<Vec<NodeState>, String> {
         self.registry
             .lock()
             .map(|registry| registry.list_nodes())
