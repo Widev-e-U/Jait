@@ -680,6 +680,34 @@ impl Application {
         });
         let mut repository_routes = RepositoryRoutes::new(auth.clone());
         repository_routes.events = Some(repository_events.clone());
+        let provider_runtime = Arc::new(crate::providers::registry_runtime::RegistryRuntime {
+            registry: provider_registry.clone(),
+            settings: Arc::new(crate::routes::providers::DbSettingsStore::new(&auth)),
+            fetchers: crate::providers::model_fetchers::ModelFetchers::new(
+                Arc::new(
+                    crate::providers::model_fetchers::SystemCatalogueHttp::with_client(
+                        reqwest::Client::builder()
+                            .redirect(reqwest::redirect::Policy::none())
+                            .build()
+                            .map_err(|e| ApplicationError::from(e.to_string()))?,
+                    ),
+                ),
+                None,
+            ),
+            config: crate::services::jait_models::JaitModelsConfig {
+                openai_api_key: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
+                openai_base_url: std::env::var("OPENAI_BASE_URL").unwrap_or_else(|_| {
+                    crate::services::jait_models::JaitModelsConfig::default().openai_base_url
+                }),
+                ollama_url: std::env::var("OLLAMA_URL").unwrap_or_else(|_| {
+                    crate::services::jait_models::JaitModelsConfig::default().ollama_url
+                }),
+                omniroute_base_url: std::env::var("OMNIROUTE_BASE_URL").unwrap_or_else(|_| {
+                    crate::services::jait_models::JaitModelsConfig::default().omniroute_base_url
+                }),
+                omniroute_api_key: std::env::var("OMNIROUTE_API_KEY").unwrap_or_default(),
+            },
+        });
         let mut router = Router::new()
             .route("/health", get(application_health))
             .with_state((auth.clone(), health))
@@ -742,25 +770,7 @@ impl Application {
                 crate::routes::providers::ProviderRoutes {
                     auth: auth.clone(),
                     directory: Some(provider_directory.clone()),
-                    providers: Some(Arc::new(
-                        crate::providers::registry_runtime::RegistryRuntime {
-                            registry: provider_registry.clone(),
-                            settings: Arc::new(crate::routes::providers::DbSettingsStore::new(&auth)),
-                            fetchers: crate::providers::model_fetchers::ModelFetchers::new(
-                                Arc::new(crate::providers::model_fetchers::SystemCatalogueHttp::with_client(
-                                    reqwest::Client::builder().redirect(reqwest::redirect::Policy::none())
-                                        .build().map_err(|e| ApplicationError::from(e.to_string()))?,
-                                )), None,
-                            ),
-                            config: crate::services::jait_models::JaitModelsConfig {
-                                openai_api_key: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
-                                openai_base_url: std::env::var("OPENAI_BASE_URL").unwrap_or_else(|_| crate::services::jait_models::JaitModelsConfig::default().openai_base_url),
-                                ollama_url: std::env::var("OLLAMA_URL").unwrap_or_else(|_| crate::services::jait_models::JaitModelsConfig::default().ollama_url),
-                                omniroute_base_url: std::env::var("OMNIROUTE_BASE_URL").unwrap_or_else(|_| crate::services::jait_models::JaitModelsConfig::default().omniroute_base_url),
-                                omniroute_api_key: std::env::var("OMNIROUTE_API_KEY").unwrap_or_default(),
-                            },
-                        },
-                    )),
+                    providers: Some(provider_runtime.clone()),
                     usage: Some(Arc::new(crate::providers::db_accounts::DbUsageStore::new(
                         &auth,
                         provider_directory.accounts(),
@@ -945,7 +955,21 @@ impl Application {
                             })
                         })
                     },
-                    jait_models: None,
+                    jait_models: Some(crate::routes::jobs::JaitModelCatalogue {
+                        config: provider_runtime.config.clone(),
+                        fetchers: Arc::new(provider_runtime.fetchers.clone()),
+                        user_api_keys: {
+                            let settings = provider_runtime.settings.clone();
+                            Arc::new(move |user| {
+                                let settings = settings.clone();
+                                Box::pin(async move {
+                                    Ok(settings.api_keys(&user).await.into_iter()
+                                        .filter_map(|(key, value)| value.as_str().map(|v| (key, v.to_owned())))
+                                        .collect())
+                                })
+                            })
+                        },
+                    }),
                 }
                 .router(),
             )
@@ -1976,8 +2000,9 @@ mod ownership_tests {
         let task = tokio::spawn(app.serve(async move {
             let _ = stopped.await;
         }));
+        // Registration performs password hashing, which can take longer under suite load.
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(30))
             .build()
             .unwrap();
         let base = format!("http://{address}");
@@ -2115,8 +2140,9 @@ mod ownership_tests {
         let task = tokio::spawn(app.serve(async move {
             let _ = stopped.await;
         }));
+        // Registration performs password hashing, which can take longer under suite load.
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(30))
             .build()
             .unwrap();
         let base = format!("http://{address}");

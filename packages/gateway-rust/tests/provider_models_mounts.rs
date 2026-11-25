@@ -66,12 +66,15 @@ async fn composed_provider_and_jobs_expose_builtin_models() {
     assert_eq!(response.status(), 200);
     let jobs: serde_json::Value = response.json().await.unwrap();
     assert_eq!(jobs["providers"]["jait"]["models"][0], "gpt-4o");
+    let provider_ids: Vec<_> = models["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|model| model["id"].clone())
+        .collect();
     assert_eq!(
-        jobs["providers"]["jait"]["models"]
-            .as_array()
-            .unwrap()
-            .len(),
-        models["models"].as_array().unwrap().len()
+        jobs["providers"]["jait"]["models"].as_array().unwrap(),
+        &provider_ids
     );
     let _ = stop.send(());
     task.await.unwrap();
