@@ -43,6 +43,7 @@
 //! through [`redact_text`]. Tokens, API keys, cookies and OAuth codes never
 //! appear in a response or a log record.
 use crate::routes::auth::{self, AuthState};
+use crate::services::jait_models::{JaitBackend, normalize_jait_backend_base_url};
 use axum::{
     Router,
     body::Body,
@@ -359,7 +360,23 @@ pub trait SettingsStore: Send + Sync {
     }
 }
 
+/// A validated `POST /api/providers/backend/test` request.
+#[derive(Debug, Clone)]
+pub struct BackendProbe {
+    pub backend: JaitBackend,
+    /// Normalized http(s) base URL without credentials; echoed back as `baseUrl`.
+    pub base_url: String,
+    /// Trimmed; empty means the probe is keyless.
+    pub api_key: String,
+    /// Trimmed; empty means the caller named no model.
+    pub model: String,
+}
+
 /// Network probes the TypeScript routes perform inline.
+///
+/// A probe resolves to the complete 200 response body: an unreachable or
+/// unauthorized endpoint is `Ok({ "ok": false, "error": ... })`, exactly as the
+/// settings page reads it. `Err` is reserved for a probe that could not run.
 pub trait ProviderProbes: Send + Sync {
     /// TS `fetchOllamaSettingsUsage(cookie)`; resolves to the caller's account.
     fn verify_ollama_session(&self, _session: &str) -> BoxFuture<'static, Result<(), String>> {
@@ -369,21 +386,24 @@ pub trait ProviderProbes: Send + Sync {
     fn verify_ollama_api_key(&self, _api_key: &str) -> BoxFuture<'static, Result<(), String>> {
         Box::pin(async { Err("Ollama usage is unavailable".into()) })
     }
-    /// TS `POST /api/providers/omniroute/test` body.
+    /// TS `config.omnirouteBaseUrl` and `config.omnirouteApiKey`, used when neither
+    /// the request nor the saved settings name an OmniRoute router.
+    fn omniroute_defaults(&self) -> (String, String) {
+        (
+            JaitBackend::OmniRoute.default_base_url().to_owned(),
+            String::new(),
+        )
+    }
+    /// TS `POST /api/providers/omniroute/test`. An empty `api_key` is keyless.
     fn probe_omniroute(
         &self,
         _base_url: &str,
-        _api_key: Option<&str>,
+        _api_key: &str,
     ) -> BoxFuture<'static, Result<Value, String>> {
         Box::pin(async { Err("Probing is unavailable".into()) })
     }
-    /// TS `POST /api/providers/backend/test` body.
-    fn probe_backend(
-        &self,
-        _kind: &str,
-        _base_url: &str,
-        _api_key: Option<&str>,
-    ) -> BoxFuture<'static, Result<Value, String>> {
+    /// TS `POST /api/providers/backend/test`.
+    fn probe_backend(&self, _probe: BackendProbe) -> BoxFuture<'static, Result<Value, String>> {
         Box::pin(async { Err("Probing is unavailable".into()) })
     }
 }
@@ -628,16 +648,21 @@ pub fn valid_account_create(body: &Map<String, Value>) -> Result<(String, String
 
 /// Base URLs must be absolute `http(s)` and must not smuggle credentials.
 pub fn validate_base_url(raw: &str) -> Result<String, Response> {
+    validate_base_url_text(raw).map_err(|message| fail(400, message))
+}
+
+/// [`validate_base_url`] with the refusal as text, for responses that carry `ok: false`.
+fn validate_base_url_text(raw: &str) -> Result<String, String> {
     let trimmed = js_trim(raw);
     if trimmed.is_empty() {
-        return Err(fail(400, "Missing base URL"));
+        return Err("Missing base URL".into());
     }
     if trimmed.len() > 2048 {
-        return Err(fail(400, "Base URL is too long"));
+        return Err("Base URL is too long".into());
     }
     let lower = trimmed.to_ascii_lowercase();
     if !(lower.starts_with("http://") || lower.starts_with("https://")) {
-        return Err(fail(400, "Base URL must be an http(s) URL"));
+        return Err("Base URL must be an http(s) URL".into());
     }
     let after_scheme = trimmed.split_once("://").map(|x| x.1).unwrap_or_default();
     let authority = after_scheme
@@ -645,12 +670,37 @@ pub fn validate_base_url(raw: &str) -> Result<String, Response> {
         .next()
         .unwrap_or_default();
     if authority.is_empty() {
-        return Err(fail(400, "Base URL must include a host"));
+        return Err("Base URL must include a host".into());
     }
     if authority.contains('@') {
-        return Err(fail(400, "Base URL must not contain credentials"));
+        return Err("Base URL must not contain credentials".into());
     }
     Ok(trimmed.trim_end_matches('/').to_string())
+}
+
+/// TS `new URL(rawBaseUrl)` plus the checks the native gateway adds: only a
+/// parseable http(s) URL without credentials is ever fetched.
+fn probe_url(raw: &str) -> Result<String, String> {
+    let checked = validate_base_url_text(raw)?;
+    url::Url::parse(&checked).map_err(|_| format!("Not a valid URL: {checked}"))?;
+    Ok(checked)
+}
+
+/// The settings page reads `data.error` from a body shaped `{ ok: false, error }`.
+fn probe_error(status: u16, message: impl AsRef<str>) -> Response {
+    auth::response(
+        status,
+        json!({ "ok": false, "error": redact_text(message.as_ref()) }),
+    )
+}
+
+/// TS `typeof body.x === "string" && body.x.trim()`, first non-empty of several spellings.
+fn text_field<'a>(body: &'a Map<String, Value>, names: &[&str]) -> Option<&'a str> {
+    names
+        .iter()
+        .filter_map(|name| body.get(*name).and_then(Value::as_str))
+        .map(js_trim)
+        .find(|value| !value.is_empty())
 }
 
 /// TS `const mode = query.refresh; if (mode === "0") return readUsageSummary(id, false)`.
@@ -1265,81 +1315,72 @@ async fn auth_logout(
     outcome.into_response()
 }
 
-#[derive(Debug, serde::Deserialize)]
-pub struct ProbeRequest {
-    #[serde(default)]
-    pub base_url: Option<String>,
-    #[serde(default, alias = "baseUrl")]
-    pub base_url_camel: Option<String>,
-    #[serde(default)]
-    pub api_key: Option<String>,
-    #[serde(default, alias = "apiKey")]
-    pub api_key_camel: Option<String>,
-    #[serde(default, alias = "type")]
-    pub kind: Option<String>,
-}
-
-impl ProbeRequest {
-    fn base_url(&self) -> Option<&str> {
-        self.base_url.as_deref().or(self.base_url_camel.as_deref())
+/// TS `(request.body as Record<string, unknown> | undefined) ?? {}`.
+async fn parse_probe_body(body: Body) -> Result<Map<String, Value>, Response> {
+    let bytes = axum::body::to_bytes(body, 64 * 1024)
+        .await
+        .map_err(|_| probe_error(400, "Invalid request body"))?;
+    if bytes.is_empty() {
+        return Ok(Map::new());
     }
-    fn api_key(&self) -> Option<&str> {
-        self.api_key
-            .as_deref()
-            .or(self.api_key_camel.as_deref())
-            .map(js_trim)
-            .filter(|key| !key.is_empty())
+    match serde_json::from_slice::<Value>(&bytes) {
+        Ok(Value::Object(map)) => Ok(map),
+        Ok(Value::Null) => Ok(Map::new()),
+        _ => Err(probe_error(400, "Invalid request body")),
     }
 }
 
-fn parse_probe_request(body: Body) -> BoxFuture<'static, Result<ProbeRequest, Response>> {
-    Box::pin(async move {
-        let bytes = axum::body::to_bytes(body, 64 * 1024)
-            .await
-            .map_err(|_| fail(400, "Invalid request body"))?;
-        if bytes.is_empty() {
-            return Ok(ProbeRequest {
-                base_url: None,
-                base_url_camel: None,
-                api_key: None,
-                api_key_camel: None,
-                kind: None,
-            });
-        }
-        serde_json::from_slice::<ProbeRequest>(&bytes)
-            .map_err(|_| fail(400, "Invalid request body"))
-    })
-}
-
+/// TS `POST /api/providers/omniroute/test`: the draft base URL and key from the
+/// body win over the saved settings, which win over the gateway configuration.
 async fn omniroute_test(
     State(state): State<ProviderRoutes>,
     headers: HeaderMap,
     body: Body,
 ) -> Response {
-    let _user = match auth::require_user(&state.auth, &headers).await {
+    let user = match auth::require_user(&state.auth, &headers).await {
         Ok(user) => user,
         Err(response) => return *response,
     };
-    let request = match parse_probe_request(body).await {
-        Ok(request) => request,
-        Err(response) => return response,
-    };
-    let Some(raw_base) = request.base_url() else {
-        return fail(400, "Missing base URL");
-    };
-    let base_url = match validate_base_url(raw_base) {
-        Ok(base_url) => base_url,
+    let body = match parse_probe_body(body).await {
+        Ok(body) => body,
         Err(response) => return response,
     };
     let Some(probes) = state.probes.as_ref() else {
-        return fail(503, "Probing is unavailable");
+        return probe_error(503, "Probing is unavailable");
     };
-    match probes.probe_omniroute(&base_url, request.api_key()).await {
+    let saved = match state.settings.as_ref() {
+        Some(settings) => settings.api_keys(&user.id).await,
+        None => Map::new(),
+    };
+    let saved_text = |name: &str| {
+        saved
+            .get(name)
+            .and_then(Value::as_str)
+            .map(js_trim)
+            .filter(|value| !value.is_empty())
+    };
+    let (default_base, default_key) = probes.omniroute_defaults();
+    let raw_base = normalize_jait_backend_base_url(
+        text_field(&body, &["base_url", "baseUrl"])
+            .or_else(|| saved_text("OMNIROUTE_BASE_URL"))
+            .unwrap_or(&default_base),
+        None,
+    );
+    let api_key = text_field(&body, &["api_key", "apiKey"])
+        .or_else(|| saved_text("OMNIROUTE_API_KEY"))
+        .unwrap_or(&default_key)
+        .to_owned();
+    let base_url = match probe_url(&raw_base) {
+        Ok(base_url) => base_url,
+        Err(message) => return probe_error(400, message),
+    };
+    match probes.probe_omniroute(&base_url, &api_key).await {
         Ok(payload) => ok_json(payload),
-        Err(error) => fail(502, redact_text(&error)),
+        Err(error) => probe_error(502, error),
     }
 }
 
+/// TS `POST /api/providers/backend/test`: any Jait backend through its model catalogue.
 async fn backend_test(
     State(state): State<ProviderRoutes>,
     headers: HeaderMap,
@@ -1349,30 +1390,46 @@ async fn backend_test(
         Ok(user) => user,
         Err(response) => return *response,
     };
-    let request = match parse_probe_request(body).await {
-        Ok(request) => request,
+    let body = match parse_probe_body(body).await {
+        Ok(body) => body,
         Err(response) => return response,
     };
-    let kind = request.kind.as_deref().map(js_trim).unwrap_or_default();
-    if kind.is_empty() {
-        return fail(400, "Missing backend type");
+    let requested = text_field(&body, &["backend", "type", "kind"]).unwrap_or_default();
+    let Some(backend) = JaitBackend::parse(requested) else {
+        let shown = if requested.is_empty() {
+            "(empty)"
+        } else {
+            requested
+        };
+        return probe_error(400, format!("Unknown backend type: {shown}"));
+    };
+    let raw_base = normalize_jait_backend_base_url(
+        text_field(&body, &["base_url", "baseUrl"]).unwrap_or(backend.default_base_url()),
+        Some(backend),
+    );
+    let api_key = text_field(&body, &["api_key", "apiKey"])
+        .unwrap_or_default()
+        .to_owned();
+    let model = text_field(&body, &["model"]).unwrap_or_default().to_owned();
+    if backend == JaitBackend::OpenCodeGo && api_key.is_empty() {
+        return probe_error(400, "Enter your OpenCode Go API key before testing.");
     }
-    let Some(raw_base) = request.base_url() else {
-        return fail(400, "Missing base URL");
-    };
-    let base_url = match validate_base_url(raw_base) {
+    let base_url = match probe_url(&raw_base) {
         Ok(base_url) => base_url,
-        Err(response) => return response,
+        Err(message) => return probe_error(400, message),
     };
     let Some(probes) = state.probes.as_ref() else {
-        return fail(503, "Probing is unavailable");
+        return probe_error(503, "Probing is unavailable");
     };
-    match probes
-        .probe_backend(kind, &base_url, request.api_key())
-        .await
-    {
+    let probe = BackendProbe {
+        backend,
+        base_url,
+        api_key,
+        model,
+    };
+    match probes.probe_backend(probe).await {
         Ok(payload) => ok_json(payload),
-        Err(error) => fail(502, redact_text(&error)),
+        Err(error) => probe_error(502, error),
     }
 }
 
@@ -1738,25 +1795,78 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn probe_request_parses_camel_case_and_bounds_body() {
-        let body = Body::from(r#"{"baseUrl":"https://x.test","apiKey":" k "}"#);
-        let request = parse_probe_request(body).await.expect("parsed");
-        assert_eq!(request.base_url(), Some("https://x.test"));
-        assert_eq!(request.api_key(), Some("k"));
+    async fn probe_body_reads_the_settings_page_fields_and_bounds_the_request() {
+        let body = Body::from(
+            r#"{"backend":" ollama ","base_url":" http://x.test ","apiKey":" k ","model":" "}"#,
+        );
+        let fields = parse_probe_body(body).await.expect("parsed");
+        assert_eq!(text_field(&fields, &["backend", "type"]), Some("ollama"));
+        assert_eq!(
+            text_field(&fields, &["base_url", "baseUrl"]),
+            Some("http://x.test")
+        );
+        assert_eq!(text_field(&fields, &["api_key", "apiKey"]), Some("k"));
+        assert_eq!(text_field(&fields, &["model"]), None, "blank is absent");
 
-        let request = parse_probe_request(Body::empty()).await.expect("empty ok");
-        assert!(request.base_url().is_none());
+        assert!(
+            parse_probe_body(Body::empty())
+                .await
+                .expect("empty")
+                .is_empty()
+        );
+        assert!(
+            parse_probe_body(Body::from("null"))
+                .await
+                .expect("null")
+                .is_empty()
+        );
 
-        let response = parse_probe_request(Body::from("not json"))
-            .await
-            .expect_err("invalid json");
-        assert_eq!(status(&response), 400);
+        for rejected in ["not json", "[]", "\"text\""] {
+            let response = parse_probe_body(Body::from(rejected))
+                .await
+                .expect_err("not an object");
+            assert_eq!(status(&response), 400, "{rejected}");
+            assert_eq!(
+                body_json(response).await,
+                json!({ "ok": false, "error": "Invalid request body" })
+            );
+        }
 
-        let oversized = format!("{{\"baseUrl\":\"{}\"}}", "a".repeat(70 * 1024));
-        let response = parse_probe_request(Body::from(oversized))
+        let oversized = format!("{{\"base_url\":\"{}\"}}", "a".repeat(70 * 1024));
+        let response = parse_probe_body(Body::from(oversized))
             .await
             .expect_err("body cap");
         assert_eq!(status(&response), 400);
+    }
+
+    #[test]
+    fn probe_url_only_lets_a_parseable_http_url_through() {
+        assert_eq!(
+            probe_url("http://127.0.0.1:11434/v1"),
+            Ok("http://127.0.0.1:11434/v1".to_owned())
+        );
+        assert_eq!(
+            probe_url("file:///etc/passwd"),
+            Err("Base URL must be an http(s) URL".to_owned())
+        );
+        assert_eq!(
+            probe_url("http://user:pass@host/v1"),
+            Err("Base URL must not contain credentials".to_owned())
+        );
+        // A bare word is normalized to http by the route; an unparseable host stays refused.
+        assert_eq!(
+            probe_url("http://not a url"),
+            Err("Not a valid URL: http://not a url".to_owned())
+        );
+    }
+
+    #[tokio::test]
+    async fn probe_errors_carry_ok_false_and_scrub_secrets() {
+        let response = probe_error(400, "key sk-live-123456 rejected");
+        assert_eq!(status(&response), 400);
+        let payload = body_json(response).await;
+        assert_eq!(payload["ok"], json!(false));
+        assert_eq!(payload["error"], json!("key sk-[redacted] rejected"));
     }
 
     #[tokio::test]

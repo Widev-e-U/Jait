@@ -1,15 +1,15 @@
 {
   "summary": {
     "httpTotal": 454,
-    "mounted-fail-closed": 112,
-    "native-tested": 247,
+    "mounted-fail-closed": 121,
+    "native-tested": 252,
     "missing": 34,
-    "native-untested": 54,
-    "mounted-incomplete": 7,
-    "nativeRouteReferencePct": 66.3,
-    "nativeTested": 280,
+    "mounted-incomplete": 12,
+    "native-untested": 35,
+    "nativeRouteReferencePct": 63.2,
+    "nativeTested": 285,
     "nativeTestedDenominator": 626,
-    "nativeTestedPct": 44.73,
+    "nativeTestedPct": 45.53,
     "wsTotal": 151,
     "wsInbound": 44,
     "wsOutboundCandidates": 107,
@@ -23,9 +23,9 @@
     "backgroundServices": 21,
     "backgroundServicesMissing": 21,
     "httpRustStatus": {
-      "native-tested": 247,
-      "native-untested": 54,
-      "missing": 153
+      "native-tested": 252,
+      "native-untested": 35,
+      "missing": 167
     },
     "wsRustStatus": {
       "native-tested": 33,
@@ -394,11 +394,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -2092,11 +2092,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2515,11 +2515,16 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_chat_session_routes.rs",
+          "name": "message_context_and_sub_agent_bodies_are_read_from_persisted_rows"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -2527,16 +2532,11 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-tested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [
-        {
-          "file": "tests/binary_session_routes.rs",
-          "name": "session_sub_routes_are_owned_through_the_binary"
-        }
-      ],
-      "rustStatus": "native-tested"
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -2612,11 +2612,16 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_chat_session_routes.rs",
+          "name": "message_context_and_sub_agent_bodies_are_read_from_persisted_rows"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -3868,11 +3873,16 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_chat_session_routes.rs",
+          "name": "prewarm_reports_that_no_provider_session_is_warmed"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5314,11 +5324,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5326,11 +5336,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5338,11 +5348,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5350,11 +5360,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5362,11 +5372,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5374,11 +5384,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5386,11 +5396,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5398,11 +5408,11 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-fail-closed",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -5410,11 +5420,16 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "backend_probe_reads_each_backend_catalogue_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -5439,11 +5454,16 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "omniroute_probe_prefers_the_draft_then_saved_settings_then_the_gateway_config"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -6038,11 +6058,11 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -6050,11 +6070,11 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -6062,11 +6082,16 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_chat_session_routes.rs",
+          "name": "restart_from_deletes_the_edited_message_and_everything_after_it"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "POST",
@@ -6074,11 +6099,11 @@
       "nodeFiles": [
         "routes/chat.ts"
       ],
-      "status": "native-untested",
+      "status": "mounted-incomplete",
       "testPathReference": true,
       "rustFile": "routes/chat.rs",
       "binaryTests": [],
-      "rustStatus": "native-untested"
+      "rustStatus": "missing"
     },
     {
       "method": "POST",
@@ -8325,7 +8350,7 @@
       "name": "messengerConnection",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:867 setTimeout"
+        "services/messenger-service.ts:870 setTimeout"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8334,7 +8359,7 @@
       "name": "messengerPresence",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:1463 setInterval"
+        "services/messenger-service.ts:1466 setInterval"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"

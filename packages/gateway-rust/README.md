@@ -224,9 +224,9 @@ Not mapped, and why:
 - Store (`/api/store/skills…`, `/api/store/packages`). The ClawHub client is fixed to the public `https://clawhub.ai`
   and refuses non-public hosts and pins resolved addresses, by design. A black-box success path needs live network or a
   test seam that bypasses that guard. This needs a user decision; until then the store stays native-untested.
-- `tests/application_mounts.rs` drives `PATCH /api/skills/:id`, `POST /api/chat/prewarm` and the session plan routes in
-  process through `Application`, not through the spawned binary. The manifest counts binary tests only, so these stay
-  unmapped.
+- `tests/application_mounts.rs` drives `PATCH /api/skills/:id` and the session plan routes in process through
+  `Application`, not through the spawned binary. The manifest counts binary tests only, so these stay unmapped. (`POST
+  /api/chat/prewarm` is now mapped to a binary test; see the 2026-11-25 section.)
 - Scheduler timer. The job CRUD routes and the manual trigger are native (see the scheduled job section at the top).
   `SchedulerService::start` is called only from tests in `scheduler/service.rs`, so the cron timer never starts in
   production and scheduled jobs never fire on their own. The timer stays missing.
@@ -259,6 +259,52 @@ Provider accounts cannot be created in the Rust binary. Every account definition
 not supported for <type>`. Create, rename, delete and the `opencode-go` connect therefore have no success path to test
 until the private launcher is ported. `GET /api/providers/:id/auth/status` answers 501 for every provider, because the
 Rust runtime does not expose auth status yet.
+
+## Provider connection probes, chat-session routes, and ledger corrections — 2026-11-25
+
+Defect fixed. The Settings page's "Test connection" buttons call `POST /api/providers/backend/test` with
+`{backend, base_url, api_key, model}` and `POST /api/providers/omniroute/test` with `{base_url, api_key}`, and read a 200
+body of `{ok, error, modelCount, latencyMs, sampleModels, authenticated, modelPresent}`. The Rust handlers read a
+different field (`type`, not `backend`), required a base URL, answered 502 for a failed probe, and the composed binary
+mounted them with no probe backend at all (503 `Probing is unavailable`). Both now follow the reference
+(`providers/http_probes.rs`, `routes/providers.rs`):
+- The base URL and key come from the request, then the user's saved settings (`OMNIROUTE_BASE_URL`, `OMNIROUTE_API_KEY`;
+  OmniRoute only), then the gateway environment. A blank draft key falls back to the saved key, as in the reference.
+  `backend/test` uses the backend's default URL, a bare host gets `http://`, and a vLLM root gets `/v1`.
+- An unhealthy endpoint is data: 200 with `ok: false` and the reference wording (rejected key, 404 with the `/v1` hint,
+  `Could not reach the router/service`, `No response within 8s`). A request that cannot be a probe is 400 with
+  `{ok:false, error}`: unknown backend, a missing OpenCode Go key, or a URL that is not `http(s)` or carries credentials.
+  The URL rule is stricter than the reference, which would try `file:` and fail at the fetch.
+- Ollama is read at `/api/tags` by model name. OpenCode Go is connected only after a real completion succeeds, because
+  its catalogue is public; the model it names must exist in that catalogue.
+- Redirects are followed at most five times and the key is dropped when the target is another origin. A catalogue
+  larger than 8 MiB is refused. Both are asserted in `tests/provider_probes.rs` (14 tests against local endpoints).
+- Differences. A rejected OpenCode Go key reads `Could not reach the service. (LLM request failed (401))`; the
+  reference quotes the upstream message. The Ollama Cloud usage verification (`/api/provider-usage/ollama/*`) is not
+  ported, so a submitted API key or session is never accepted (clearing the stored session still works).
+
+`tests/binary_providers_routes.rs` drives both routes through the spawned binary against a local catalogue server: the
+draft, then saved settings, then the gateway environment; every backend shape above; and a check that no key appears in
+any response. `tests/binary_chat_session_routes.rs` drives four chat routes through the binary with rows seeded into
+its database: `GET /api/sessions/:id/messages/:index/context-flow`, `GET /api/sessions/:id/sub-agents/:subAgentId`,
+`POST /api/sessions/:id/restart-from` (including the stale-content 409 and non-owner 404 that delete nothing) and
+`POST /api/chat/prewarm`. Prewarm is a documented no-op here: the gateway starts provider sessions per turn, so a CLI
+provider is acknowledged with `status: "skipped"` and nothing is warmed. Its mapping covers auth, validation, ownership
+and that answer, not warming.
+
+Ledger corrections (`tooling/api-inventory.mjs`). These routes were counted `native-untested` although the composed
+binary cannot succeed at them, so they are now `mounted-fail-closed` or `mounted-incomplete` and cannot be mapped:
+- Provider accounts: `POST /api/provider-accounts` (the account launcher fails closed), `DELETE /api/provider-accounts/:id`
+  (process quiescence is not integrated) and `POST /api/provider-accounts/:id/opencode-go` (no connect on the directory).
+  Rename is native and is not yet driven by a binary test.
+- Provider auth: `GET /api/providers/:id/auth/status`, `POST .../auth/login`, `.../auth/login/input`, `.../auth/logout` and
+  `POST /api/providers/:id/update`. `RegistryRuntime` implements listing, info and models only, so no provider sign-in
+  or logout works against the Rust binary. `providers/provider_auth.rs` has the command pool and device-code parsing,
+  but no adapter calls it.
+- Plan mode and retry: `GET /api/sessions/:id/plan`, `POST .../plan/execute`, `POST .../plan/reject` and
+  `POST .../retry-tool`. A session can never hold a pending plan or a retryable call, so they only answer their 404.
+  `GET .../plan` had been mapped to a test that asserts exactly that 404; the mapping is removed.
+- Ollama usage: `POST /api/provider-usage/ollama/api-key` (fail-closed) and `.../session` (incomplete).
 
 ## Git local routes through the composed binary, and a patch-diff fix — 2026-11-19
 

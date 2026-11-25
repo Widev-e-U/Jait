@@ -131,6 +131,23 @@ impl JaitBackend {
         }
     }
 
+    /// `JAIT_BACKEND_DEFAULT_URLS` in `packages/shared/src/jait-backends.ts`.
+    pub const fn default_base_url(self) -> &'static str {
+        match self {
+            Self::OpenAi => "https://api.openai.com/v1",
+            Self::OpenRouter => "https://openrouter.ai/api/v1",
+            Self::Ollama => "http://localhost:11434",
+            Self::OmniRoute => "http://localhost:20128/v1",
+            Self::Gemini => "https://generativelanguage.googleapis.com/v1beta/openai",
+            Self::Anthropic => "https://api.anthropic.com/v1",
+            Self::Grok => "https://api.x.ai/v1",
+            Self::Perplexity => "https://api.perplexity.ai",
+            Self::Moonshot | Self::Kimi => "https://api.moonshot.ai/v1",
+            Self::Vllm => "http://localhost:8000/v1",
+            Self::OpenCodeGo => "https://opencode.ai/zen/go/v1",
+        }
+    }
+
     /// `OPENAI_COMPATIBLE_BACKENDS`: backends probed through the OpenAI `/models` shape.
     pub const fn is_openai_compatible(self) -> bool {
         matches!(

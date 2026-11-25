@@ -245,6 +245,15 @@ const FAIL_CLOSED_ROUTES = new Set([
   // Generation routes share one generate() helper that answers 503 when no generator is wired. The composed
   // application wires none (every router defaults to generator: None), so each of these refuses the effect.
   'POST /api/plans/{}/generate', 'POST /api/repos/{}/strategy/generate', 'POST /api/repos/{}/todos/generate',
+  // The composed provider directory has no account launcher (FailClosedFactory.build) or process quiescence, so
+  // an account is never created, deleted or connected to OpenCode Go (no connect_opencode_go on the directory).
+  'POST /api/provider-accounts', 'DELETE /api/provider-accounts/{}', 'POST /api/provider-accounts/{}/opencode-go',
+  // The composed provider runtime (RegistryRuntime) implements list, info and models only: login, logout, auth
+  // status and config update keep their unsupported defaults (501/400/503), so no sign-in flow works natively.
+  'GET /api/providers/{}/auth/status', 'POST /api/providers/{}/auth/login', 'POST /api/providers/{}/auth/login/input',
+  'POST /api/providers/{}/auth/logout', 'POST /api/providers/{}/update',
+  // The Ollama Cloud usage probe is not ported, so a submitted key is never accepted.
+  'POST /api/provider-usage/ollama/api-key',
 ]);
 // Mounted endpoints with a working subset and missing production collaborators. An empty
 // success is not evidence that the omitted backend has no data. Keys use normalized paths.
@@ -256,6 +265,13 @@ const INCOMPLETE_ROUTES = new Set([
   'GET /api/environment/snapshot',
   // The composed reminder router lacks memory and thread integrations.
   'GET /api/reminders', 'DELETE /api/reminders/{}',
+  // Plan mode and the executed-call log are not native: a session never holds a pending plan or a retryable
+  // call, so these only ever answer their 404 after the ownership checks (routes/chat.rs session_plan and
+  // session_retry_tool). Their success paths do not exist, so a 404 test is not evidence of the feature.
+  'GET /api/sessions/{}/plan', 'POST /api/sessions/{}/plan/reject', 'POST /api/sessions/{}/plan/execute',
+  'POST /api/sessions/{}/retry-tool',
+  // Clearing the stored Ollama session works; accepting a new one needs the unported Ollama Cloud probe.
+  'POST /api/provider-usage/ollama/session',
 ]);
 
 // --- Rust routes (axum) ---

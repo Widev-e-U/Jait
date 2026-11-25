@@ -37,6 +37,7 @@ pub mod steering_dispatcher;
 pub mod acp_adapter;
 pub mod acp_provider;
 pub mod db_accounts;
+pub mod http_probes;
 pub mod registry_runtime;
 
 pub mod session_idle;

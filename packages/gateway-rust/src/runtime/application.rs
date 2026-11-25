@@ -752,7 +752,10 @@ impl Application {
                         provider_directory.accounts(),
                     ))),
                     settings: Some(Arc::new(crate::routes::providers::DbSettingsStore::new(&auth))),
-                    probes: None,
+                    probes: Some(Arc::new(
+                        crate::providers::http_probes::HttpProviderProbes::from_env()
+                            .map_err(ApplicationError::from)?,
+                    )),
                 },
             ))
             .merge(RepoProposalRoutes::new(auth.clone()).router())

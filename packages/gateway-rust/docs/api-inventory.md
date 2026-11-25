@@ -7,15 +7,15 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 ```json
 {
   "httpTotal": 454,
-  "mounted-fail-closed": 112,
-  "native-tested": 247,
+  "mounted-fail-closed": 121,
+  "native-tested": 252,
   "missing": 34,
-  "native-untested": 54,
-  "mounted-incomplete": 7,
-  "nativeRouteReferencePct": 66.3,
-  "nativeTested": 280,
+  "mounted-incomplete": 12,
+  "native-untested": 35,
+  "nativeRouteReferencePct": 63.2,
+  "nativeTested": 285,
   "nativeTestedDenominator": 626,
-  "nativeTestedPct": 44.73,
+  "nativeTestedPct": 45.53,
   "wsTotal": 151,
   "wsInbound": 44,
   "wsOutboundCandidates": 107,
@@ -29,9 +29,9 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "backgroundServices": 21,
   "backgroundServicesMissing": 21,
   "httpRustStatus": {
-    "native-tested": 247,
-    "native-untested": 54,
-    "missing": 153
+    "native-tested": 252,
+    "native-untested": 35,
+    "missing": 167
   },
   "wsRustStatus": {
     "native-tested": 33,
@@ -72,7 +72,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | DELETE | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | DELETE | `/api/projects/:id/members/:userId` | native-tested | native-tested | `tests/binary_project_membership.rs::project_membership_is_owner_managed_and_revocable` | routes/projects.ts |
 | DELETE | `/api/projects/archived` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::permanent_archive_deletion_is_atomic_and_owner_scoped` | routes/projects.ts |
-| DELETE | `/api/provider-accounts/:id` | native-untested | native-untested |  | routes/providers.ts |
+| DELETE | `/api/provider-accounts/:id` | missing | mounted-fail-closed |  | routes/providers.ts |
 | DELETE | `/api/reminders/:id` | missing | mounted-incomplete |  | routes/reminders.ts |
 | DELETE | `/api/repo-proposals/:id` | native-tested | native-tested | `tests/binary_repo_proposals_routes.rs::repository_todos_and_proposal_aliases_are_owner_scoped` | routes/repo-proposals.ts |
 | DELETE | `/api/repos/:id` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
@@ -184,7 +184,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/provider-usage` | native-tested | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
 | GET | `/api/provider-usage/summary` | native-tested | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
 | GET | `/api/providers` | native-tested | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
-| GET | `/api/providers/:id/auth/status` | native-untested | native-untested |  | routes/providers.ts |
+| GET | `/api/providers/:id/auth/status` | missing | mounted-fail-closed |  | routes/providers.ts |
 | GET | `/api/providers/:id/models` | native-tested | native-tested | `tests/binary_providers_routes.rs::builtin_provider_models_and_reset_through_the_binary` | routes/providers.ts |
 | GET | `/api/reminders` | missing | mounted-incomplete |  | routes/reminders.ts |
 | GET | `/api/reminders/export.md` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
@@ -213,13 +213,13 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/sessions/:sessionId/events` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/loop` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/messages` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | native-untested | native-untested |  | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/plan` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/messages/:messageIndex/context-flow` | native-tested | native-tested | `tests/binary_chat_session_routes.rs::message_context_and_sub_agent_bodies_are_read_from_persisted_rows` | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/plan` | missing | mounted-incomplete |  | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/runtime` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/shared-stream` | native-tested | native-tested | `tests/binary_project_membership.rs::project_membership_is_owner_managed_and_revocable` | routes/chat.ts |
 | GET | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/:sessionId/stream` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
-| GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | native-untested | native-untested |  | routes/chat.ts |
+| GET | `/api/sessions/:sessionId/sub-agents/:subAgentId` | native-tested | native-tested | `tests/binary_chat_session_routes.rs::message_context_and_sub_agent_bodies_are_read_from_persisted_rows` | routes/chat.ts |
 | GET | `/api/sessions/:sessionId/trajectory` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | GET | `/api/sessions/last-active` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | GET | `/api/sessions/streaming` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
@@ -299,7 +299,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | POST | `/api/channels/:id/start` | missing | mounted-fail-closed |  | routes/channels.ts |
 | POST | `/api/channels/:id/stop` | missing | mounted-fail-closed |  | routes/channels.ts |
 | POST | `/api/chat` | native-tested | native-tested | `tests/binary_agent_tool_policy.rs::reenabled_tool_is_advertised_and_executed_in_new_chat`, `tests/binary_thread_turns.rs::web_shaped_supervised_turn_uses_its_model_and_keeps_display_segments`, `tests/binary_thread_turns.rs::refused_web_choices_start_no_turn_through_the_binary`, `tests/binary_thread_turns.rs::web_shaped_acp_turn_runs_the_registered_provider_through_the_binary`, `tests/binary_thread_turns.rs::acp_turn_fails_when_the_agent_refuses_the_model`, `tests/binary_thread_turns.rs::acp_turn_fails_when_the_agent_offers_no_effort`, `tests/binary_thread_turns.rs::queued_web_send_replays_its_choices_through_the_binary` | routes/chat.ts |
-| POST | `/api/chat/prewarm` | native-untested | native-untested |  | routes/chat.ts |
+| POST | `/api/chat/prewarm` | native-tested | native-tested | `tests/binary_chat_session_routes.rs::prewarm_reports_that_no_provider_session_is_warmed` | routes/chat.ts |
 | POST | `/api/code-graph/graphrag/prepare` | native-untested | native-untested |  | routes/code-graph.ts |
 | POST | `/api/code-graph/index` | native-tested | native-tested | `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
 | POST | `/api/code-graph/path` | native-tested | native-tested | `tests/binary_code_graph.rs::owner_index_builds_the_graph_through_the_binary` | routes/code-graph.ts |
@@ -400,17 +400,17 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | POST | `/api/projects/:id/restore` | native-tested | native-tested | `tests/binary_project_repository_assignment.rs::project_created_events_follow_commit_and_are_owner_scoped` | routes/projects.ts |
 | POST | `/api/projects/:id/sessions` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/projects.ts |
 | POST | `/api/projects/select` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
-| POST | `/api/provider-accounts` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/provider-accounts/:id/opencode-go` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/provider-usage/ollama/api-key` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/provider-usage/ollama/session` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/providers/:id/auth/login` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/providers/:id/auth/login/input` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/providers/:id/auth/logout` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/providers/:id/update` | native-untested | native-untested |  | routes/providers.ts |
-| POST | `/api/providers/backend/test` | native-untested | native-untested |  | routes/providers.ts |
+| POST | `/api/provider-accounts` | missing | mounted-fail-closed |  | routes/providers.ts |
+| POST | `/api/provider-accounts/:id/opencode-go` | missing | mounted-fail-closed |  | routes/providers.ts |
+| POST | `/api/provider-usage/ollama/api-key` | missing | mounted-fail-closed |  | routes/providers.ts |
+| POST | `/api/provider-usage/ollama/session` | missing | mounted-incomplete |  | routes/providers.ts |
+| POST | `/api/providers/:id/auth/login` | missing | mounted-fail-closed |  | routes/providers.ts |
+| POST | `/api/providers/:id/auth/login/input` | missing | mounted-fail-closed |  | routes/providers.ts |
+| POST | `/api/providers/:id/auth/logout` | missing | mounted-fail-closed |  | routes/providers.ts |
+| POST | `/api/providers/:id/update` | missing | mounted-fail-closed |  | routes/providers.ts |
+| POST | `/api/providers/backend/test` | native-tested | native-tested | `tests/binary_providers_routes.rs::backend_probe_reads_each_backend_catalogue_through_the_binary` | routes/providers.ts |
 | POST | `/api/providers/models/reset` | native-tested | native-tested | `tests/binary_providers_routes.rs::builtin_provider_models_and_reset_through_the_binary` | routes/providers.ts |
-| POST | `/api/providers/omniroute/test` | native-untested | native-untested |  | routes/providers.ts |
+| POST | `/api/providers/omniroute/test` | native-tested | native-tested | `tests/binary_providers_routes.rs::omniroute_probe_prefers_the_draft_then_saved_settings_then_the_gateway_config` | routes/providers.ts |
 | POST | `/api/reminders` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | POST | `/api/repos` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |
 | POST | `/api/repos/:repoId/plans` | native-tested | native-tested | `tests/binary_plans_routes.rs::plan_routes_through_the_binary` | routes/plans.ts |
@@ -453,10 +453,10 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | POST | `/api/sessions/:id/generate-title` | native-tested | native-tested | `tests/binary_session_routes.rs::generate_title_uses_the_owners_provider_through_the_binary` | routes/sessions.ts |
 | POST | `/api/sessions/:sessionId/loop` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:id/move` | native-tested | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/sessions.ts |
-| POST | `/api/sessions/:sessionId/plan/execute` | native-untested | native-untested |  | routes/chat.ts |
-| POST | `/api/sessions/:sessionId/plan/reject` | native-untested | native-untested |  | routes/chat.ts |
-| POST | `/api/sessions/:sessionId/restart-from` | native-untested | native-untested |  | routes/chat.ts |
-| POST | `/api/sessions/:sessionId/retry-tool` | native-untested | native-untested |  | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/plan/execute` | missing | mounted-incomplete |  | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/plan/reject` | missing | mounted-incomplete |  | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/restart-from` | native-tested | native-tested | `tests/binary_chat_session_routes.rs::restart_from_deletes_the_edited_message_and_everything_after_it` | routes/chat.ts |
+| POST | `/api/sessions/:sessionId/retry-tool` | missing | mounted-incomplete |  | routes/chat.ts |
 | POST | `/api/sessions/:sessionId/steer` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/chat.ts |
 | POST | `/api/sessions/:id/viewed` | native-tested | native-tested | `tests/binary_session_routes.rs::session_sub_routes_are_owned_through_the_binary` | routes/sessions.ts |
 | POST | `/api/skills/:id/install-tool` | native-untested | native-untested |  | routes/skills.ts |
@@ -524,8 +524,8 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `browserDevtoolsGrantCleanup` (service) — missing; Rust keyword hint present; Node: routes/browser-devtools.ts:36 setInterval
 - `threadRecoverySweep` (service) — missing; Rust keyword hint absent; Node: routes/threads.ts:297 setInterval
 - `teamsReauthFlowPoll` (flow-poll) — missing; Rust keyword hint present; Node: services/bridge-reauth.ts:104 setInterval
-- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:867 setTimeout
-- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1463 setInterval
+- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:870 setTimeout
+- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1466 setInterval
 - `orchestratorStandby` (service) — missing; Rust keyword hint absent; Node: services/orchestration/orchestrator.ts:624 setInterval
 - `providerUpdateChecks` (service) — missing; Rust keyword hint present; Node: services/provider-updates.ts:93 setInterval
 
