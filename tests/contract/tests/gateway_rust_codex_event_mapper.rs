@@ -221,6 +221,92 @@ fn codex_event_item_lifecycle_uses_the_message_envelope() {
 }
 
 #[test]
+fn interrupted_tool_results_are_unsuccessful_in_every_completion_envelope() {
+    let mut batch = Vec::new();
+    for status in [
+        json!("interrupted"),
+        json!("completed"),
+        json!("failed"),
+        json!("error"),
+        json!("declined"),
+        json!("Interrupted"),
+        Value::Null,
+    ] {
+        let item = json!({
+            "id":"call-interrupted",
+            "type":"commandExecution",
+            "name":"terminal.run",
+            "status":status,
+            "output":"partial output",
+            "result":{"exitCode":null,"partial":true},
+        });
+        batch.push(call("item/completed", json!({"item":item})));
+        batch.push(call("codex/event/item_completed", json!({"msg":item})));
+        batch.push(call("item/mcpToolCall/completed", item.clone()));
+        batch.push(call("item/mcpToolCall/failed", item));
+    }
+    compare(Value::Array(batch));
+}
+
+#[test]
+fn collaboration_items_preserve_operation_names_and_independent_agent_states() {
+    let mut batch = Vec::new();
+    for operation in [
+        "spawn_agent",
+        "spawnAgent",
+        "wait",
+        "closeAgent",
+        "resume_agent",
+        "sendInput",
+        "send_message",
+        "followupTask",
+        "interruptAgent",
+        "list_agents",
+        "WAIT",
+        "unknown",
+        "spawn-agent",
+        "functions.spawn_agent",
+    ] {
+        let item = json!({
+            "id":"collab-call",
+            "type":"collabAgentToolCall",
+            "tool":operation,
+            "status":"completed",
+            "receiverThreadIds":["worker-1","worker-2"],
+            "agentsStates":{
+                "worker-1":{"status":"running"},
+                "worker-2":{"status":"completed","message":"done"},
+            },
+            "result":{"operationFinished":true},
+        });
+        for (method, key) in [
+            ("item/started", "item"),
+            ("item/completed", "item"),
+            ("codex/event/item_started", "msg"),
+            ("codex/event/item_completed", "msg"),
+        ] {
+            batch.push(call(method, json!({key:item})));
+        }
+    }
+    for chunk in batch.chunks(32) {
+        compare(json!(chunk));
+    }
+    for item in [
+        json!({"id":"collab-empty","type":"collab_agent_tool_call","status":"completed"}),
+        json!({"id":"collab-nested","type":"collab-agent-tool-call","action":{"name":"sendMessage"},"status":"interrupted","data":{"nested":"kept"}}),
+        json!({"id":"collab-recipient","type":"collab/agent/tool/call","recipient_name":"resumeAgent","status":"completed"}),
+        json!({"id":"collab-kind","kind":"collabAgentToolCall","toolName":"wait","result":["worker-1"],"status":"completed"}),
+    ] {
+        compare(json!([
+            call("item/started", json!({"item":item})),
+            call("item/completed", json!({"item":item})),
+            call("codex/event/item_started", json!({"msg":item})),
+            call("codex/event/item_completed", json!({"msg":item})),
+        ]));
+    }
+}
+
+#[test]
 fn completed_items_preserve_structured_payloads_and_reject_user_echoes() {
     let mut batch = Vec::new();
     for item in [

@@ -325,6 +325,46 @@ fn first_difference(actual: &Value, expected: &Value, path: &str) -> String {
     )
 }
 
+#[tokio::test(start_paused = true)]
+async fn codex_collaboration_results_and_interruption_survive_remote_delivery() {
+    let item = json!({
+        "id":"collab-1",
+        "type":"collabAgentToolCall",
+        "tool":"spawnAgent",
+        "status":"completed",
+        "receiverThreadIds":["worker-1"],
+        "agentsStates":{"worker-1":{"status":"running"}},
+        "result":{"spawned":true},
+    });
+    let call = json!({
+        "op":"nativeremoteprovider.scenario",
+        "steps":[
+            {"op":"start"},
+            {"op":"send"},
+            {"op":"event","event":{"method":"item/started","params":{"item":item}}},
+            {"op":"event","event":{"method":"item/completed","params":{"item":item}}},
+            {"op":"event","event":{"method":"item/mcpToolCall/completed","params":{
+                "itemId":"tool-2","name":"read","status":"interrupted","output":"partial",
+            }}},
+            {"op":"event","event":{"method":"codex/event/item_completed","params":{"msg":{
+                "id":"collab-2","type":"collabAgentToolCall","tool":"wait","status":"interrupted",
+                "agentsStates":{"worker-1":{"status":"running"}},
+            }}}},
+            {"op":"event","event":{"type":"provider.turn-completed"}},
+            {"op":"await"},
+            {"op":"stop"},
+        ],
+    });
+    let expected = reference(&call);
+    let actual = native(&call).await;
+    assert_eq!(
+        actual,
+        expected,
+        "remote Codex mapping: {}",
+        first_difference(&actual, &expected, "")
+    );
+}
+
 fn options() -> StartSessionOptions {
     serde_json::from_value(
         json!({"threadId":"thread","workingDirectory":"/workspace","mode":"supervised"}),

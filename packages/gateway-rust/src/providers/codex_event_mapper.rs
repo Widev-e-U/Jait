@@ -225,7 +225,7 @@ pub fn map_codex_notification(
                 return vec![ProviderEvent::ToolResult {
                     session_id: session.clone(),
                     tool: category,
-                    ok: !matches!(status, "error" | "failed"),
+                    ok: !matches!(status, "error" | "failed" | "interrupted"),
                     message: message.to_owned(),
                     call_id,
                     data: extract_tool_result_data(item),
@@ -281,7 +281,7 @@ pub fn map_codex_notification(
             vec![ProviderEvent::ToolResult {
                 session_id: session.clone(),
                 tool: tool.to_owned(),
-                ok: !matches!(status, "error" | "failed"),
+                ok: !matches!(status, "error" | "failed" | "interrupted"),
                 message: message.to_owned(),
                 call_id,
                 data: extract_tool_result_data(body),
@@ -319,7 +319,7 @@ pub fn map_codex_notification(
                 return vec![ProviderEvent::ToolResult {
                     session_id: session.clone(),
                     tool: category,
-                    ok: !matches!(status, "error" | "failed"),
+                    ok: !matches!(status, "error" | "failed" | "interrupted"),
                     message: message.to_owned(),
                     call_id,
                     data: extract_tool_result_data(msg),
@@ -529,6 +529,11 @@ fn parse_json_object(value: Option<&Value>) -> Option<Map<String, Value>> {
 }
 
 fn extract_tool_result_data(item: &Map<String, Value>) -> Option<Value> {
+    if normalize_item_type(&js_string(item.get("type").unwrap_or(&Value::Null)))
+        == "collab agent tool call"
+    {
+        return Some(Value::Object(item.clone()));
+    }
     first_object(&[item.get("result"), item.get("output"), item.get("data")])
         .map(|object| Value::Object(object.clone()))
         .or_else(|| {
@@ -601,6 +606,12 @@ fn envelope_type_of(msg: &Map<String, Value>) -> String {
 }
 
 fn normalize_item_type(raw: &str) -> String {
+    let camel = split_camel_case(raw, ' ');
+    let separated = collapse(|c| matches!(c, '_' | '-' | '/'), &camel, ' ');
+    js_trim(&separated).to_lowercase()
+}
+
+fn split_camel_case(raw: &str, separator: char) -> String {
     let mut camel = String::with_capacity(raw.len() + 8);
     let mut characters = raw.chars().peekable();
     while let Some(current) = characters.next() {
@@ -610,11 +621,10 @@ fn normalize_item_type(raw: &str) -> String {
                 .peek()
                 .is_some_and(|next| next.is_ascii_uppercase())
         {
-            camel.push(' ');
+            camel.push(separator);
         }
     }
-    let separated = collapse(|c| matches!(c, '_' | '-' | '/'), &camel, ' ');
-    js_trim(&separated).to_lowercase()
+    camel
 }
 
 /// Replace runs of separator characters with a single replacement character.
@@ -657,7 +667,24 @@ fn is_tool_item_type(normalized: &str) -> bool {
 }
 
 fn map_item_to_category(normalized: &str, item: &Map<String, Value>) -> String {
-    if let Some(name) = extract_provider_tool_name(item)
+    let provider_tool_name = extract_provider_tool_name(item);
+    if normalized == "collab agent tool call" {
+        let operation = provider_tool_name
+            .map(|name| split_camel_case(name, '_').to_lowercase())
+            .unwrap_or_default();
+        return match operation.as_str() {
+            "spawn_agent" => "agent.spawn",
+            "wait" => "agent.wait",
+            "close_agent" => "agent.close",
+            "resume_agent" => "agent.resume",
+            "send_input" | "send_message" | "followup_task" => "agent.send",
+            "interrupt_agent" => "agent.interrupt",
+            "list_agents" => "agent.list",
+            _ => "agent",
+        }
+        .into();
+    }
+    if let Some(name) = provider_tool_name
         && is_provider_agent_tool(name)
     {
         return name.to_owned();

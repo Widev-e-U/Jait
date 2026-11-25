@@ -20,6 +20,22 @@ differential targets and the existing binary membership/session route tests cove
 the affected paths. This focused slice does not establish full sharing parity or
 replacement readiness; coverage manifests remain unchanged.
 
+## Codex tool-result compatibility — 2026-11-25
+
+The native Codex notification mapper now reports interrupted tool calls as
+unsuccessful in item, MCP, and legacy Codex completion envelopes. Collaboration
+calls use the reference's `agent.*` operation names and retain the whole item as
+result data: an operation completing does not mean its spawned agents have
+finished, so `agentsStates` and receiver thread IDs must remain available.
+
+Focused live differential tests in
+`tests/contract/tests/gateway_rust_codex_event_mapper.rs` cover these mappings.
+`codex_collaboration_results_and_interruption_survive_remote_delivery` in
+`tests/contract/tests/gateway_rust_remote_provider.rs` also compares delivery
+through the native remote-provider adapter and the TypeScript adapter with a
+scripted transport. This does not verify production remote-node composition or
+a real Codex installation; coverage manifests remain unchanged.
+
 ## Native compatibility checks for ownership and failed writes
 
 The Rust session tool endpoints return only the authenticated caller's sessions
