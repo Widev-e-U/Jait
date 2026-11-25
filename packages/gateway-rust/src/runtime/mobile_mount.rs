@@ -155,6 +155,7 @@ pub fn composed_mobile_routes(auth: &AuthState, manager: ConsentManager) -> Mobi
             manager,
         }),
     )
+    .with_native_sessions()
 }
 
 #[cfg(test)]

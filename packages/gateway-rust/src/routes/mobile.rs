@@ -85,6 +85,7 @@ pub struct MobileRoutes {
     push: Option<Arc<dyn PushDevices>>,
     routines: Option<Arc<dyn RoutineStore>>,
     sessions: Option<Arc<dyn SessionList>>,
+    native_sessions: bool,
     consent: Arc<dyn ConsentStore>,
     access: Arc<dyn ControlAccessView>,
 }
@@ -102,6 +103,7 @@ impl MobileRoutes {
             push: None,
             routines: None,
             sessions: None,
+            native_sessions: false,
             consent,
             access,
         }
@@ -116,6 +118,10 @@ impl MobileRoutes {
     }
     pub fn with_sessions(mut self, sessions: Arc<dyn SessionList>) -> Self {
         self.sessions = Some(sessions);
+        self
+    }
+    pub fn with_native_sessions(mut self) -> Self {
+        self.native_sessions = true;
         self
     }
     pub fn router(self) -> Router {
@@ -637,11 +643,33 @@ async fn os_tool_sessions(State(state): State<MobileRoutes>, request: Request) -
         Ok(user) => user,
         Err(response) => return *response,
     };
-    let sessions = state
-        .sessions
-        .as_ref()
-        .map(|list| list.list_active(&user.id))
-        .unwrap_or_default();
+    let sessions = if state.native_sessions {
+        let owner = user.id;
+        match state
+            .auth
+            .with_database(move |db| {
+                Ok(crate::services::sessions::SessionService::new(db).list(
+                    crate::services::sessions::SessionFilter {
+                        status: Some("active"),
+                        user_id: Some(&owner),
+                        ..Default::default()
+                    },
+                )?)
+            })
+            .await
+        {
+            Ok(rows) => json!(rows),
+            Err(error) => return auth::database_failure(&error),
+        }
+    } else {
+        json!(
+            state
+                .sessions
+                .as_ref()
+                .map(|list| list.list_active(&user.id))
+                .unwrap_or_default()
+        )
+    };
     auth::response(200, json!({ "sessions": sessions }))
 }
 

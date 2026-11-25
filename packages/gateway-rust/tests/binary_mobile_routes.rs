@@ -125,6 +125,53 @@ async fn mobile_routes_through_the_binary() {
     };
     use reqwest::Method as M;
 
+    let mut ids = Vec::new();
+    for token in [&owner, &owner, &other] {
+        let response = client
+            .post(url("/api/sessions"))
+            .bearer_auth(token)
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 201);
+        ids.push(
+            response.json::<Value>().await.unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        );
+    }
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    db.execute(
+        "UPDATE sessions SET status='archived' WHERE id=?1",
+        [&ids[1]],
+    )
+    .unwrap();
+    drop(db);
+    assert_eq!(
+        client
+            .get(url("/api/mobile/os-tool/sessions"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    for (token, expected) in [(&owner, &ids[0]), (&other, &ids[2])] {
+        let response = client
+            .get(url("/api/mobile/os-tool/sessions"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let body: Value = response.json().await.unwrap();
+        let rows = body["sessions"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "{body}");
+        assert_eq!(rows[0]["id"], *expected);
+    }
+
     let (st, b) = call(M::GET, "/api/mobile/devices".into(), owner.clone(), None).await;
     assert!(st == 200 && b["devices"] == json!([]), "{b}");
     let r = client.get(url("/api/mobile/devices")).send().await.unwrap();
