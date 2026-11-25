@@ -67,9 +67,23 @@ final class NotificationAvatar {
             while (options.outWidth / options.inSampleSize > 256 || options.outHeight / options.inSampleSize > 256) {
                 options.inSampleSize *= 2;
             }
-            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+            return circle(BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options));
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    /** Center-crop to a square and mask to a circle so notification avatars are always round. */
+    static Bitmap circle(Bitmap source) {
+        if (source == null) return null;
+        int size = Math.min(source.getWidth(), source.getHeight());
+        if (size <= 0) return source;
+        Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint);
+        paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(source, (size - source.getWidth()) / 2f, (size - source.getHeight()) / 2f, paint);
+        return output;
     }
 }
