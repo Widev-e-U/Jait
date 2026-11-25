@@ -155,6 +155,7 @@ async fn compare(cases: Vec<Value>) {
                     ws.as_ref(),
                     test["path"].as_str(),
                     test["projectNodeId"].as_str(),
+                    test["toolName"].as_str(),
                     &lane,
                 )
                 .await
@@ -205,6 +206,7 @@ async fn node_target_strips_node_id_pins_aliases_locally_and_rejects_gateway_onl
         "os.query",
         "memory.search",
         "cron.add",
+        "project.move",
     ] {
         for input in [
             json!(null),
@@ -299,6 +301,18 @@ async fn resolver_keeps_explicit_binding_exists_precedence_and_first_platform_ma
     cases.push(json!({"kind":"resolve","path":"/missing","nodes":[]}));
     cases.push(json!({"kind":"resolve","projectNodeId":"explicit","findFailure":{"thrown":null}}));
     cases.push(json!({"kind":"resolve","path":"/missing","nodesFailure":{"error":"nodes failed"}}));
+    // Terminal tools keep an explicit binding, even to a disconnected node; other tools do not.
+    for tool in ["terminal.run", "execute", "jait.terminal", "file.read"] {
+        for binding in [Some("gateway"), Some("explicit"), Some(""), None] {
+            for connected in [true, false] {
+                let mut row = json!({"kind":"resolve","path":"/native/nonexistent/project","toolName":tool,"connected":connected,"nodes":nodes});
+                if let Some(v) = binding {
+                    row["projectNodeId"] = json!(v);
+                }
+                cases.push(row);
+            }
+        }
+    }
     compare(cases).await;
 }
 #[tokio::test]

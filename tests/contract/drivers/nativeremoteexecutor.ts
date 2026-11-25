@@ -21,7 +21,7 @@ export async function dispatch(call:any){
   try {
    let result;
    if(test.kind==='timeout')result=proxyTimeoutMs(test.tool,test.input);
-   else if(test.kind==='resolve')result=resolveRemoteNodeForSession(ws as any,test.path,test.projectNodeId);
+   else if(test.kind==='resolve')result=resolveRemoteNodeForSession(ws as any,test.path,test.projectNodeId,test.toolName);
    else if(test.kind==='target')result=resolveCallNodeTarget(test.tool,test.input);
    else result=await createRemoteToolExecutor({ws:ws as any,localExecutor},test.node??null)(test.tool,test.input,context as any,test.options);
    output.push({result,events,chunks});

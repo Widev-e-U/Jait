@@ -38,6 +38,10 @@ const LOCAL_NODE_ALIASES: &[&str] = &["gateway", "local", "this"];
 /// Returning node selection here grants no authority: the caller still passes the
 /// resolved id through the same node-permission check as a session binding.
 pub fn resolve_call_node_target(tool: &str, input: &Value) -> Value {
+    // project.move uses nodeId as its destination, not as an execution target.
+    if tool == "project.move" {
+        return json!({"nodeId": Value::Null, "forcesLocal": false, "input": input});
+    }
     let requested = input
         .get("nodeId")
         .and_then(Value::as_str)
@@ -106,12 +110,20 @@ pub trait RemoteControlPlane: Send + Sync {
         on_output_chunk: Option<OutputCallback>,
     ) -> BoxFuture<'a, Result<Value, HostError>>;
 }
+/// Terminal tools keep an explicit project binding even when the node is disconnected,
+/// so the executor reports that the command could not run on the project's machine.
 pub async fn resolve_remote_node_for_session(
     ws: &dyn RemoteControlPlane,
     project_path: Option<&str>,
     project_node_id: Option<&str>,
+    tool: Option<&str>,
     lane: &BlockingLane,
 ) -> Result<Option<String>, HostError> {
+    if let Some(id) = project_node_id.filter(|s| !s.is_empty())
+        && tool.is_some_and(terminal)
+    {
+        return Ok((id != "gateway").then(|| id.into()));
+    }
     if let Some(id) = project_node_id.filter(|s| !s.is_empty() && *s != "gateway")
         && ws.find_node(id)?
     {
