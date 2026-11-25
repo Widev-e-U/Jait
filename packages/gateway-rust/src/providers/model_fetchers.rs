@@ -128,24 +128,40 @@ impl SystemCatalogueHttp {
     fn send(&self, method: reqwest::Method, request: HttpRequest) -> HttpFuture {
         let client = self.client.clone();
         Box::pin(async move {
+            let parsed = url::Url::parse(&request.url)
+                .map_err(|_| CatalogueError("invalid catalogue URL".into()))?;
+            if !matches!(parsed.scheme(), "http" | "https")
+                || parsed.host().is_none()
+                || !parsed.username().is_empty()
+                || parsed.password().is_some()
+            {
+                return Err(CatalogueError("invalid catalogue URL".into()));
+            }
             let mut call = client
-                .request(method, &request.url)
+                .request(method, parsed)
                 .timeout(Duration::from_millis(request.timeout_ms));
             if let Some(value) = request.authorization {
                 call = call.header(reqwest::header::AUTHORIZATION, value);
             }
-            let response = call
+            let mut response = call
                 .send()
                 .await
                 .map_err(|e| CatalogueError(e.to_string()))?;
             let status = response.status().as_u16();
             // A rejected status never consumes JSON in the reference.
             let body = if (200..300).contains(&status) {
-                response
-                    .bytes()
+                let mut body = Vec::new();
+                while let Some(chunk) = response
+                    .chunk()
                     .await
                     .map_err(|e| CatalogueError(e.to_string()))?
-                    .to_vec()
+                {
+                    if body.len().saturating_add(chunk.len()) > 8 * 1024 * 1024 {
+                        return Err(CatalogueError("model catalogue exceeds size limit".into()));
+                    }
+                    body.extend_from_slice(&chunk);
+                }
+                body
             } else {
                 Vec::new()
             };
@@ -159,6 +175,80 @@ impl CatalogueHttp for SystemCatalogueHttp {
     }
     fn post(&self, request: HttpRequest) -> HttpFuture {
         self.send(reqwest::Method::POST, request)
+    }
+}
+
+// Bridge the shared catalogue engine to the Jait backend selection service.
+impl crate::services::jait_models::ModelFetchers for ModelFetchers {
+    fn fetch_openai<'a>(
+        &'a self,
+        key: &'a str,
+        url: &'a str,
+    ) -> crate::services::jait_models::ModelFetchFuture<'a> {
+        self.jait_fetch(CatalogueKind::OpenAi, key, url, false)
+    }
+    fn fetch_openrouter<'a>(
+        &'a self,
+        key: &'a str,
+    ) -> crate::services::jait_models::ModelFetchFuture<'a> {
+        self.jait_fetch(
+            CatalogueKind::OpenRouter,
+            key,
+            "https://openrouter.ai/api/v1",
+            false,
+        )
+    }
+    fn fetch_ollama<'a>(
+        &'a self,
+        url: &'a str,
+    ) -> crate::services::jait_models::ModelFetchFuture<'a> {
+        self.jait_fetch(CatalogueKind::Ollama, "", url, true)
+    }
+    fn fetch_ollama_with<'a>(
+        &'a self,
+        url: &'a str,
+        include_cloud: bool,
+    ) -> crate::services::jait_models::ModelFetchFuture<'a> {
+        self.jait_fetch(CatalogueKind::Ollama, "", url, include_cloud)
+    }
+    fn fetch_omniroute<'a>(
+        &'a self,
+        key: &'a str,
+        url: &'a str,
+    ) -> crate::services::jait_models::ModelFetchFuture<'a> {
+        self.jait_fetch(CatalogueKind::OmniRoute, key, url, false)
+    }
+}
+impl ModelFetchers {
+    fn jait_fetch<'a>(
+        &'a self,
+        kind: CatalogueKind,
+        key: &'a str,
+        url: &'a str,
+        include_cloud: bool,
+    ) -> crate::services::jait_models::ModelFetchFuture<'a> {
+        Box::pin(async move {
+            let models = self
+                .fetch_with(
+                    kind,
+                    key,
+                    url,
+                    FetchOptions {
+                        force: false,
+                        include_cloud,
+                    },
+                )
+                .await
+                .map_err(|e| crate::services::jait_models::ModelFetchError::new(e.to_string()))?;
+            Ok(models
+                .into_iter()
+                .filter_map(|model| {
+                    serde_json::to_value(model)
+                        .ok()
+                        .and_then(|value| serde_json::from_value(value).ok())
+                })
+                .collect())
+        })
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

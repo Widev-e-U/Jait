@@ -1464,9 +1464,18 @@ async fn list_models(
         return fail(404, "Unknown provider");
     }
     match runtime.list_models(&id, &user.id).await {
-        Ok(models) => ok_json(json!({
-            "models": models.into_iter().map(|model| redact_value(&model)).collect::<Vec<_>>(),
-        })),
+        Ok(models) => {
+            let mut response = ok_json(json!({
+                "models": models.into_iter().map(|model| redact_value(&model)).collect::<Vec<_>>(),
+            }));
+            if id == "jait" {
+                response.headers_mut().insert(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("no-store"),
+                );
+            }
+            response
+        }
         Err(error) => fail(502, redact_text(&error)),
     }
 }

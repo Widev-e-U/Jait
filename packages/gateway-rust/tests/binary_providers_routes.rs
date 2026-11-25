@@ -357,7 +357,16 @@ async fn serve_catalogue(catalogue: Catalogue) -> String {
         move |Path(scope): Path<String>, headers: HeaderMap| {
             catalogue.note(&scope, &headers);
             let models = models.clone();
-            async move { listed(&headers, models) }
+            async move {
+                if scope == "redirect" {
+                    return (
+                        StatusCode::FOUND,
+                        [(axum::http::header::LOCATION, "/destination/v1/models")],
+                    )
+                        .into_response();
+                }
+                listed(&headers, models)
+            }
         }
     };
     let rooted = {
@@ -741,4 +750,109 @@ async fn backend_probe_reads_each_backend_catalogue_through_the_binary() {
         1,
         "a model the service does not offer costs no completion"
     );
+}
+
+#[tokio::test]
+async fn jait_models_include_the_authenticated_users_configured_instance() {
+    let catalogue = Catalogue::default();
+    let mock = serve_catalogue(catalogue.clone()).await;
+    let gateway = Gateway::start();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let registered = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"catalogue-owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(registered.status(), 200);
+    let token = registered.json::<Value>().await.unwrap()["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let instances = json!([
+        { "id":"smoke", "type":"openai", "name":"Local model", "baseUrl":format!("{mock}/openai/v1"), "apiKey":"catalogue-secret", "model":"x/y" },
+        { "id":"redirect", "type":"openai", "name":"Redirecting model", "baseUrl":format!("{mock}/redirect/v1"), "apiKey":"redirect-secret" }
+    ]).to_string();
+    let saved = client
+        .patch(format!("{}/api/auth/settings", gateway.base))
+        .bearer_auth(&token)
+        .json(&json!({"api_keys":{"JAIT_BACKEND_INSTANCES":instances}}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let response = client
+        .get(format!("{}/api/providers/jait/models", gateway.base))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response.headers()[reqwest::header::CACHE_CONTROL],
+        "no-store"
+    );
+    let body = response.json::<Value>().await.unwrap();
+    let ids: Vec<&str> = body["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m["id"].as_str())
+        .collect();
+    assert!(
+        ids.contains(&"jait://openai/smoke/x%2Fy"),
+        "configured model missing; actual ids: {ids:?}"
+    );
+    assert!(!body.to_string().contains("catalogue-secret"));
+    assert!(!body.to_string().contains("redirect-secret"));
+    assert_eq!(
+        catalogue.bearers("redirect"),
+        vec![Some("Bearer redirect-secret".to_owned())]
+    );
+    assert!(
+        catalogue.bearers("destination").is_empty(),
+        "catalogue redirects must not be followed"
+    );
+    assert!(
+        catalogue
+            .bearers("openai")
+            .contains(&Some("Bearer catalogue-secret".to_owned()))
+    );
+
+    let invitation = client
+        .post(format!("{}/api/auth/invitations", gateway.base))
+        .bearer_auth(&token)
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(invitation.status(), 200);
+    let invitation = invitation.json::<Value>().await.unwrap()["invitation"].clone();
+    let other = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"catalogue-other", "password":"owner-pass-123", "invitation":invitation}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(other.status(), 200);
+    let other_token = other.json::<Value>().await.unwrap()["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let other_models = client
+        .get(format!("{}/api/providers/jait/models", gateway.base))
+        .bearer_auth(other_token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(other_models.status(), 200);
+    let other_body = other_models.json::<Value>().await.unwrap();
+    assert!(
+        !other_body.to_string().contains("jait://openai/smoke/x%2Fy"),
+        "another user must not see the owner's configured instance"
+    );
+    assert!(!other_body.to_string().contains("catalogue-secret"));
 }
