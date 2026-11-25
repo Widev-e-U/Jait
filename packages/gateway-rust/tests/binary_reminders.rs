@@ -140,6 +140,18 @@ async fn reminders_are_isolated_by_owner_through_the_binary() {
             .status(),
         400
     );
+    let invalid_session = client
+        .post(&reminders)
+        .bearer_auth(token)
+        .json(&json!({"content":"Session reminder", "sessionId":"missing-session"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(invalid_session.status(), 404);
+    assert_eq!(
+        invalid_session.json::<Value>().await.unwrap()["details"],
+        "Session not found"
+    );
     let created = client
         .post(&reminders)
         .bearer_auth(token)
