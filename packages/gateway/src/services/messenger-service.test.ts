@@ -128,6 +128,30 @@ describe('Messenger message actions and history', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it('keeps a brief WhatsApp typing notification visible across a snapshot interval', async () => {
+    vi.useFakeTimers();
+    try {
+      const { c, room } = setup();
+      room.states = [
+        { type: 'm.bridge', state_key: 'whatsapp', content: { protocol: { displayname: 'WhatsApp' } } },
+        { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob' } },
+      ] as any;
+      const update = (user_ids: string[]) => c.sync({ rooms: { join: { '!room:test': {
+        ephemeral: { events: [{ type: 'm.typing', content: { user_ids } }] },
+      } } } });
+      await update(['@bob:test']);
+      vi.advanceTimersByTime(150);
+      await update([]);
+      vi.advanceTimersByTime(1850);
+      const snapshot = c.snapshot('!room:test');
+      expect(snapshot.rooms[0].service).toBe('WhatsApp');
+      expect(snapshot.typing).toEqual(['Bob']);
+      expect(snapshot.rooms[0].typing).toEqual(['Bob']);
+      vi.advanceTimersByTime(501);
+      expect(c.snapshot('!room:test').typing).toEqual([]);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('uses sender names for direct alerts and prefixes group messages', async () => {
     vi.useFakeTimers();
     try {

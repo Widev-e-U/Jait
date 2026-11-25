@@ -1,14 +1,15 @@
 import { MessageText } from '@/components/ui/message-text'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ChevronLeft, ChevronRight, Forward, Reply, Search, Smile } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Forward, Play, Reply, Search, Smile } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { MessageReadStatus } from '@/components/chat/message-read-status'
 import { DeliveryIndicator } from '@/components/chat/delivery-indicator'
 import { MAX_ATTACHMENT_BYTES, type MessengerMessage, type MessengerPresence } from '@/lib/messenger/model'
+import { peekCachedBlob } from '@/lib/messenger/blob-cache'
 import { isStandaloneEmoji, isStandaloneImage } from '@/lib/messenger/standalone'
 import { EmojiPickerDialog, QUICK_REACTIONS } from './messenger-emoji-picker'
 import { MessengerPeerAvatar } from './messenger-peer'
@@ -20,103 +21,156 @@ import { TooltipHint } from '@/components/ui/tooltip'
 
 type MessengerAttachmentData = NonNullable<MessengerMessage['attachment']>
 
-/** Full-size viewer for an image album with previous/next arrows (and arrow keys) between its images. */
+function useAttachmentMedia(attachment: MessengerAttachmentData, enabled: boolean, attempt = 0, cacheOnly = false) {
+  const { store } = useMessenger()
+  const [url, setUrl] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(false)
+  useLayoutEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    let objectUrl: string | undefined
+    const show = (blob: Blob) => {
+      if (cancelled) return
+      objectUrl = URL.createObjectURL(blob)
+      setUrl(objectUrl)
+    }
+    const cached = peekCachedBlob(`att:${attachment.url}`)
+    if (cached) show(cached)
+    else if (!cacheOnly) {
+      setBusy(true)
+      setError(false)
+      void store.attachmentBlob(attachment).then(show, () => { if (!cancelled) setError(true) })
+        .finally(() => { if (!cancelled) setBusy(false) })
+    }
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+    // Snapshot objects change every poll. The attachment URL identifies the media.
+  }, [store, attachment.url, enabled, attempt, cacheOnly])
+  return { url, busy, error }
+}
+
+function isVideoAttachment(attachment: MessengerAttachmentData): boolean {
+  return attachment.mime.toLowerCase().startsWith('video/')
+}
+
+function AlbumSlide({ attachment, active }: { attachment: MessengerAttachmentData; active: boolean }) {
+  const tooLarge = !!attachment.size && attachment.size > MAX_ATTACHMENT_BYTES
+  const video = isVideoAttachment(attachment)
+  const [attempt, setAttempt] = useState(0)
+  const [playbackError, setPlaybackError] = useState(false)
+  const { url, error } = useAttachmentMedia(attachment, !tooLarge, attempt)
+  return <>
+    <div className="grid h-[min(65dvh,42rem)] place-items-center">
+      {url ? video
+        ? <video controls playsInline preload="metadata" src={url} aria-label={attachment.name}
+            className="h-full min-h-0 w-full bg-black object-contain" onError={() => setPlaybackError(true)} />
+        : <img src={url} alt={attachment.name} className="h-full min-h-0 w-full object-contain" />
+        : tooLarge ? <p role="alert" className="text-sm text-muted-foreground">Attachment exceeds 20 MB</p>
+        : error && active ? <Button variant="outline" onClick={() => setAttempt(n => n + 1)}>Retry attachment</Button>
+        : <p role="status" className="text-sm text-muted-foreground">Loading {video ? 'video' : 'image'}…</p>}
+    </div>
+    <div className="mt-3 flex h-5 items-center gap-3">
+      {url && <a href={url} download={attachment.name} tabIndex={active ? undefined : -1} className="text-sm underline">Download {video ? 'video' : 'image'}</a>}
+      {playbackError && <p role="alert" className="text-sm text-destructive">Could not play this video in your browser.</p>}
+    </div>
+  </>
+}
+
 export function AlbumViewer({ attachments, index, onIndexChange, onClose }: {
   attachments: MessengerAttachmentData[]
   index: number
   onIndexChange: (index: number) => void
   onClose: () => void
 }) {
-  const { store } = useMessenger()
   const attachment = attachments[index]
-  const [url, setUrl] = useState<string | null>(null)
-  const [error, setError] = useState(false)
-  useEffect(() => {
-    if (!attachment) return
-    let cancelled = false
-    let objectUrl: string | undefined
-    setUrl(null); setError(false)
-    void store.attachmentBlob(attachment).then(blob => {
-      if (cancelled) return
-      objectUrl = URL.createObjectURL(blob)
-      setUrl(objectUrl)
-    }).catch(() => { if (!cancelled) setError(true) })
-    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [store, attachment?.url]) // eslint-disable-line react-hooks/exhaustive-deps -- snapshot objects change every poll; media identity does not
   const hasPrev = index > 0
   const hasNext = index < attachments.length - 1
   if (!attachment) return null
+  const slideLabel = attachments.some(isVideoAttachment) ? 'attachment' : 'image'
   const arrow = 'absolute top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-background/80 shadow ring-1 ring-border transition hover:bg-background'
   return <Dialog open onOpenChange={open => { if (!open) onClose() }}>
     <DialogContent
       className="max-w-4xl"
       onKeyDown={event => {
+        if (event.target instanceof HTMLVideoElement) return
         if (event.key === 'ArrowLeft' && hasPrev) { event.preventDefault(); onIndexChange(index - 1) }
         if (event.key === 'ArrowRight' && hasNext) { event.preventDefault(); onIndexChange(index + 1) }
       }}
     >
       <DialogTitle className="truncate">{attachment.name} <span className="text-sm font-normal text-muted-foreground">({index + 1} / {attachments.length})</span></DialogTitle>
-      <div className="relative">
-        {url ? <img src={url} alt={attachment.name} className="max-h-[75vh] w-full object-contain" />
-          : <p role={error ? 'alert' : 'status'} className="grid h-40 place-items-center text-sm text-muted-foreground">{error ? 'Could not load image.' : 'Loading image…'}</p>}
-        {hasPrev && <button type="button" aria-label="Previous image" onClick={() => onIndexChange(index - 1)} className={arrow + ' left-1'}><ChevronLeft className="h-5 w-5" /></button>}
-        {hasNext && <button type="button" aria-label="Next image" onClick={() => onIndexChange(index + 1)} className={arrow + ' right-1'}><ChevronRight className="h-5 w-5" /></button>}
+      <div className="relative h-[calc(min(65dvh,42rem)+2rem)]">
+        <div className="h-full overflow-hidden">
+          <div className="flex h-full transition-transform duration-200 ease-out motion-reduce:transition-none" style={{ transform: `translateX(-${index * 100}%)` }}>
+            {attachments.map((item, slide) => <div key={slide} aria-hidden={slide !== index} className="h-full w-full shrink-0">
+              {(slide === index || (!isVideoAttachment(item) && Math.abs(slide - index) === 1))
+                && <AlbumSlide key={item.url} attachment={item} active={slide === index} />}
+            </div>)}
+          </div>
+        </div>
+        <button type="button" aria-label={'Previous ' + slideLabel} aria-disabled={!hasPrev} onClick={() => { if (hasPrev) onIndexChange(index - 1) }} className={arrow + ' left-1 aria-disabled:opacity-40'}><ChevronLeft className="h-5 w-5" /></button>
+        <button type="button" aria-label={'Next ' + slideLabel} aria-disabled={!hasNext} onClick={() => { if (hasNext) onIndexChange(index + 1) }} className={arrow + ' right-1 aria-disabled:opacity-40'}><ChevronRight className="h-5 w-5" /></button>
       </div>
-      {url && <a href={url} download={attachment.name} className="text-sm underline">Download image</a>}
     </DialogContent>
   </Dialog>
 }
 
-export function MessengerAttachment({ attachment, large = false, tile = false, onOpen }: {
+export function MessengerAttachment({ attachment, large = false, moreAttachments = 0, onOpen }: {
   attachment: MessengerAttachmentData
   /** Sent on its own: the photo fills the bubble instead of sitting in a padding box. */
   large?: boolean
-  tile?: boolean
-  /** When set (image albums), opening the image is delegated so the viewer can page through siblings. */
+  moreAttachments?: number
+  /** When set, opening the attachment is delegated so the viewer can page through siblings. */
   onOpen?: () => void
 }) {
-  const { store } = useMessenger()
-  const [url, setUrl] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const video = isVideoAttachment(attachment)
+  const [playbackError, setPlaybackError] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const container = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
   const tooLarge = !!attachment.size && attachment.size > MAX_ATTACHMENT_BYTES
+  const cachedOnly = attempt === 0 && (!attachment.image || !visible)
+  const { url, busy, error } = useAttachmentMedia(attachment, !tooLarge && !(onOpen && video), attempt, cachedOnly)
   useEffect(() => {
-    if (!container.current) return
+    if (!container.current || !attachment.image || url || tooLarge) return
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) { setVisible(true); observer.disconnect() }
     }, { rootMargin: '200px' })
     observer.observe(container.current)
     return () => observer.disconnect()
-  }, [])
-  useEffect(() => {
-    if (tooLarge || !(attempt > 0 || attachment.image && visible)) return
-    let cancelled = false
-    let objectUrl: string | undefined
-    setBusy(true); setError('')
-    void store.attachmentBlob(attachment).then(blob => {
-      if (cancelled) return
-      objectUrl = URL.createObjectURL(blob)
-      setUrl(objectUrl)
-    }).catch(() => { if (!cancelled) setError('Could not load attachment. Try again.') })
-      .finally(() => { if (!cancelled) setBusy(false) })
-    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [store, attachment.url, attachment.image, tooLarge, visible, attempt]) // Snapshot objects change every poll; media identity does not.
+  }, [attachment.image, url, tooLarge])
+  if (onOpen) return <div ref={container}>
+    <button type="button" onClick={onOpen}
+      aria-label={moreAttachments ? `Open album with ${moreAttachments} more attachments` : `Open ${video ? 'video' : 'image'} ${attachment.name}`}
+      className="relative grid aspect-square w-full place-items-center overflow-hidden rounded-lg bg-background/60 focus-visible:outline focus-visible:outline-primary">
+      {video ? <Play aria-hidden="true" className="size-7" />
+        : url ? <img src={url} alt={attachment.name} className="absolute inset-0 size-full object-cover" />
+        : <span className="truncate px-2 text-xs text-muted-foreground">{attachment.name}</span>}
+      {moreAttachments > 0 && <span aria-hidden="true" className="absolute inset-0 grid place-items-center bg-black/60 text-3xl font-semibold text-white">+{moreAttachments}</span>}
+    </button>
+  </div>
+
   return <div ref={container} data-large={large ? 'true' : 'false'} className={large ? 'w-full max-w-full' : 'mt-1 max-w-full'}>
     {url ? attachment.image ? <>
-      <button type="button" aria-label={'Open image ' + attachment.name} onClick={() => onOpen ? onOpen() : setExpanded(true)} className={(tile ? 'block aspect-square w-full' : large ? 'block w-full' : 'block max-w-full') + ' overflow-hidden rounded-lg focus-visible:outline focus-visible:outline-primary'}>
-        <img src={url} alt={attachment.name} className={tile ? 'h-full w-full object-cover' : large ? 'max-h-[70vh] w-full object-contain' : 'max-h-80 max-w-full object-contain'} />
+      <button type="button" aria-label={'Open image ' + attachment.name} onClick={() => setExpanded(true)} className={(large ? 'block w-full' : 'block max-w-full') + ' overflow-hidden rounded-lg focus-visible:outline focus-visible:outline-primary'}>
+        <img src={url} alt={attachment.name} className={large ? 'max-h-[70vh] w-full object-contain' : 'max-h-80 max-w-full object-contain'} />
       </button>
-      {!onOpen && <Dialog open={expanded} onOpenChange={setExpanded}><DialogContent className="max-w-4xl"><DialogTitle className="truncate">{attachment.name}</DialogTitle><img src={url} alt={attachment.name} className="max-h-[75vh] w-full object-contain" /><a href={url} download={attachment.name} className="text-sm underline">Download image</a></DialogContent></Dialog>}
-    </> : <a href={url} download={attachment.name} className="break-all text-sm underline">Download {attachment.name}</a>
-      : <div className={attachment.image ? 'flex items-center justify-center rounded-lg bg-background/40 p-3 ' + (tile ? 'aspect-square w-full' : large ? 'min-h-40 w-full' : 'min-h-28 min-w-32') : ''}>
+      <Dialog open={expanded} onOpenChange={setExpanded}><DialogContent className="max-w-4xl"><DialogTitle className="truncate">{attachment.name}</DialogTitle><img src={url} alt={attachment.name} className="max-h-[75vh] w-full object-contain" /><a href={url} download={attachment.name} className="text-sm underline">Download image</a></DialogContent></Dialog>
+    </> : <div className="space-y-1">
+      {video && <video controls playsInline preload="metadata" src={url} aria-label={attachment.name}
+        className="aspect-video max-h-80 w-full rounded-lg bg-black object-contain" onError={() => setPlaybackError(true)} />}
+      <a href={url} download={attachment.name} className="break-all text-sm underline">Download {attachment.name}</a>
+    </div>
+      : <div className={attachment.image ? 'flex items-center justify-center rounded-lg bg-background/40 p-3 ' + (large ? 'min-h-40 w-full' : 'min-h-28 min-w-32') : ''}>
         {busy ? <span role="status" className="text-xs text-muted-foreground">Loading {attachment.image ? 'image' : 'attachment'}…</span>
-          : <Button size="sm" variant="outline" disabled={tooLarge} onClick={() => setAttempt(n => n + 1)}>{tooLarge ? 'Attachment exceeds 20 MB' : error ? 'Retry attachment' : attachment.image ? 'Load image' : 'Load attachment'}</Button>}
+          : <Button size="sm" variant="outline" disabled={tooLarge} onClick={() => setAttempt(n => n + 1)}>{tooLarge ? 'Attachment exceeds 20 MB' : error ? 'Retry attachment' : attachment.image ? 'Load image' : video ? 'Load video' : 'Load attachment'}</Button>}
       </div>}
-    {error && <p role="alert" className="mt-1 text-xs text-destructive">{error}</p>}
+    {(error || playbackError) && <p role="alert" className="mt-1 text-xs text-destructive">
+      {error ? 'Could not load attachment. Try again.' : 'Could not play this video in your browser.'}
+    </p>}
   </div>
 }
 
@@ -155,11 +209,13 @@ function ReactionBar({ position, onPick, onSearch, disabled, barRef, actions }: 
   </div>, document.body)
 }
 
-export function MessengerBubble({ message, roomId, disabled, variant = 'chat', groupStart = true, groupEnd = true, avatar, onReply, imageTile = false, onOpenImage }: {
+export function MessengerBubble({ message, roomId, disabled, variant = 'chat', groupStart = true, groupEnd = true, avatar, onReply, albumTile = false, moreAttachments = 0, onOpenAttachment, takeArrival }: {
   message: MessengerMessage
-  imageTile?: boolean
-  /** Album tiles open the shared carousel viewer instead of a per-image dialog. */
-  onOpenImage?: () => void
+  albumTile?: boolean
+  moreAttachments?: number
+  takeArrival?: (id: string) => boolean
+  /** Open this tile in the shared album viewer. */
+  onOpenAttachment?: () => void
   messageId?: string
   /** Offered on other people's messages only. */
   onReply?: (message: MessengerMessage) => void
@@ -196,6 +252,14 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   const isMobile = useIsMobile()
   const hoverTimer = useRef<number | null>(null)
   const root = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!takeArrival?.(message.id) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    root.current?.animate(
+      [{ opacity: 0.65, transform: 'translateY(4px)' }, { opacity: 1, transform: 'translateY(0)' }],
+      { duration: 180, easing: 'ease-out' },
+    )
+  }, [message.id, takeArrival])
+
   const run = async (action: () => Promise<unknown>) => {
     if (busy) return
     setBusy(true); setError('')
@@ -207,11 +271,11 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   /** A photo sent on its own fills the bubble; with a caption it stays normal size. */
   const standaloneImage = isStandaloneImage(message)
   /** A body made only of a short emoji run gets the jumbo treatment. */
-  const emojiOnly = !standaloneImage && !editing && isStandaloneEmoji(message.body)
+  const emojiOnly = !albumTile && !standaloneImage && !editing && isStandaloneEmoji(message.body)
   const wide = standaloneImage || emojiOnly
-  const showSenderName = !imageTile && (!message.own || channel) && groupStart
+  const showSenderName = !albumTile && (!message.own || channel) && groupStart
   /** Direct chats get a gutter; only the bubble that opens a run fills it. */
-  const showAvatar = !imageTile && !channel && !message.own
+  const showAvatar = !albumTile && !channel && !message.own
   const corner = channel
     ? 'rounded-lg'
     : 'rounded-xl'
@@ -318,7 +382,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         setPosition({ x: event.clientX, y: event.clientY })
       }}
       style={{ transform: `translateX(${swipeOffset}px)`, transition: swipeOffset ? 'none' : 'transform 180ms ease-out', width: editing && editWidth ? editWidth : undefined }}
-      className={'relative grid grid-cols-[minmax(0,1fr)_auto] [touch-action:pan-y] ' + (message.own ? 'gap-x-1 ' : '') + (editing ? 'min-w-44 ' : 'min-w-0 ') + (imageTile ? 'w-full max-w-full' : wide
+      className={'relative grid grid-cols-[minmax(0,1fr)_auto] [touch-action:pan-y] ' + (message.own ? 'gap-x-1 ' : '') + (editing ? 'min-w-44 ' : 'min-w-0 ') + (albumTile ? 'w-full max-w-full' : wide
       ? (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[92%] sm:max-w-[420px]')
       : (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[88%] sm:max-w-[74%]'))}>
       <div className="col-start-1 flex min-w-0 items-baseline justify-end gap-x-1.5 text-[11px] leading-4 text-muted-foreground">
@@ -348,7 +412,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         className={'relative col-start-1 row-start-2 min-w-0 select-text transition-colors ' +
           (emojiOnly
             ? 'border-transparent bg-transparent px-1 py-1'
-            : standaloneImage
+            : standaloneImage || albumTile
               ? 'p-0.5 ' + corner + (channel ? ' border border-transparent' : ' border shadow-sm ' + (message.own ? 'border-primary/20 bg-primary/10' : 'border-border bg-muted'))
               : 'px-2.5 py-1.5 ' + corner + (channel
                 ? ' border ' + (message.own ? 'border-primary/15 bg-primary/10' : 'border-transparent hover:bg-muted/40')
@@ -368,8 +432,8 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         {editing ? <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (text.trim()) void run(async () => { await store.edit!(roomId, message.id, text); setEditing(false) }) }}>
           <textarea autoFocus aria-label="Edit message" className="min-h-24 w-full resize-y rounded-md border bg-background p-2 text-sm" maxLength={10000} value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && !busy) setEditing(false) }} />
           <div className="flex gap-2"><Button size="sm" type="submit" disabled={busy || !text.trim()}>Save</Button><Button size="sm" variant="ghost" type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</Button></div>
-        </form> : standaloneImage ? null : <p className={'whitespace-pre-wrap break-words [overflow-wrap:anywhere] ' + (emojiOnly ? 'text-5xl leading-tight' : 'text-sm leading-[1.35]') + ' ' + (message.unableToDecrypt ? 'italic text-muted-foreground' : '')}><MessageText>{message.linkedBody ?? message.body}</MessageText></p>}
-        {message.attachment && <MessengerAttachment key={message.attachment.url} attachment={message.attachment} large={standaloneImage} tile={imageTile} {...(onOpenImage ? { onOpen: onOpenImage } : {})} />}
+        </form> : standaloneImage || albumTile ? null : <p className={'whitespace-pre-wrap break-words [overflow-wrap:anywhere] ' + (emojiOnly ? 'text-5xl leading-tight' : 'text-sm leading-[1.35]') + ' ' + (message.unableToDecrypt ? 'italic text-muted-foreground' : '')}><MessageText>{message.linkedBody ?? message.body}</MessageText></p>}
+        {message.attachment && <MessengerAttachment key={message.attachment.url} attachment={message.attachment} large={standaloneImage} moreAttachments={moreAttachments} {...(onOpenAttachment ? { onOpen: onOpenAttachment } : {})} />}
       </div>
       {message.own && <div className="col-start-2 row-start-2 mb-0.5 flex items-center self-end">
         {message.pending ? <DeliveryIndicator state="sending" /> : message.failed ? <DeliveryIndicator state="failed" /> : <MessageReadStatus inline readers={message.readBy ?? []} bridgeStatus={message.bridgeStatus} />}

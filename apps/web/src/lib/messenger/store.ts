@@ -5,7 +5,7 @@ import type { IEncryptedFile } from 'matrix-encrypt-attachment'
 import { latestConfirmedEvent, roomBridgeStatuses, roomReadReceipts } from './read-state'
 import { messengerReadLink } from './notification-actions'
 import { triggerSystemNotification, revokeSystemNotification } from '@/lib/system-notifications'
-import { cachedBlob } from './blob-cache'
+import { cachedBlob, clearBlobCache } from './blob-cache'
 import { linkedBodyFromHtml } from './linked-body'
 import {
   MAX_ATTACHMENT_BYTES, bridgeLabel, isStatusRoom, messengerError, normalizeHomeserver, readSession, roomKind, sessionKey,
@@ -645,6 +645,7 @@ export class MessengerStore {
   }
 
   dispose() {
+    clearBlobCache()
     ++this.generation
     this.client?.stopClient()
     this.client?.removeAllListeners()

@@ -36,6 +36,7 @@ export default defineConfig({
     'messenger-list.spec.ts',
     'messenger-teams.spec.ts',
     'messenger-image-groups.spec.ts',
+    'messenger-timeline.spec.ts',
     'messenger-status.spec.ts',
     'teams-tenant.spec.ts',
     'agent-controls.spec.ts',

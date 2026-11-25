@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { automaticReadAllowed } from '@/lib/messenger/notification-actions'
-import { forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type CSSProperties, type FormEvent } from 'react'
+import { forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type FormEvent } from 'react'
 import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal, Reply, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,7 @@ import { channelThreads } from '@/lib/messenger/channel-threads'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
 import { collectAttachments } from '@/components/chat/attachment-list'
 import type { ChatAttachment } from '@/hooks/useChat'
-import { imageMessageGroups } from '@/lib/messenger/image-groups'
+import { ALBUM_PREVIEW_SIZE, imageMessageGroups } from '@/lib/messenger/image-groups'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { PromptInput, type PromptInputHandle } from '@/components/chat/prompt-input'
@@ -34,6 +34,44 @@ import { DeliveryIndicator } from '@/components/chat/delivery-indicator'
 import { useMessengerListHidden } from '@/lib/messenger/list-visibility'
 import { MessengerFilterBar, MessengerHeaderBar, type ChatFilter } from './messenger-services-bar'
 import { hasServiceLogo, ServiceLogo } from './service-logo'
+
+function useMessageArrival(roomId: string | null, messages: MessengerMessage[]) {
+  const previous = useRef<{ roomId: string | null; messages: MessengerMessage[]; openedAt: number } | null>(null)
+  const arrivals = useRef(new Map<string, number>())
+
+  useLayoutEffect(() => {
+    const now = Date.now()
+    const last = previous.current
+    const sameRoom = last?.roomId === roomId
+    const openedAt = sameRoom ? last.openedAt : now
+    previous.current = { roomId, messages, openedAt }
+    if (!sameRoom) {
+      arrivals.current.clear()
+      return
+    }
+    for (const [id, expires] of arrivals.current) {
+      if (expires <= now) arrivals.current.delete(id)
+    }
+    const latest = last.messages.at(-1)
+    const cutoff = latest?.timestamp ?? openedAt
+    const knownIds = new Set(last.messages.map(message => message.id))
+    const pendingBodies = new Set(last.messages.filter(message => message.own && message.pending).map(message => message.body))
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index]!
+      if (message.id === latest?.id || message.timestamp < cutoff) break
+      if (knownIds.has(message.id)) continue
+      // Acknowledgement replaces an optimistic message ID in the gateway store.
+      if (message.own && !message.pending && pendingBodies.has(message.body)) continue
+      arrivals.current.set(message.id, now + 250)
+    }
+  }, [roomId, messages])
+
+  return useCallback((id: string) => {
+    const expires = arrivals.current.get(id)
+    arrivals.current.delete(id)
+    return expires !== undefined && expires > Date.now()
+  }, [])
+}
 
 function MessengerTypingIndicator({ label, className }: { label: string; className: string }) {
   return (
@@ -152,7 +190,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const initialHistoryPrepared = useRef(false)
   const historyErrorToast = useRef<string | number | undefined>(undefined)
   const [loadingHistory, setLoadingHistory] = useState(false)
-  const [albumView, setAlbumView] = useState<{ groupId: string; index: number } | null>(null)
+  const [albumView, setAlbumView] = useState<{ roomId: string; attachments: NonNullable<MessengerMessage['attachment']>[]; index: number } | null>(null)
   const [historyFailedRoom, setHistoryFailedRoom] = useState<string | null>(null)
   // Messenger options are their own page (`/messenger/settings`), not a drawer over the conversation list.
   // The older `?pane=options` links still open it.
@@ -238,6 +276,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
   const ready = snapshot.status === 'ready'
   const connected = !!snapshot.session
   const matchesSearch = (message: MessengerMessage) => !search || (!message.unableToDecrypt && message.body.toLowerCase().includes(search.toLowerCase()))
+  const takeArrival = useMessageArrival(optionsOpen || statusRoom || !room ? null : roomId, snapshot.messages)
   const messages = snapshot.messages.filter(matchesSearch)
   const threads = room?.kind === 'channel' && !search
     ? channelThreads(messages, room.service.toLowerCase() === 'teams') : null
@@ -530,6 +569,8 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                 {imageGroups.map(({ messages: group, startIndex: index }) => {
                   const message = group[0]!
                   const album = group.length > 1
+                  const preview = group.slice(0, ALBUM_PREVIEW_SIZE)
+                  const remaining = group.length - preview.length
                   const hasReplies = group.some(item => threads?.replies.has(item.id))
                   return <div key={message.id} className={groupPositions[index + group.length - 1]?.end === false ? 'pb-1.5' : 'pb-3'}>
                     {needsDayDivider(timeline[index - 1]?.timestamp, message.timestamp) && <p data-day-divider className="mx-auto my-2 w-fit rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">{dayDividerLabel(message.timestamp)}</p>}
@@ -538,17 +579,21 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                         {album && !message.own && room.kind !== 'channel' && <div className="w-9 shrink-0 pt-0.5"><MessengerPeerAvatar {...messageAvatarProps(room, message)} /></div>}
                         <div data-image-group={album ? 'true' : undefined} className={album ? 'w-[min(92%,420px)] min-w-0' : ''}>
                           {album && (!message.own || room.kind === 'channel') && <p className="mb-0.5 truncate text-[11px] font-semibold leading-4 text-primary">{message.sender}</p>}
-                          <div className={album ? 'grid grid-cols-2 gap-1' : ''}>
-                            {group.map((item, offset) => <MessengerBubble
+                          <div className={album ? 'relative grid grid-cols-2 gap-1' : ''}>
+                            {preview.map((item, offset) => <MessengerBubble
                               key={item.id} messageId={item.id} message={item} roomId={room.id} disabled={!ready || busy}
-                              imageTile={album}
-                              {...(album ? { onOpenImage: () => setAlbumView({ groupId: message.id, index: offset }) } : {})}
+                              albumTile={album} takeArrival={takeArrival}
+                              moreAttachments={offset === preview.length - 1 ? remaining : 0}
+                              {...(album ? { onOpenAttachment: () => setAlbumView({ roomId: room.id, attachments: group.flatMap(media => media.attachment ? [media.attachment] : []), index: offset }) } : {})}
                               variant={room.kind === 'channel' ? 'channel' : 'chat'}
                               groupStart={groupPositions[index + offset]?.start ?? true}
                               groupEnd={groupPositions[index + offset]?.end ?? true}
                               onReply={replyToMessage}
                               avatar={messageAvatarProps(room, item)}
                             />)}
+                            {remaining > 0 && group.slice(ALBUM_PREVIEW_SIZE).map(item => (
+                              <span key={item.id} data-message-id={item.id} aria-hidden="true" className="pointer-events-none absolute bottom-0 right-0 size-px" />
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -558,7 +603,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                         return <section key={item.id} aria-label="Thread replies" className="mt-2 space-y-2 border-t pt-2 pl-3 sm:pl-8">
                           {replies.map(reply => <MessengerBubble key={reply.id} messageId={reply.id}
                             message={reply.replyTo?.id === item.id ? { ...reply, replyTo: undefined } : reply}
-                            roomId={room.id} disabled={!ready || busy} variant="channel"
+                            roomId={room.id} disabled={!ready || busy} variant="channel" takeArrival={takeArrival}
                             onReply={replyToMessage} avatar={messageAvatarProps(room, reply)} />)}
                         </section>
                       })}
@@ -566,21 +611,15 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                   </div>
                 })}
               </Conversation>
-              {albumView && (() => {
-                const group = imageGroups.find(candidate => candidate.messages[0]!.id === albumView.groupId)?.messages ?? []
-                const attachments = group.flatMap(item => item.attachment ? [item.attachment] : [])
-                // Tile offsets match attachment order only when every tile carries an attachment.
-                if (attachments.length !== group.length) return null
-                return <AlbumViewer attachments={attachments} index={Math.min(albumView.index, attachments.length - 1)}
-                  onIndexChange={index => setAlbumView({ groupId: albumView.groupId, index })} onClose={() => setAlbumView(null)} />
-              })()}
+              {albumView && albumView.roomId === room.id && <AlbumViewer attachments={albumView.attachments} index={albumView.index}
+                onIndexChange={index => setAlbumView({ ...albumView, index })} onClose={() => setAlbumView(null)} />}
               {loadingHistory && <p role="status" className="pointer-events-none absolute inset-x-0 top-2 z-10 mx-auto w-fit rounded-full border bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm">Loading earlier messages…</p>}
               </div>
               {snapshot.historyLimited && <p role="status" className="px-3 py-1 text-xs text-muted-foreground">10,000 events loaded. Open WhatsApp for older history.</p>}
               <ChatComposerSurface className="shrink-0 px-3 pb-3">
-                <div data-messenger-composer className="mx-auto max-w-4xl">
+                <div data-messenger-composer className="relative mx-auto max-w-4xl">
                   {!!snapshot.typing?.length && <MessengerTypingIndicator
-                    className="mb-1 text-muted-foreground"
+                    className="pointer-events-none absolute inset-x-0 bottom-full mb-1 text-muted-foreground"
                     label={`${snapshot.typing.join(', ')} ${snapshot.typing.length === 1 ? 'is' : 'are'} typing`}
                   />}
                   {replies[room.id] && <div data-reply-preview className="mb-1.5 flex items-center gap-2 rounded-lg border-l-2 border-primary bg-muted px-3 py-1.5">

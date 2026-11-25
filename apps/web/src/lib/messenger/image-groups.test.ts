@@ -12,7 +12,16 @@ const photo = (id: string, overrides: Partial<MessengerMessage> = {}): Messenger
 describe('imageMessageGroups', () => {
   it('groups consecutive photos and retains every message in order', () => {
     const messages = Array.from({ length: 5 }, (_, i) => photo(String(i), { timestamp: 1_700_000_000_000 + i }))
-    expect(imageMessageGroups(messages).map(group => group.messages.map(message => message.id))).toEqual([['0', '1', '2', '3'], ['4']])
+    expect(imageMessageGroups(messages).map(group => group.messages.map(message => message.id))).toEqual([['0', '1', '2', '3', '4']])
+  })
+
+  it('groups uncaptioned videos with photos and leaves captioned videos separate', () => {
+    const video = photo('video', {
+      body: 'clip.webm',
+      attachment: { url: 'mxc://example/clip', name: 'clip.webm', mime: 'video/webm', image: false },
+    })
+    expect(imageMessageGroups([photo('a'), video, { ...video, id: 'captioned', body: 'At the beach' }])
+      .map(group => group.messages.map(message => message.id))).toEqual([['a', 'video'], ['captioned']])
   })
 
   it('separates captions, replies, unsettled messages, different people and distant photos', () => {

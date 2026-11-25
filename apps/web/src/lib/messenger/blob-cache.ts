@@ -16,22 +16,37 @@ function evict(now: number) {
   }
 }
 
-export function cachedBlob(key: string, load: () => Promise<Blob>): Promise<Blob> {
+export function peekCachedBlob(key: string): Blob | undefined {
   const now = Date.now()
   evict(now)
   const hit = entries.get(key)
-  if (hit) {
-    if (hit.blob) { entries.delete(key); entries.set(key, { ...hit, expires: now + TTL_MS }) }
-    return hit.blob ? Promise.resolve(hit.blob) : hit.pending!
-  }
+  if (!hit?.blob) return undefined
+  entries.delete(key)
+  entries.set(key, { ...hit, expires: now + TTL_MS })
+  return hit.blob
+}
+
+export function cachedBlob(key: string, load: () => Promise<Blob>): Promise<Blob> {
+  const blob = peekCachedBlob(key)
+  if (blob) return Promise.resolve(blob)
+  const hit = entries.get(key)
+  if (hit?.pending) return hit.pending
+
+  const entry: Entry = { expires: 0 }
   const pending = load().then(blob => {
-    entries.delete(key)
-    entries.set(key, { blob, expires: Date.now() + TTL_MS })
-    cachedBytes += blob.size
-    evict(Date.now())
+    if (entries.get(key) === entry) {
+      entries.delete(key)
+      entries.set(key, { blob, expires: Date.now() + TTL_MS })
+      cachedBytes += blob.size
+      evict(Date.now())
+    }
     return blob
-  }, error => { entries.delete(key); throw error })
-  entries.set(key, { pending, expires: now + TTL_MS })
+  }, error => {
+    if (entries.get(key) === entry) entries.delete(key)
+    throw error
+  })
+  entry.pending = pending
+  entries.set(key, entry)
   return pending
 }
 

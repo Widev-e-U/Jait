@@ -84,7 +84,7 @@ type Room = {
   states: Event[];
   previous?: string | null;
   receipts: Record<string, Record<string, { ts?: number; thread_id?: string }>>;
-  typing?: { users: string[]; expires: number };
+  typing?: { users: string[]; expires: number; started: number };
   /** Counterpart of a direct conversation, resolved from `m.direct`/member state. */
   peer?: { userId: string; name: string; avatarUrl?: string };
 };
@@ -1074,9 +1074,19 @@ class Connection {
           else if (e.type === 'net.jait.hidden')
             room.summary.hidden = !!e.content?.hidden;
         for (const e of data.ephemeral?.events ?? [])
-          if (e.type === 'm.typing' && Array.isArray(e.content?.user_ids))
-            room.typing = { users: e.content.user_ids.filter((id: unknown): id is string => typeof id === 'string').slice(0, 100), expires: Date.now() + 15000 };
-          else if (e.type === 'm.receipt')
+          if (e.type === 'm.typing' && Array.isArray(e.content?.user_ids)) {
+            const now = Date.now();
+            const users = e.content.user_ids.filter((id: unknown): id is string => typeof id === 'string' && id !== this.session?.userId).slice(0, 100);
+            const previous = room.typing;
+            if (users.length) {
+              room.typing = { users, expires: now + 15000, started: previous && previous.expires > now ? previous.started : now };
+            } else if (previous && room.summary.service?.toLowerCase() === 'whatsapp' && now < previous.started + 2500) {
+              // A short bridge start/stop can otherwise disappear between browser snapshots.
+              previous.expires = previous.started + 2500;
+            } else {
+              room.typing = undefined;
+            }
+          } else if (e.type === 'm.receipt')
             for (const [eventId, types] of Object.entries(
               e.content as Record<string, any>,
             ))

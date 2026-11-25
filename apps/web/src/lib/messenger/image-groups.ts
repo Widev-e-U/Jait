@@ -3,9 +3,18 @@ import { needsDayDivider } from './dates'
 import { isStandaloneImage } from './standalone'
 
 // Bridges expose photos as separate events without an album identifier. Group
-// only consecutive, uncaptioned photos sent close together by the same person.
+// only consecutive, uncaptioned photos and videos sent close together by the same person.
 export const IMAGE_GROUP_WINDOW_MS = 60_000
-export const MAX_IMAGE_GROUP_SIZE = 4
+export const ALBUM_PREVIEW_SIZE = 4
+
+function isAlbumMedia(message: MessengerMessage): boolean {
+  if (message.pending || message.failed || message.unableToDecrypt || message.replyTo) return false
+  if (isStandaloneImage(message)) return true
+  const attachment = message.attachment
+  const body = message.body.trim()
+  return !!attachment && attachment.mime.toLowerCase().startsWith('video/')
+    && (!body || body === attachment.name.trim())
+}
 
 export function imageMessageGroups(
   messages: MessengerMessage[],
@@ -15,11 +24,10 @@ export function imageMessageGroups(
   for (const [index, message] of messages.entries()) {
     const group = groups[groups.length - 1]
     const previous = group?.messages[group.messages.length - 1]
-    const eligible = (item: MessengerMessage) => isStandaloneImage(item) && !item.pending && !item.failed && !item.unableToDecrypt && !item.replyTo
     const gap = previous ? message.timestamp - previous.timestamp : NaN
     const sameSender = previous && previous.own === message.own && previous.sender === message.sender
       && (!previous.senderId || !message.senderId || previous.senderId === message.senderId)
-    if (previous && group.messages.length < MAX_IMAGE_GROUP_SIZE && sameSender && eligible(previous) && eligible(message)
+    if (previous && sameSender && isAlbumMedia(previous) && isAlbumMedia(message)
       && Number.isFinite(gap) && gap >= 0 && gap <= IMAGE_GROUP_WINDOW_MS
       && !needsDayDivider(previous.timestamp, message.timestamp)) {
       group.messages.push(message)

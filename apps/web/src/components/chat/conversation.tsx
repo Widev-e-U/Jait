@@ -1074,13 +1074,13 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
       }
       const target = current.scrollHeight
       const remaining = target - current.scrollTop - current.clientHeight
-      if (remaining > BOTTOM_SETTLE_EPSILON_PX) {
+      const targetMoved = Math.abs(target - lastTarget) > BOTTOM_SETTLE_EPSILON_PX
+      if (remaining > BOTTOM_SETTLE_EPSILON_PX || targetMoved) {
         stableFrames = 0
-        // Only re-issue when the destination actually moved; re-targeting the
-        // same offset every frame would restart the smooth animation instead of
-        // letting it finish.
-        if (Math.abs(target - lastTarget) > BOTTOM_SETTLE_EPSILON_PX) {
-          lastTarget = target
+        // Re-target a smooth scroll only when the destination moves so the
+        // animation can finish. Correct instant scrolls whenever they drift.
+        lastTarget = target
+        if (remaining > BOTTOM_SETTLE_EPSILON_PX && (targetMoved || behavior !== 'smooth')) {
           current.scrollTo({ top: target, behavior })
         }
       } else {
@@ -1392,6 +1392,8 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     if (!sizerEl || typeof ResizeObserver === 'undefined') return
 
     const observer = new ResizeObserver(() => {
+      // Initial positioning already follows size changes and owns the reveal callback.
+      if (variant === 'messenger' && !initialScrollReady) return
       if (pendingTopAlignIdRef.current != null || (topAnchoredMessageId != null && !detachedRef.current)) return
       // The height change is a tool card the user just toggled, and that card
       // is already pinning its own edge frame by frame. Anything written here
@@ -1418,7 +1420,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
 
     observer.observe(sizerEl)
     return () => observer.disconnect()
-  }, [topAnchoredMessageId, restoreScrollAnchor, scrollToBottom, updateBottomState])
+  }, [variant, initialScrollReady, topAnchoredMessageId, restoreScrollAnchor, scrollToBottom, updateBottomState])
 
   // Track how far the virtual sizer sits below the top of the scroll *content*.
   // The minimap's document spans are in sizer coordinates, so this offset is
@@ -1474,9 +1476,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
             style={{
               ...CONVERSATION_SCROLL_STYLE,
               visibility: !hasContent || initialScrollReady ? 'visible' : 'hidden',
-              // Opening a messenger chat repositions the list while hidden; fade it in
-              // once settled instead of snapping from the skeleton.
-              ...(variant === 'messenger' ? { opacity: !hasContent || initialScrollReady ? 1 : 0, transition: 'opacity 180ms ease-out' } : {}),
+              ...(variant === 'messenger' ? { scrollBehavior: 'auto' } : {}),
             }}
           >
             {loading && (
@@ -1487,7 +1487,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
                 </div>
               </div>
             )}
-            <div ref={innerRef} className={cn(getChatTranscriptColumnClassName('pb-6 sm:py-6', variant === 'messenger' ? 'pt-6' : 'pt-12'))}>
+            <div ref={innerRef} className={cn(getChatTranscriptColumnClassName('pb-6 sm:py-6', variant === 'messenger' ? 'flex min-h-full flex-col pt-6' : 'pt-12'))}>
               {hasMore && (
                 <div className="flex justify-center py-3">
                   <button
@@ -1506,6 +1506,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
               )}
               <div
                 ref={sizerRef}
+                className={variant === 'messenger' ? 'mt-auto shrink-0' : undefined}
                 style={{
                   height: committedSize + newTurnTailPadding,
                   width: '100%',
