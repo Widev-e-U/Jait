@@ -14,6 +14,7 @@ import { CatalogueDetails } from './catalogue-details'
 
 const COLORS = { root: '#f472b6', page: '#38bdf8', feature: '#a78bfa', tool: '#34d399', skill: '#fb7185' }
 const RADII = { root: 10, page: 8, feature: 5, tool: 3, skill: 4 }
+const NODE_HIT_RADIUS = 11
 const SKILLS_LINK = `${JAIT_PAGES.settings.path}?tab=skills&skillsTab=installed`
 
 function escapeLabel(value: string): string {
@@ -62,6 +63,7 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraphMethods<CatalogueNode, CatalogueLink> | undefined>(undefined)
   const hasFitRef = useRef(false)
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const focusedPage = pageFilter !== 'all'
   const searching = Boolean(query.trim())
@@ -103,22 +105,33 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
   }, [fitGraph, pageFilter])
 
   const choose = useCallback((node: CatalogueNode) => {
-    if (node.kind === 'root') {
-      focusPage('all')
-    } else if (node.kind === 'page' && node.pageId) {
-      focusPage(node.pageId)
-    } else {
-      const connected = graph.links.some(({ source, target }) => catalogueEndpointId(source) === selected.id && catalogueEndpointId(target) === node.id)
-      setSelection({ id: node.id, parent: connected ? selected.id : node.id === selection.id ? selection.parent : undefined })
-      const camera = graphRef.current
-      if (camera && node.x !== undefined && node.y !== undefined) {
-        const duration = cameraDuration(320)
-        camera.centerAt(node.x, node.y, duration)
-        if (camera.zoom() < 0.95) camera.zoom(0.95, duration)
-      }
+    const connected = graph.links.some(({ source, target }) => catalogueEndpointId(source) === selected.id && catalogueEndpointId(target) === node.id)
+    setSelection({ id: node.id, parent: connected ? selected.id : node.id === selection.id ? selection.parent : undefined })
+  }, [graph.links, selected.id, selection])
+
+  const chooseFromGraph = (node: CatalogueNode, event: MouseEvent) => {
+    const start = pointerStartRef.current
+    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return
+    choose(node)
+  }
+
+  const chooseFromDetails = (node: CatalogueNode) => {
+    choose(node)
+    if (node.x !== undefined && node.y !== undefined) {
+      graphRef.current?.centerAt(node.x, node.y, cameraDuration(280))
     }
-    setCollapsed(false)
-  }, [focusPage, graph.links, selected.id, selection])
+  }
+
+  const canPan = (event: MouseEvent | TouchEvent) => {
+    const camera = graphRef.current
+    if (!camera || !(event.currentTarget instanceof HTMLCanvasElement)) return true
+    if ('touches' in event && event.touches.length !== 1) return true
+    const pointer = 'touches' in event ? event.touches[0] : event
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const { x, y } = camera.screen2GraphCoords(pointer.clientX - bounds.left, pointer.clientY - bounds.top)
+    return !graph.nodes.some((node) => node.x !== undefined && node.y !== undefined
+      && Math.hypot(node.x - x, node.y - y) <= NODE_HIT_RADIUS)
+  }
 
   useEffect(() => {
     let active: AbortController | undefined
@@ -159,7 +172,10 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
     const themeObserver = new MutationObserver(readColors)
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] })
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setSize({ width: Math.round(entry.contentRect.width), height: Math.round(entry.contentRect.height) })
+      if (!entry) return
+      const width = Math.round(entry.contentRect.width)
+      const height = Math.round(entry.contentRect.height)
+      setSize((previous) => previous.width === width && previous.height === height ? previous : { width, height })
     })
     observer.observe(element)
     return () => { observer.disconnect(); themeObserver.disconnect() }
@@ -247,7 +263,9 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
       {errors.join(' · ')} <button type="button" className="ml-2 rounded underline focus-visible:ring-2 focus-visible:ring-ring" onClick={update}>Retry</button>
     </div>}
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto md:flex-row md:overflow-hidden">
-      <div ref={containerRef} className="relative min-h-[7rem] min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted/20 md:min-h-0" data-testid="catalogue-graph" aria-label="Interactive catalogue graph" role="region">
+      <div ref={containerRef} onPointerDownCapture={(event) => {
+        pointerStartRef.current = { x: event.clientX, y: event.clientY }
+      }} className="relative min-h-[7rem] min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted/20 md:min-h-0" data-testid="catalogue-graph" aria-label="Interactive catalogue graph" role="region">
         {size.width > 0 && size.height > 0 && <ForceGraph2D
           ref={graphRef} width={size.width} height={size.height} graphData={graph} nodeId="id"
           dagMode={focusedPage ? undefined : 'radialout'} dagLevelDistance={90}
@@ -255,13 +273,14 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
           nodePointerAreaPaint={(node: CatalogueNode, color, ctx) => {
             ctx.fillStyle = color
             ctx.beginPath()
-            ctx.arc(node.x ?? 0, node.y ?? 0, 11, 0, Math.PI * 2)
+            ctx.arc(node.x ?? 0, node.y ?? 0, NODE_HIT_RADIUS, 0, Math.PI * 2)
             ctx.fill()
           }}
           linkColor={(link: CatalogueLink) => onPath(link) ? primaryColorRef.current : '#94a3b866'}
           linkWidth={(link: CatalogueLink) => onPath(link) ? 2.5 : 1}
           linkDirectionalArrowLength={(link: CatalogueLink) => onPath(link) ? 5 : 0}
-          onNodeClick={choose} onEngineStop={fitGraph} warmupTicks={50} cooldownTicks={1}
+          enableNodeDrag={false} enablePanInteraction={canPan}
+          onNodeClick={chooseFromGraph} onEngineStop={fitGraph} warmupTicks={50} cooldownTicks={1}
           d3VelocityDecay={0.4} minZoom={0.2} maxZoom={8} backgroundColor="transparent"
         />}
         {searching && graph.nodes.length === 1 && <p role="status" className="pointer-events-none absolute inset-x-3 top-3 rounded bg-background/95 px-3 py-2 text-sm text-muted-foreground">No matching catalogue entries.</p>}
@@ -275,8 +294,8 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
         </div>
       </div>
       <CatalogueDetails nodes={graph.nodes} path={path} selected={selected} collapsed={collapsed} focusedPage={focusedPage}
-        searching={searching} skillsMessage={skillsMessage} destinationLabel={skillDestination ? 'Open Skills settings' : page && `Open ${page.title}`}
-        onToggle={() => setCollapsed((value) => !value)} onChoose={choose} onNavigate={() => {
+        searching={searching} showInstalledSkills={pageFilter === 'settings'} skillsMessage={skillsMessage} destinationLabel={skillDestination ? 'Open Skills settings' : page && `Open ${page.title}`}
+        onToggle={() => setCollapsed((value) => !value)} onChoose={chooseFromDetails} onNavigate={() => {
           if (destination) {
             onNavigate()
             openNotification({ id: 'catalogue:' + selected.id, link: destination })

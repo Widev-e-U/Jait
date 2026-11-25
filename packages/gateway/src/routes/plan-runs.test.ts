@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import Fastify from "fastify";
 import { createFileListTool, createFilePatchTool, createFileReadTool, createFileWriteTool } from "../tools/file-tools.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +16,13 @@ import { ToolRegistry } from "../tools/registry.js";
 import { PlanService } from "../services/plans.js";
 import { RepositoryService } from "../services/repositories.js";
 import { registerPlanRoutes } from "./plans.js";
+
+
+async function workflowArtifactsRoot(): Promise<string> {
+  const root = resolve(import.meta.dirname, "../../../../.jait/artifacts");
+  await mkdir(root, { recursive: true });
+  return root;
+}
 
 const owner = "owner";
 const config = { ...loadConfig(), jwtSecret: "plan-runs-test-secret" };
@@ -112,7 +118,14 @@ describe("plan run routes", () => {
     const request = { method: "POST" as const, url: `/api/plan-runs/${run.id}/resume`, headers };
     expect((await app.inject({ ...request, payload: {} })).statusCode).toBe(409);
     expect((await app.inject({ ...request, payload: { decisions: [{}] } })).statusCode).toBe(400);
-    const resumed = await app.inject({ ...request, payload: { decisions: [{ taskId: task.id, decision: "retry", note: "Checked workspace" }] } });
+    const retry = { decisions: [{ taskId: task.id, decision: "retry", note: "Checked workspace" }] };
+    const outsider = await app.inject({ ...request, headers: await auth("outsider"), payload: retry });
+    expect(outsider.statusCode).toBe(404);
+    expect(orchestration.getRun(owner, run.id)).toMatchObject({
+      paused: true,
+      tasks: [{ taskId: task.id, state: "interrupted", attemptCount: 1 }],
+    });
+    const resumed = await app.inject({ ...request, payload: retry });
     expect(resumed.statusCode).toBe(200);
     expect(resumed.json().run.tasks).toMatchObject([{ taskId: task.id, state: "running", attemptCount: 2 }]);
     const url = `/api/plan-runs/${run.id}/tasks/${task.id}/attempts`;
@@ -284,8 +297,8 @@ describe("gateway workflow composition", () => {
   });
 
   it("offers a writing task only the file tools for its worktree, and runs it there", async () => {
-    const stateDir = await mkdtemp(join(tmpdir(), "jait-state-"));
-    const repoDir = await mkdtemp(join(tmpdir(), "jait-repo-"));
+    const stateDir = await mkdtemp(join(await workflowArtifactsRoot(), "jait-state-"));
+    const repoDir = await mkdtemp(join(await workflowArtifactsRoot(), "jait-repo-"));
     const previousStateDir = process.env["JAIT_STATE_DIR"];
     process.env["JAIT_STATE_DIR"] = stateDir;
     const database = await openDatabase(":memory:");

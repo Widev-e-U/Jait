@@ -31,18 +31,22 @@ for (const mobile of [false, true]) {
     }, { token, api: API_URL })
     await page.goto('/agents')
     await expect(page.getByRole('button', { name: 'New agent' })).toBeVisible({ timeout: 30_000 })
-    await page.getByRole('button', { name: 'Account menu' }).click()
+    await expect(page.getByRole('button', { name: 'Open catalogue', exact: true })).toHaveCount(0)
+    const accountMenu = page.getByRole('button', { name: 'Account menu' })
+    const catalogueItem = page.getByRole('menuitem', { name: 'Catalogue', exact: true })
+    await accountMenu.click()
     const items = page.getByRole('menuitem')
     const labels = await items.allTextContents()
     expect(labels.indexOf('Catalogue')).toBe(labels.indexOf('Usage') + 1)
-    await page.getByRole('menuitem', { name: 'Catalogue', exact: true }).click()
+    await catalogueItem.click()
     const modal = page.getByRole('dialog', { name: 'Catalogue', exact: true })
     await expect(modal).toBeVisible()
     await expect(modal.getByRole('heading', { name: 'Catalogue', exact: true })).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(modal).not.toBeVisible()
-    const launcher = page.getByRole('button', { name: 'Open catalogue', exact: true })
-    await launcher.press('Enter')
+    await expect(accountMenu).toBeFocused()
+    await accountMenu.press('Enter')
+    await catalogueItem.press('Enter')
     await expect(modal.getByTestId('catalogue-graph').locator('canvas')).toBeVisible({ timeout: 30_000 })
     await modal.getByRole('button', { name: 'Enter fullscreen' }).click()
     const fullscreen = await modal.boundingBox()
@@ -74,11 +78,12 @@ for (const mobile of [false, true]) {
     await modal.getByRole('button', { name: 'Open Threads', exact: true }).click()
     await expect(modal).not.toBeVisible()
     await expect(page).toHaveURL(/\/threads$/)
-    await launcher.click()
+    await accountMenu.click()
+    await catalogueItem.click()
     await expect(modal).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(modal).not.toBeVisible()
-    await expect(launcher).toBeFocused()
+    await expect(accountMenu).toBeFocused()
   })
 }
 
@@ -132,7 +137,8 @@ test('installed skills appear in browse and search and open filtered Skills sett
     description: 'Review changes against a personal checklist.', filePath: '/skills/personal-review/SKILL.md',
   }] }))
   await page.goto('/agents')
-  await page.getByRole('button', { name: 'Open catalogue', exact: true }).click()
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('menuitem', { name: 'Catalogue', exact: true }).click()
   const modal = page.getByRole('dialog', { name: 'Catalogue', exact: true })
   const browse = modal.getByRole('navigation', { name: 'Browse catalogue entries' })
   const personalSkill = browse.getByRole('button', { name: 'Personal Review user', exact: true })
@@ -152,4 +158,95 @@ test('installed skills appear in browse and search and open filtered Skills sett
   await expect(modal).not.toBeVisible()
   await expect(page).toHaveURL(/\/settings\?tab=skills&skillsTab=installed&skillsQ=personal-review$/)
   await expect(page.getByText('Personal Review', { exact: true })).toBeVisible()
+})
+
+
+test('catalogue nodes stay fixed on drag and the details panel centers the graph', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 800 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.addInitScript(({ token, api }) => {
+    localStorage.setItem('jait-auth-token', token)
+    sessionStorage.setItem('jait-auth-token', token)
+    localStorage.setItem('jait-gateway-url', api)
+  }, { token, api: API_URL })
+  await page.route('**/api/tools', (route) => route.fulfill({ json: { tools: Array.from({ length: 40 }, (_, index) => ({
+    name: `example.tool-${String(index).padStart(2, '0')}`,
+    description: 'Example catalogue tool',
+    page: 'agents',
+  })) } }))
+  await page.goto('/agents')
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('menuitem', { name: 'Catalogue', exact: true }).click()
+  const modal = page.getByRole('dialog', { name: 'Catalogue', exact: true })
+  await modal.getByRole('searchbox', { name: 'Search catalogue' }).fill('example.tool-')
+  const entry = modal.getByRole('button', { name: 'example.tool-25', exact: true })
+  await expect(entry).toBeVisible()
+  await entry.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+  const before = await entry.boundingBox()
+  await entry.click()
+  await expect(modal.getByRole('heading', { name: 'example.tool-25', exact: true })).toBeAttached()
+  await expect(entry).toBeInViewport()
+  await expect.poll(async () => Math.abs((await entry.boundingBox())!.y - before!.y)).toBeLessThan(2)
+
+  await modal.getByRole('searchbox', { name: 'Search catalogue' }).clear()
+  const pageFilter = modal.getByRole('combobox', { name: 'Catalogue page' })
+  await pageFilter.click()
+  await page.getByRole('option', { name: 'Chat', exact: true }).click()
+  await expect(modal.getByRole('heading', { name: 'Chat', exact: true })).toBeVisible()
+  const canvas = modal.getByTestId('catalogue-graph').locator('canvas').first()
+  const readCamera = () => canvas.evaluate((element: HTMLCanvasElement) => {
+    const context = element.getContext('2d')!
+    const camera = context.getTransform()
+    return { x: camera.e, y: camera.f, scale: camera.a }
+  })
+  const rootNodePosition = () => canvas.evaluate((element: HTMLCanvasElement) => {
+    const context = element.getContext('2d')!
+    const { width, height, clientWidth, clientHeight } = element
+    const { data } = context.getImageData(0, 0, width, height)
+    let count = 0
+    let x = 0
+    let y = 0
+    for (let offset = 0; offset < data.length; offset += 4) {
+      // Pink pixels are the Jait root node.
+      if (data[offset] !== 244 || data[offset + 1] !== 114 || data[offset + 2] !== 182 || data[offset + 3] !== 255) continue
+      const pixel = offset / 4
+      x += pixel % width
+      y += Math.floor(pixel / width)
+      count++
+    }
+    return count ? { x: (x / count) * clientWidth / width, y: (y / count) * clientHeight / height } : null
+  })
+  await expect.poll(rootNodePosition).not.toBeNull()
+  const root = (await rootNodePosition())!
+  const initialCamera = await readCamera()
+  await canvas.hover({ position: root })
+  await page.mouse.wheel(0, -150)
+  await expect.poll(async () => (await readCamera()).scale).toBeGreaterThan(initialCamera.scale)
+  const position = (await rootNodePosition())!
+  await canvas.hover({ position })
+  await expect(canvas).toHaveClass(/clickable/)
+  const zoomedCamera = await readCamera()
+  const canvasBounds = (await canvas.boundingBox())!
+  await page.mouse.down()
+  await page.mouse.move(canvasBounds.x + position.x + 45, canvasBounds.y + position.y + 25, { steps: 5 })
+  await page.mouse.up()
+  expect(await rootNodePosition()).toEqual(position)
+  expect(await readCamera()).toEqual(zoomedCamera)
+  await expect(modal.getByRole('heading', { name: 'Chat', exact: true })).toBeVisible()
+
+  await canvas.click({ position })
+  await expect(modal.getByRole('heading', { name: 'Jait', exact: true })).toBeVisible()
+  await expect(pageFilter).toHaveText('Chat')
+  expect(await readCamera()).toEqual(zoomedCamera)
+
+  const entries = modal.getByRole('navigation', { name: 'Browse catalogue entries' })
+  await entries.locator('summary').filter({ hasText: 'Pages' }).click()
+  await entries.getByRole('button', { name: 'Chat', exact: true }).click()
+  await expect(modal.getByRole('heading', { name: 'Chat', exact: true })).toBeVisible()
+  await modal.getByRole('navigation', { name: 'Selected catalogue path' }).getByRole('button', { name: 'Jait', exact: true }).click()
+  await expect.poll(async () => {
+    const centered = await rootNodePosition()
+    return centered ? Math.hypot(centered.x - canvasBounds.width / 2, centered.y - canvasBounds.height / 2) : Infinity
+  }).toBeLessThan(2)
+  expect((await readCamera()).scale).toBe(zoomedCamera.scale)
 })

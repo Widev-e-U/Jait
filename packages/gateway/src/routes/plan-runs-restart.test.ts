@@ -165,3 +165,91 @@ it.each(["controlled shutdown", "abrupt process crash"])("reopens a persisted in
     await rm(fixture, { recursive: true, force: true });
   }
 }, 30_000);
+
+it("passes a persisted predecessor result to a dependent real worker after gateway restart", async () => {
+  const artifacts = resolve(import.meta.dirname, "../../../../.jait/artifacts");
+  await mkdir(artifacts, { recursive: true });
+  const fixture = await mkdtemp(join(artifacts, "workflow-dependency-restart-"));
+  const dbPath = join(fixture, "gateway.sqlite");
+  await writeFile(join(fixture, "result.txt"), "fixture\n");
+  const config = { ...loadConfig(), jwtSecret: "workflow-dependency-test-secret" };
+  const userService = {
+    findById: (id: string) => id === "owner" ? { id } : undefined,
+    getSettings: () => ({ chatProvider: "jait", jaitBackend: "openai", selectedModel: "fixture-model",
+      apiKeys: { OPENAI_API_KEY: "fixture", OPENAI_BASE_URL: "https://fixture.example.test/v1" } }),
+  } as unknown as UserService;
+  let database = await openDatabase(dbPath);
+  let databaseOpen = true;
+  let app: Awaited<ReturnType<typeof createServer>> | undefined;
+  try {
+    migrateDatabase(database.sqlite);
+    let repos = new RepositoryService(database.db);
+    let plans = new PlanService(database.db);
+    const repo = repos.create({ userId: "owner", name: "fixture", localPath: fixture });
+    const task = { title: "Analyze", description: "Inspect fixture", status: "approved" as const, resources: {},
+      verification: [{ id: "file", label: "Fixture exists", check: { kind: "artifact" as const, path: "result.txt" } }] };
+    const plan = plans.create({ userId: "owner", repoId: repo.id, title: "Dependency restart", tasks: [
+      { ...task, id: "first" }, { ...task, id: "second", dependsOn: ["first"] },
+    ] });
+    const headers = { authorization: `Bearer ${await signAuthToken({ id: "owner", username: "owner" }, config.jwtSecret)}` };
+    const response = (prompt: string, summary: string) => {
+      const contract = prompt.split("\n").find((line) => line.startsWith('{"taskId":') && line.includes('"attemptId"'));
+      const report = { ...JSON.parse(contract!), summary };
+      return new Response([
+        `data: ${JSON.stringify({ choices: [{ delta: { content: `[INFORM] ${JSON.stringify(report)}` } }] })}\n\n`,
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n', "data: [DONE]\n\n",
+      ].join(""), { headers: { "Content-Type": "text/event-stream" } });
+    };
+    const beforeRestart = vi.fn(async (_url: string, init: RequestInit) => {
+      const prompt: string = JSON.parse(String(init.body)).messages.find((m: { role: string }) => m.role === "user").content;
+      if (beforeRestart.mock.calls.length === 1) return response(prompt, "Persisted predecessor evidence");
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init.signal!;
+        if (signal.aborted) reject(signal.reason);
+        else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", beforeRestart);
+    app = await createServer(config, { db: database.db, repoService: repos, planService: plans, userService, toolRegistry: new ToolRegistry() });
+    const start = await app.inject({ method: "POST", url: `/api/plans/${plan.id}/runs`, headers, payload: {} });
+    expect(start.statusCode, start.body).toBe(201);
+    const url = `/api/plan-runs/${start.json().run.id}`;
+    await expect.poll(() => beforeRestart.mock.calls.length).toBe(2);
+    expect((await app.inject({ url, headers })).json().run.tasks).toMatchObject([
+      { taskId: "first", state: "passed" }, { taskId: "second", state: "running" },
+    ]);
+    await app.close();
+    app = undefined;
+    database.sqlite.close();
+    databaseOpen = false;
+
+    database = await openDatabase(dbPath);
+    databaseOpen = true;
+    migrateDatabase(database.sqlite);
+    repos = new RepositoryService(database.db);
+    plans = new PlanService(database.db);
+    const afterRestart = vi.fn(async (_url: string, init: RequestInit) => {
+      const prompt: string = JSON.parse(String(init.body)).messages.find((m: { role: string }) => m.role === "user").content;
+      expect(prompt).toContain("Persisted predecessor evidence");
+      return response(prompt, "Dependent completed");
+    });
+    vi.stubGlobal("fetch", afterRestart);
+    app = await createServer(config, { db: database.db, repoService: repos, planService: plans, userService, toolRegistry: new ToolRegistry() });
+    const recovered = (await app.inject({ url, headers })).json().run;
+    expect(recovered.tasks).toMatchObject([{ taskId: "first", state: "passed" }, { taskId: "second", state: "interrupted" }]);
+    expect(afterRestart).not.toHaveBeenCalled();
+    const resume = await app.inject({ method: "POST", url: `${url}/resume`, headers,
+      payload: { decisions: [{ taskId: "second", decision: "retry", note: "Reviewed interruption" }] } });
+    expect(resume.statusCode, resume.body).toBe(200);
+    await expect.poll(async () => (await app!.inject({ url, headers })).json().run.status).toBe("passed");
+    expect(afterRestart).toHaveBeenCalledTimes(1);
+    expect((await app.inject({ url: `${url}/tasks/second/attempts`, headers })).json().attempts).toMatchObject([
+      { attemptNo: 1, state: "interrupted" }, { attemptNo: 2, state: "passed", result: { summary: "Dependent completed" } },
+    ]);
+  } finally {
+    await app?.close();
+    vi.unstubAllGlobals();
+    if (databaseOpen) database.sqlite.close();
+    await rm(fixture, { recursive: true, force: true });
+  }
+}, 30_000);

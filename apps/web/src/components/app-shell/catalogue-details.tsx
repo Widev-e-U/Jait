@@ -20,6 +20,7 @@ interface CatalogueDetailsProps {
   collapsed: boolean
   focusedPage: boolean
   searching: boolean
+  showInstalledSkills: boolean
   skillsMessage?: string
   destinationLabel?: string
   onToggle: () => void
@@ -27,30 +28,28 @@ interface CatalogueDetailsProps {
   onNavigate: () => void
 }
 
-export function CatalogueDetails({ nodes, path, selected, collapsed, focusedPage, searching, skillsMessage,
+export function CatalogueDetails({ nodes, path, selected, collapsed, focusedPage, searching, showInstalledSkills, skillsMessage,
   destinationLabel, onToggle, onChoose, onNavigate }: CatalogueDetailsProps) {
   const contentId = useId()
-  const contentRef = useRef<HTMLDivElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const focusHeadingRef = useRef(false)
   const selectedId = selected.id
   useLayoutEffect(() => {
     if (focusHeadingRef.current) {
-      headingRef.current?.focus({ preventScroll: true })
+      headingRef.current?.focus()
       focusHeadingRef.current = false
     }
-    contentRef.current?.scrollTo({ top: 0 })
   }, [selectedId])
 
-  const selectFromList = (node: CatalogueNode) => {
-    if (node.id !== selectedId) focusHeadingRef.current = true
+  const selectFromList = (node: CatalogueNode, keyboard: boolean) => {
+    focusHeadingRef.current = keyboard && node.id !== selectedId
     onChoose(node)
   }
   const toggleLabel = collapsed ? 'Expand catalogue details' : 'Collapse catalogue details'
   const ToggleIcon = collapsed ? PanelRightOpen : PanelRightClose
 
   return <aside aria-label="Catalogue details" className={cn('flex max-h-[50%] w-full min-w-0 shrink-0 flex-col overflow-hidden rounded-lg border bg-card md:max-h-none',
-    collapsed ? 'md:w-12' : 'md:w-[19rem] xl:w-[21rem]')}>
+    collapsed ? 'md:w-12' : 'h-1/2 md:h-auto md:w-[19rem] xl:w-[21rem]')}>
     <div className={cn('flex min-h-11 shrink-0 items-center gap-2 px-2', collapsed ? 'md:justify-center' : 'border-b')}>
       <div className={cn('min-w-0 flex-1 truncate pl-2 text-sm font-medium', collapsed && 'md:sr-only')}>
         {collapsed ? selected.label : 'Browse catalogue'}
@@ -65,11 +64,11 @@ export function CatalogueDetails({ nodes, path, selected, collapsed, focusedPage
         <TooltipContent>{toggleLabel}</TooltipContent>
       </Tooltip>
     </div>
-    <div id={contentId} hidden={collapsed} ref={contentRef} className="min-h-0 overflow-y-auto overscroll-contain">
-      <div className="border-b bg-muted/20 p-3 sm:p-4">
+    <div id={contentId} hidden={collapsed} className="min-h-0 overflow-y-auto overscroll-contain">
+      <div className="border-b bg-muted/20 p-3 [overflow-anchor:none] sm:p-4">
         {path.length > 1 && <nav aria-label="Selected catalogue path" className="mb-2 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
           {path.slice(0, -1).map((node) => <span className="inline-flex min-w-0 items-center gap-1" key={node.id}>
-            <button type="button" onClick={() => selectFromList(node)} className="break-all rounded px-1 py-1 text-left hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{node.label}</button>
+            <button type="button" onClick={(event) => selectFromList(node, event.detail === 0)} className="break-all rounded px-1 py-1 text-left hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{node.label}</button>
             <ChevronRight aria-hidden="true" className="size-3 shrink-0" />
           </span>)}
         </nav>}
@@ -91,7 +90,7 @@ export function CatalogueDetails({ nodes, path, selected, collapsed, focusedPage
         {sections.map(({ kind, label, Icon }) => {
           const entries = nodes.filter((node) => node.kind === kind)
           if (!entries.length && (kind !== 'skill' || !skillsMessage)) return null
-          return <details key={kind} className="group rounded-md" open={searching || (focusedPage && kind === 'tool') || (kind === 'skill' && path.some((node) => node.id === 'feature:settings:installed-skills'))}>
+          return <details key={kind} className="group rounded-md" open={searching || (focusedPage && kind === 'tool') || (kind === 'skill' && showInstalledSkills)}>
             <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
               <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
               <span>{label}</span>
@@ -101,7 +100,7 @@ export function CatalogueDetails({ nodes, path, selected, collapsed, focusedPage
             {!entries.length ? <p className="px-3 py-2 text-sm text-muted-foreground">{skillsMessage}</p> :
               <ul className="space-y-0.5 pb-1" role="list">
                 {entries.map((node) => <li key={node.id}>
-                  <button type="button" aria-current={node.id === selectedId ? 'true' : undefined} onClick={() => selectFromList(node)}
+                  <button type="button" aria-current={node.id === selectedId ? 'true' : undefined} onClick={(event) => selectFromList(node, event.detail === 0)}
                     className="flex min-h-10 w-full items-center justify-between gap-2 rounded-md px-3 py-1.5 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:bg-primary/10 aria-[current=true]:font-medium">
                     <span className="min-w-0 break-words">{kind === 'feature' && node.pageId && `${JAIT_PAGES[node.pageId].title} · `}{node.label}</span>
                     {node.available === false && <span className="shrink-0 text-xs text-amber-700 dark:text-amber-300">Unavailable</span>}

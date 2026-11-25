@@ -69,6 +69,35 @@ describe("parseAgentTaskReport", () => {
     }
   });
 
+  it("rejects credential-shaped file paths without storing or changing them", () => {
+    const token = `ghp_${"a".repeat(36)}`;
+    for (const fields of [
+      { changedFiles: [`src/${token}.txt`] },
+      { artifacts: [{ path: `out/${token}.txt` }] },
+    ]) {
+      const result = parseAgentTaskReport(report(fields), expected);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toContain("must not contain credentials");
+        expect(result.reason).not.toContain(token);
+      }
+    }
+    expect(parseAgentTaskReport(report({ changedFiles: ["src/token=example.txt"], artifacts: [{ path: "out/api_key=example.txt" }] }), expected).ok).toBe(true);
+  });
+
+  it("redacts credentials in artifact kinds before bounding them", () => {
+    const token = `ghp_${"a".repeat(36)}`;
+    const result = parseAgentTaskReport(
+      report({ artifacts: [{ path: "out/result.txt", kind: `${"x".repeat(40)} ${token}` }] }),
+      expected,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const kind = result.report.artifacts[0]?.kind;
+    expect(kind).toBe(`${"x".repeat(40)} [redacted token]`);
+    expect(kind?.length).toBeLessThanOrEqual(64);
+  });
+
   it("reports unreadable objects as rejections instead of throwing", () => {
     const hostile = new Proxy({}, {
       ownKeys() {

@@ -1,6 +1,5 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFileListTool, createFilePatchTool, createFileReadTool, createFileWriteTool } from "../../tools/file-tools.js";
 import { ToolRegistry } from "../../tools/registry.js";
@@ -11,13 +10,20 @@ import {
   type WorkspaceMode,
 } from "./workflow-tool-guard.js";
 
+
+async function workflowArtifactsRoot(): Promise<string> {
+  const root = resolve(import.meta.dirname, "../../../../../.jait/artifacts");
+  await mkdir(root, { recursive: true });
+  return root;
+}
+
 describe("workflow tool guard", () => {
   let base: string;
   let root: string;
   let outside: string;
 
   beforeEach(async () => {
-    base = await mkdtemp(join(tmpdir(), "jait-guard-"));
+    base = await mkdtemp(join(await workflowArtifactsRoot(), "jait-guard-"));
     root = join(base, "workspace");
     outside = join(base, "outside");
     await mkdir(join(root, "docs"), { recursive: true });

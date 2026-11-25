@@ -1,6 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ToolContext } from "../../tools/contracts.js";
 import type { RepositoryService } from "../repositories.js";
@@ -12,6 +11,13 @@ import { ConsentAwareExecutor } from "../../security/consent-executor.js";
 import { ConsentManager } from "../../security/consent-manager.js";
 import type { ToolPermission } from "../../security/tool-permissions.js";
 import { TrustEngine } from "../../security/trust-engine.js";
+
+
+async function workflowArtifactsRoot(): Promise<string> {
+  const root = resolve(import.meta.dirname, "../../../../../.jait/artifacts");
+  await mkdir(root, { recursive: true });
+  return root;
+}
 
 const OWNED_REPO = { id: "repo-1", userId: "owner", localPath: "/repos/app", deviceId: null };
 const repositories = {
@@ -133,7 +139,7 @@ describe("workflow verifier", () => {
   });
 
   it("checks artifacts inside the workspace and routes command gates to the executor", async () => {
-    dir = await mkdtemp(join(tmpdir(), "jait-verify-"));
+    dir = await mkdtemp(join(await workflowArtifactsRoot(), "jait-verify-"));
     await mkdir(join(dir, "docs"));
     await writeFile(join(dir, "docs", "a.md"), "a\n");
     const verifier = createWorkflowVerifier({ repositories: { getById: () => ({ ...OWNED_REPO, localPath: dir! }) } as unknown as Pick<RepositoryService, "getById">, toolExecutor: undefined });

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { Loader2, Maximize, Minimize, Network, X } from 'lucide-react'
+import { Loader2, Maximize, Minimize, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -20,19 +20,6 @@ export function useCatalogueDialog() {
       setOpen(true)
     },
   }
-}
-
-export function CatalogueLauncher({ compact, onClick }: { compact?: boolean; onClick: () => void }) {
-  return <Tooltip>
-    <TooltipTrigger asChild>
-      <Button type="button" variant="ghost" size={compact ? 'icon' : 'sm'} aria-label="Open catalogue"
-        className={compact ? 'h-9 w-9 shrink-0 text-muted-foreground' : 'h-9 w-full justify-start gap-3 px-3 text-muted-foreground'}
-        onClick={onClick}>
-        <Network aria-hidden="true" />{!compact && 'Catalogue'}
-      </Button>
-    </TooltipTrigger>
-    {compact && <TooltipContent>Catalogue</TooltipContent>}
-  </Tooltip>
 }
 
 /** Keep canvas dependencies out of the initial app render. */

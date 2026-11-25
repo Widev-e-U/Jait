@@ -6,8 +6,7 @@ import { execFileSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { TaskWorker } from "@jait/shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type JaitDB, migrateDatabase, openDatabase } from "../../db/connection.js";
@@ -23,6 +22,13 @@ import { type SubAgentRunner, type SubAgentRunRequest, SubAgentTaskExecutor, unb
 import { OrchestrationService, workflowSessionId } from "./orchestrator.js";
 import { routeWorkers } from "./worker-router.js";
 import { integrationBranchName, WorkflowWorkspaces } from "./workspace.js";
+
+
+async function workflowArtifactsRoot(): Promise<string> {
+  const root = resolve(import.meta.dirname, "../../../../../.jait/artifacts");
+  await mkdir(root, { recursive: true });
+  return root;
+}
 
 const OWNER = "owner-1";
 const REPO_ID = "repo-1";
@@ -331,7 +337,7 @@ describe("ACP workers in a plan run", () => {
   let db: JaitDB;
 
   beforeEach(async () => {
-    base = await mkdtemp(join(tmpdir(), "jait-acp-run-"));
+    base = await mkdtemp(join(await workflowArtifactsRoot(), "jait-acp-run-"));
     repo = join(base, "repo");
     await mkdir(repo);
     git(repo, "init", "-q", "-b", "main");

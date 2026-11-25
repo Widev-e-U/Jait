@@ -724,7 +724,7 @@ export class OrchestrationService {
         try {
           this.pump(runId);
         } catch (error) {
-          this.store.setRunError(runId, boundText(errorMessage(error), MAX_ERROR), this.nowIso());
+          this.store.setRunError(runId, boundText(redactSecrets(errorMessage(error)), MAX_ERROR), this.nowIso());
         }
       }
     });
@@ -749,7 +749,7 @@ export class OrchestrationService {
         this.finish(attempt, {
           to: "interrupted",
           outcome: "interrupted",
-          error: boundText(`internal error: ${errorMessage(error)}; outcome unknown`, MAX_ERROR),
+          error: boundText(redactSecrets(`internal error: ${errorMessage(error)}; outcome unknown`), MAX_ERROR),
         });
       })
       .finally(() => {
@@ -794,7 +794,7 @@ export class OrchestrationService {
         this.finish(attempt, {
           to: "interrupted",
           outcome: "interrupted",
-          error: boundText(`executor failed: ${errorMessage(error)}; outcome unknown`, MAX_ERROR),
+          error: boundText(redactSecrets(`executor failed: ${errorMessage(error)}; outcome unknown`), MAX_ERROR),
         });
       }
       return;
@@ -933,7 +933,7 @@ export class OrchestrationService {
       });
       return { passed: verdict.passed === true, detail: boundText(redactSecrets(String(verdict.detail)), MAX_DETAIL) };
     } catch (error) {
-      return { passed: false, detail: boundText(`verifier error: ${errorMessage(error)}`, MAX_DETAIL) };
+      return { passed: false, detail: boundText(redactSecrets(`verifier error: ${errorMessage(error)}`), MAX_DETAIL) };
     }
   }
 
@@ -979,7 +979,7 @@ export class OrchestrationService {
         label,
         required: true,
         passed: false,
-        detail: boundText(`scope check error: ${errorMessage(error)}`, MAX_DETAIL),
+        detail: boundText(redactSecrets(`scope check error: ${errorMessage(error)}`), MAX_DETAIL),
       };
     }
   }

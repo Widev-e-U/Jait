@@ -19,15 +19,25 @@ const MAX_FOLLOW_UP = 500;
 const MAX_CHANGED_FILES = 500;
 const MAX_ARTIFACTS = 50;
 
-const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+const RECOGNIZABLE_TOKEN_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[redacted private key]"],
   [/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, "[redacted token]"],
   [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, "[redacted token]"],
   [/\bsk-[A-Za-z0-9_-]{16,}\b/g, "[redacted token]"],
   [/\bAKIA[0-9A-Z]{16}\b/g, "[redacted token]"],
   [/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]"],
+];
+
+const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  ...RECOGNIZABLE_TOKEN_PATTERNS,
   [/\b(password|passwd|secret|token|api[_-]?key)(\s*[:=]\s*)\S+/gi, "$1$2[redacted]"],
 ];
+
+// A filename can legitimately contain assignments like token=example. Use only
+// specific credential formats for paths, whose exact identity must be preserved.
+function containsRecognizableToken(path: string): boolean {
+  return RECOGNIZABLE_TOKEN_PATTERNS.some(([pattern, replacement]) => path.replace(pattern, replacement) !== path);
+}
 
 /** Best-effort masking of common credential shapes before text is stored or shown. Not a DLP guarantee. */
 export function redactSecrets(text: string): string {
@@ -71,6 +81,7 @@ function readPaths(value: unknown, field: string, max: number): string[] {
   for (const entry of value) {
     const path = normalizeResourceKey(entry);
     if (!isSafeFilePath(path)) reject(`${field} entries must be safe project-relative file paths`);
+    if (containsRecognizableToken(path)) reject(`${field} entries must not contain credentials`);
     paths.push(path);
   }
   return [...new Set(paths)];
@@ -88,7 +99,8 @@ function readArtifacts(value: unknown): AgentTaskReport["artifacts"] {
     const record = entry as Record<string, unknown>;
     const path = normalizeResourceKey(record.path);
     if (!isSafeFilePath(path)) reject("artifact paths must be safe project-relative files");
-    const kind = typeof record.kind === "string" ? record.kind.trim().slice(0, 64) : "";
+    if (containsRecognizableToken(path)) reject("artifact paths must not contain credentials");
+    const kind = typeof record.kind === "string" ? redactSecrets(record.kind.trim()).slice(0, 64) : "";
     return kind ? { path, kind } : { path };
   });
 }

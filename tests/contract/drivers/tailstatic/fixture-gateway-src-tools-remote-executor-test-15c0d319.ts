@@ -781,6 +781,75 @@ await __jait_hook_3265();
 
 break;
 }
+case "tailstatic_packages_gateway_src_tools_remote_executor_test_ts_142_3_gateway_bound": {
+
+
+const remoteNode: FsNode = {
+  id: "node-linux",
+  name: "Linux Desktop",
+  platform: "linux",
+  clientId: "client-linux",
+  isGateway: false,
+  registeredAt: "2026-01-01T00:00:00.000Z",
+};
+const windowsNode: FsNode = {
+  id: "node-windows",
+  name: "Windows Desktop",
+  platform: "windows",
+  clientId: "client-windows",
+  isGateway: false,
+  registeredAt: "2026-01-01T00:00:00.000Z",
+};
+const gatewayNode: FsNode = {
+  id: "gateway",
+  name: "Gateway",
+  platform: "linux",
+  clientId: "gateway-client",
+  isGateway: true,
+  registeredAt: "2026-01-01T00:00:00.000Z",
+};
+function createToolContext(): ToolContext {
+  return {
+    sessionId: "session-1",
+    actionId: "action-1",
+    projectRoot: "/remote/project",
+    requestedBy: "test-user",
+  };
+}
+function createMockWs(overrides: Partial<WsControlPlane> = {}) {
+  return {
+    getFsNodes: vi.fn(() => [gatewayNode, remoteNode, windowsNode]),
+    findNodeByDeviceId: vi.fn((nodeId: string) => (nodeId === remoteNode.id ? remoteNode : undefined)),
+    proxyToolOp: vi.fn(async () => ({ ok: true, message: "remote result" })),
+    ...overrides,
+  } as unknown as WsControlPlane;
+}
+/*__jait_scope_open__*/{
+let cleanupPath: string | null = null;
+const __jait_hook_3265 = () => {
+    if (cleanupPath) {
+      rmSync(cleanupPath, { force: true, recursive: true });
+      cleanupPath = null;
+    }
+  };
+
+try {
+await (async()=>{
+
+    const ws = createMockWs();
+
+    __jait_captureType(0, resolveRemoteNodeForSession(ws, "/definitely/missing/jait/project", "gateway", "jait.terminal"));
+    __jait_capture(1, ws.getFsNodes.mock.calls);
+
+})();
+
+} finally {
+await __jait_hook_3265();
+}
+}
+
+break;
+}
 case "tailstatic_packages_gateway_src_tools_remote_executor_test_ts_159_3": {
 
 
@@ -1212,13 +1281,14 @@ try {
 await (async()=>{
 
     const onOutputChunk = vi.fn();
-    const ws = createMockWs();
-    const localExecutor = vi.fn(async () => ({ ok: true, message: "local result" }));
-    const context = { ...createToolContext(), onOutputChunk };
-    const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
+    const ws = createMockWs({ findNodeByDeviceId: vi.fn(() => windowsNode) });
+    const localExecutor = vi.fn(async () => ({ ok: true, message: "terminal result" }));
+    const context = { ...createToolContext(), projectRoot: "C:\\Users\\test\\repo", onOutputChunk };
+    const nodeId = resolveRemoteNodeForSession(ws, context.projectRoot, windowsNode.id, "jait.terminal");
+    const execute = createRemoteToolExecutor({ ws, localExecutor }, nodeId);
 
-    await __jait_captureResolved(0, (execute("terminal.run", { command: "pwd" }, context)));
-    __jait_capture(1, (localExecutor.mock.calls), (["terminal.run",{ command: "pwd" },{ ...context, executionNodeId: remoteNode.id },undefined]));
+    await __jait_captureResolved(0, (execute("jait.terminal", { command: "Get-Location" }, context)));
+    __jait_capture(1, (localExecutor.mock.calls), (["jait.terminal",{ command: "Get-Location" },{ ...context, executionNodeId: windowsNode.id },undefined]));
     __jait_capture(2, (ws.proxyToolOp.mock.calls));
   
 })();
@@ -1285,17 +1355,19 @@ const __jait_hook_5316 = () => {
 try {
 await (async()=>{
 
-    const ws = createMockWs({ findNodeByDeviceId: vi.fn(() => undefined) });
-    const localExecutor = vi.fn(async () => ({ ok: true, message: "fallback result" }));
-    const context = createToolContext();
-    const execute = createRemoteToolExecutor({ ws, localExecutor }, remoteNode.id);
+    for (const [index, toolName] of ["jait.terminal", "terminal.run", "execute"].entries()) {
+      const ws = createMockWs({ findNodeByDeviceId: vi.fn((id) => id === windowsNode.id ? windowsNode : undefined) });
+      const localExecutor = vi.fn(async () => ({ ok: true, message: "fallback result" }));
+      const context = { ...createToolContext(), projectRoot: "C:\\Users\\test\\repo" };
+      const projectNodeId = "disconnected-windows-node";
+      const nodeId = resolveRemoteNodeForSession(ws, context.projectRoot, projectNodeId, toolName);
+      const execute = createRemoteToolExecutor({ ws, localExecutor }, nodeId);
 
-    await __jait_captureResolved(0, (execute("terminal.run", { command: "pwd" }, context)), ({
-      ok: false,
-      message: `Project node ${remoteNode.id} is disconnected; terminal command was not run`,
-    }));
-    __jait_capture(1, (localExecutor.mock.calls));
-    __jait_capture(2, (ws.proxyToolOp.mock.calls));
+      await __jait_captureResolved(index * 4, execute(toolName, { command: "Get-Location" }, context));
+      __jait_capture(index * 4 + 1, ws.getFsNodes.mock.calls);
+      __jait_capture(index * 4 + 2, localExecutor.mock.calls);
+      __jait_capture(index * 4 + 3, ws.proxyToolOp.mock.calls);
+    }
   
 })();
 

@@ -24,8 +24,8 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 18,
   "clientRequestCalls": 388,
-  "clientNonLiteralRequestCalls": 75,
-  "clientReviewedRequestSites": 70,
+  "clientNonLiteralRequestCalls": 76,
+  "clientReviewedRequestSites": 71,
   "backgroundServices": 21,
   "backgroundServicesMissing": 21,
   "httpRustStatus": {
@@ -524,16 +524,17 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `browserDevtoolsGrantCleanup` (service) — missing; Rust keyword hint present; Node: routes/browser-devtools.ts:36 setInterval
 - `threadRecoverySweep` (service) — missing; Rust keyword hint absent; Node: routes/threads.ts:297 setInterval
 - `teamsReauthFlowPoll` (flow-poll) — missing; Rust keyword hint present; Node: services/bridge-reauth.ts:104 setInterval
-- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:870 setTimeout
-- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1466 setInterval
+- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:875 setTimeout
+- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1481 setInterval
 - `orchestratorStandby` (service) — missing; Rust keyword hint absent; Node: services/orchestration/orchestrator.ts:624 setInterval
 - `providerUpdateChecks` (service) — missing; Rust keyword hint present; Node: services/provider-updates.ts:93 setInterval
 
 ## Reviewed timers and loops (not services)
 
+- `routes/plan-runs-crash.fixture.ts|(top level)` — routes/plan-runs-crash.fixture.ts:40 setInterval — test-only child process stays alive until the restart regression kills it
 - `channels/telegram/connector.ts|TelegramConnector.startTyping` — channels/telegram/connector.ts:578 setInterval — typing indicator while one chat reply is pending
 - `routes/browser-devtools.ts|registerBrowserDevToolsRoutes.upgrade` — routes/browser-devtools.ts:133 setInterval — validity check on one devtools transport, cleared with that transport
-- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4495 setInterval, routes/chat.ts:6535 setInterval, routes/chat.ts:6649 setInterval, routes/chat.ts:6657 setInterval, routes/chat.ts:6745 setInterval, routes/chat.ts:6779 setInterval, routes/chat.ts:6842 setInterval, routes/chat.ts:6869 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
+- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4510 setInterval, routes/chat.ts:6542 setInterval, routes/chat.ts:6656 setInterval, routes/chat.ts:6664 setInterval, routes/chat.ts:6752 setInterval, routes/chat.ts:6786 setInterval, routes/chat.ts:6849 setInterval, routes/chat.ts:6876 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
 - `routes/mcp-server.ts|registerMcpRoutes` — routes/mcp-server.ts:501 setInterval, routes/mcp-server.ts:622 setInterval — keepalive on one MCP connection
 - `tools/browser-handoff.ts|createBrowserHandoffTool.wait` — tools/browser-handoff.ts:25 setInterval — poll inside one browser handoff tool call
 - `tools/terminal-tools.ts|executeInTerminal` — tools/terminal-tools.ts:1029 setInterval — poll inside one terminal tool execution
@@ -781,7 +782,7 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/sessions/latency-repro-session/events` — GET /api/sessions/:sessionId/events — apps/web/src/repro/chat-stream-latency-repro.tsx
 - `/api/sessions/latency-repro-session/messages` — GET /api/sessions/:sessionId/messages — apps/web/src/repro/chat-stream-latency-repro.tsx
 - `/api/sessions/unread-count` — DELETE /api/sessions/:id, GET /api/sessions/:id, GET /api/sessions/unread-count, PATCH /api/sessions/:id — apps/web/src/hooks/useUnreadChatCount.ts
-- `/api/skills` — GET /api/skills — apps/web/src/components/automation/ThreadSkillPicker.tsx, apps/web/src/components/settings/SkillSettings.tsx, apps/web/src/hooks/useSkills.ts
+- `/api/skills` — GET /api/skills — apps/web/src/components/app-shell/catalogue-graph.tsx, apps/web/src/components/automation/ThreadSkillPicker.tsx, apps/web/src/components/settings/SkillSettings.tsx, apps/web/src/hooks/useSkills.ts
 - `/api/skills/{}` — PATCH /api/skills/:id — apps/web/src/components/settings/SkillSettings.tsx
 - `/api/skills/{}/install-tool` — POST /api/skills/:id/install-tool — apps/web/src/components/settings/SkillSettings.tsx
 - `/api/store/packages` — GET /api/store/packages — apps/web/src/components/settings/ExtensionSettings.tsx
@@ -820,6 +821,7 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 
 Each request call (fetch, apiFetch, request, this.request, getJson) whose path is not a literal containing /api is listed here with the place its path is built. Reviewed in tooling/client-inventory.mjs; the table must match the source exactly.
 
+- `apps/web/src/components/app-shell/catalogue-graph.tsx|fetchCatalogue` (1) — helper; callers in this file pass /api/tools and /api/skills
 - `apps/web/src/components/project/project-members.tsx|ProjectMembers.change` (1) — forwards the project members endpoint or endpoint plus an encoded user ID from component handlers
 - `apps/web/src/components/project/project-members.tsx|ProjectMembers` (3) — fetch forwards the helper URL; two request calls use the project members endpoint built in this component
 - `apps/web/src/App.tsx|App` (1) — health probe of the configured gateway (${getApiUrl()}/health)

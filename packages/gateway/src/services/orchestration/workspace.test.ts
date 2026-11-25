@@ -1,11 +1,17 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { RepositoryService } from "../repositories.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { pathCoveredByWrites, taskBranchName, WorkflowWorkspaces, WorkspaceConflictError, WorkspaceError, WorkspaceStaleError, integrationBranchName } from "./workspace.js";
+
+
+async function workflowArtifactsRoot(): Promise<string> {
+  const root = resolve(import.meta.dirname, "../../../../../.jait/artifacts");
+  await mkdir(root, { recursive: true });
+  return root;
+}
 
 const GIT_ENV = {
   ...process.env,
@@ -43,7 +49,7 @@ describe("workflow workspaces (real git)", () => {
   let workspaces: WorkflowWorkspaces;
 
   beforeEach(async () => {
-    base = await mkdtemp(join(tmpdir(), "jait-wf-"));
+    base = await mkdtemp(join(await workflowArtifactsRoot(), "jait-wf-"));
     repo = join(base, "repo");
     await mkdir(repo);
     git(repo, "init", "-q", "-b", "main");

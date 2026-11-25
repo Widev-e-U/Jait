@@ -30,7 +30,7 @@ import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/compone
 import { NotificationBell } from '@/components/ui/notification-center'
 import { UpdateButton } from '@/components/app-shell/update-button'
 import { UsageModal } from '@/components/app-shell/usage-modal'
-import { CatalogueLauncher, CatalogueModal, useCatalogueDialog } from '@/components/app-shell/catalogue-modal'
+import { CatalogueModal, useCatalogueDialog } from '@/components/app-shell/catalogue-modal'
 import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/components/voice/voice-header-controls'
 import type { ThemeMode } from '@/hooks/useAuth'
 
@@ -213,7 +213,6 @@ export function AppHeader(props: AppHeaderProps) {
             {/* Mobile avatar + menu group */}
             {isMobile ? (
               <div className="flex items-center gap-0 shrink-0">
-                {isAuthenticated && <CatalogueLauncher compact onClick={() => catalogue.setOpen(true)} />}
                 {isAuthenticated && <NotificationBell />}
                 {isAuthLoading ? (
                   <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" aria-label="Loading account" />

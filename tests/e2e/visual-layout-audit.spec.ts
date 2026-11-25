@@ -112,7 +112,8 @@ test('catalogue graph border stays within its visible scroll region', async ({ p
   // the test deadline without adding layout coverage.
   for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 600 }, { width: 1024, height: 400 }, { width: 390, height: 844 }, { width: 360, height: 640 }]) {
     await page.setViewportSize(viewport)
-    await page.getByRole('button', { name: 'Open catalogue', exact: true }).click()
+    await page.getByRole('button', { name: 'Account menu' }).click()
+    await page.getByRole('menuitem', { name: 'Catalogue', exact: true }).click()
     const modal = page.getByRole('dialog', { name: 'Catalogue', exact: true })
     const graph = page.getByTestId('catalogue-graph')
     await expect(graph.locator('canvas')).toBeVisible()

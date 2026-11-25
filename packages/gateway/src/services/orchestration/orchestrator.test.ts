@@ -60,6 +60,60 @@ function makeService(executor: TaskExecutor, verifier: VerificationRunner = pass
   return new OrchestrationService({ db, executor, verifier, workspaces: inertWorkspaces });
 }
 
+it("redacts executor exceptions before persisting an interrupted attempt", async () => {
+  const service = makeService({
+    execute: async () => { throw new Error("provider failed token=abc123secret"); },
+  });
+  const run = service.createRun(USER, { title: "executor failure", tasks: [task("A")] });
+  await service.settle();
+  const view = service.getRun(USER, run.id);
+  const attempts = new OrchestrationStore(db).getAttempts(run.id);
+  expect(view.status).toBe("interrupted");
+  expect(attempts[0]).toMatchObject({ state: "interrupted" });
+  expect(JSON.stringify({ view, attempts })).toContain("token=[redacted]");
+  expect(JSON.stringify({ view, attempts })).not.toContain("abc123secret");
+});
+
+it("redacts verifier exceptions in persisted and returned gate results", async () => {
+  const service = makeService(
+    { execute: async (input) => report(input) },
+    { run: async () => { throw new Error("gate token=verifiersecret"); } },
+  );
+  const run = service.createRun(USER, { title: "verifier failure", tasks: [task("A", { maxAttempts: 1 })] });
+  await service.settle();
+  const view = service.getRun(USER, run.id);
+  const attempts = new OrchestrationStore(db).getAttempts(run.id);
+  expect(view.status).toBe("failed");
+  const ownerAttempts = service.getTaskAttempts(USER, run.id, "A");
+  for (const result of [attempts, ownerAttempts]) {
+    const serialized = JSON.stringify(result);
+    expect(serialized).toContain("verifier error: gate token=[redacted]");
+    expect(serialized).not.toContain("verifiersecret");
+  }
+  expect(JSON.stringify(view)).not.toContain("verifiersecret");
+});
+
+it("redacts scope-check exceptions in persisted and returned gate results", async () => {
+  const service = new OrchestrationService({
+    db,
+    executor: { execute: async (input) => report(input) },
+    verifier: passingVerifier,
+    workspaces: { ...inertWorkspaces, checkScope: async () => { throw new Error("scope token=scopesecret"); } },
+  });
+  const run = service.createRun(USER, { title: "scope failure", tasks: [task("A", { maxAttempts: 1, resources: { writes: ["out/result.txt"] } })] });
+  await service.settle();
+  const view = service.getRun(USER, run.id);
+  const attempts = new OrchestrationStore(db).getAttempts(run.id);
+  expect(view.status).toBe("failed");
+  const ownerAttempts = service.getTaskAttempts(USER, run.id, "A");
+  for (const result of [attempts, ownerAttempts]) {
+    const serialized = JSON.stringify(result);
+    expect(serialized).toContain("scope check error: scope token=[redacted]");
+    expect(serialized).not.toContain("scopesecret");
+  }
+  expect(JSON.stringify(view)).not.toContain("scopesecret");
+});
+
 it("keeps the trusted worker identity on an attempt after cancellation and rejects late updates", async () => {
   let active!: TaskExecutionInput;
   let complete!: () => void;
@@ -351,14 +405,23 @@ describe("validation and plans", () => {
       repoId: "repo-1",
       userId: USER,
       title: "Plan",
-      tasks: [{ id: "A", title: "Task A", description: "", status: "approved", verification: [gate()] }],
+      tasks: [{ id: "A", title: "Task A", description: "", status: "approved", verification: [
+        { id: "check", label: "Approved command", check: { kind: "command", command: "approved-check" } },
+      ] }],
     });
     const executor: TaskExecutor = { execute: async (input) => report(input) };
-    const service = makeService(executor);
+    const checks: unknown[] = [];
+    const verifier: VerificationRunner = { run: async (input) => {
+      checks.push(input.check);
+      return { passed: true, detail: "ok" };
+    } };
+    const service = makeService(executor, verifier);
     const run = service.createRun(USER, { planId: plan.id });
     plans.update(plan.id, {
       title: "Edited",
-      tasks: [{ id: "Z", title: "Other", description: "", status: "approved", verification: [gate()] }],
+      tasks: [{ id: "Z", title: "Other", description: "", status: "approved", verification: [
+        { id: "check", label: "Changed command", check: { kind: "command", command: "changed-check" } },
+      ] }],
     });
     await service.settle();
     const view = service.getRun(USER, run.id);
@@ -366,5 +429,6 @@ describe("validation and plans", () => {
     expect(view.title).toBe("Plan");
     expect(view.tasks.map((item) => item.taskId)).toEqual(["A"]);
     expect(view.status).toBe("passed");
+    expect(checks).toEqual([{ kind: "command", command: "approved-check" }]);
   });
 });

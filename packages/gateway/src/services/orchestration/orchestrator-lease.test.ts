@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type { VerificationGate } from "@jait/shared/types";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type JaitDB, migrateDatabase, openDatabase } from "../../db/connection.js";
@@ -21,6 +20,13 @@ import { FileOrchestrationLease, LEASE_FILE_NAME } from "./process-lease.js";
  * Two gateway processes on one database are modelled as two services with their
  * own lease pids over the same connection. The lease file is real.
  */
+
+async function workflowArtifactsRoot(): Promise<string> {
+  const root = resolve(import.meta.dirname, "../../../../../.jait/artifacts");
+  await mkdir(root, { recursive: true });
+  return root;
+}
+
 const USER = "user-1";
 const OWNER_PID = 4001;
 const STANDBY_PID = 4002;
@@ -34,7 +40,7 @@ beforeEach(async () => {
   sqlite = opened.sqlite;
   db = opened.db;
   migrateDatabase(sqlite);
-  leaseDir = await mkdtemp(join(tmpdir(), "jait-orchestrator-lease-"));
+  leaseDir = await mkdtemp(join(await workflowArtifactsRoot(), "jait-orchestrator-lease-"));
 });
 
 afterEach(async () => {

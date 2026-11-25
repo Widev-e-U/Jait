@@ -1,6 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { VerificationGate } from "@jait/shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type JaitDB, migrateDatabase, openDatabase } from "../../db/connection.js";
@@ -18,6 +17,13 @@ import {
 } from "./executor.js";
 import { inertWorkspaces } from "./inert-workspaces.js";
 import { OrchestrationService, type TaskExecutionInput, type VerificationRunner } from "./orchestrator.js";
+
+
+async function workflowArtifactsRoot(): Promise<string> {
+  const root = resolve(import.meta.dirname, "../../../../../.jait/artifacts");
+  await mkdir(root, { recursive: true });
+  return root;
+}
 
 const USER = "user-1";
 
@@ -327,8 +333,47 @@ describe("SubAgentTaskExecutor inside the orchestrator", () => {
     expect(dependent).not.toContain("abc123secret");
   });
 
+  it("passes only the verified retry report to a dependent after a failed gate", async () => {
+    const events: string[] = [];
+    const prompts: string[] = [];
+    let attempts = 0;
+    const runner: SubAgentRunner = {
+      run: async (request) => {
+        events.push(`worker:${request.taskId}`);
+        prompts.push(request.prompt);
+        if (request.taskId === "A") attempts++;
+        return { text: JSON.stringify({
+          taskId: request.taskId,
+          attemptId: request.attemptId,
+          status: "completed",
+          summary: request.taskId === "A" ? `version ${attempts}` : "used verified result",
+          changedFiles: [], artifacts: [], followUps: [],
+        }) };
+      },
+    };
+    let checks = 0;
+    const verifier: VerificationRunner = {
+      run: async () => {
+        checks++;
+        events.push(`gate:${checks}`);
+        return { passed: checks !== 1, detail: checks === 1 ? "missing output" : "ok" };
+      },
+    };
+    const service = new OrchestrationService({ db, executor: new SubAgentTaskExecutor(runner), verifier, workspaces: inertWorkspaces });
+    const run = service.createRun(USER, {
+      title: "Research and summarize",
+      tasks: [{ ...task, maxAttempts: 2 }, { ...task, id: "B", title: "Summarize", dependsOn: ["A"] }],
+    });
+    await service.settle();
+    expect(service.getRun(USER, run.id).status).toBe("passed");
+    expect(events).toEqual(["worker:A", "gate:1", "worker:A", "gate:2", "worker:B", "gate:3"]);
+    expect(prompts[1]).toContain("missing output");
+    expect(prompts[2]).toContain('"summary":"version 2"');
+    expect(prompts[2]).not.toContain('"summary":"version 1"');
+  });
+
   it("checks a non-coding writer's artifact on disk in its repository and passes it", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "jait-artifact-"));
+    const dir = await mkdtemp(join(await workflowArtifactsRoot(), "jait-artifact-"));
     try {
       const service = new OrchestrationService({
         db,
@@ -361,7 +406,7 @@ describe("SubAgentTaskExecutor inside the orchestrator", () => {
   });
 
   it("never passes a non-coding writer on its report alone when the artifact is missing", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "jait-artifact-"));
+    const dir = await mkdtemp(join(await workflowArtifactsRoot(), "jait-artifact-"));
     try {
       const service = new OrchestrationService({
         db,

@@ -18,8 +18,8 @@
     "clientOnlyRoutes": 5,
     "rustOnlyRoutes": 18,
     "clientRequestCalls": 388,
-    "clientNonLiteralRequestCalls": 75,
-    "clientReviewedRequestSites": 70,
+    "clientNonLiteralRequestCalls": 76,
+    "clientReviewedRequestSites": 71,
     "backgroundServices": 21,
     "backgroundServicesMissing": 21,
     "httpRustStatus": {
@@ -8350,7 +8350,7 @@
       "name": "messengerConnection",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:870 setTimeout"
+        "services/messenger-service.ts:875 setTimeout"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8359,7 +8359,7 @@
       "name": "messengerPresence",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:1466 setInterval"
+        "services/messenger-service.ts:1481 setInterval"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8385,6 +8385,13 @@
   ],
   "reviewedTimers": [
     {
+      "key": "routes/plan-runs-crash.fixture.ts|(top level)",
+      "sites": [
+        "routes/plan-runs-crash.fixture.ts:40 setInterval"
+      ],
+      "reason": "test-only child process stays alive until the restart regression kills it"
+    },
+    {
       "key": "channels/telegram/connector.ts|TelegramConnector.startTyping",
       "sites": [
         "channels/telegram/connector.ts:578 setInterval"
@@ -8401,14 +8408,14 @@
     {
       "key": "routes/chat.ts|registerChatRoutes",
       "sites": [
-        "routes/chat.ts:4495 setInterval",
-        "routes/chat.ts:6535 setInterval",
-        "routes/chat.ts:6649 setInterval",
-        "routes/chat.ts:6657 setInterval",
-        "routes/chat.ts:6745 setInterval",
-        "routes/chat.ts:6779 setInterval",
-        "routes/chat.ts:6842 setInterval",
-        "routes/chat.ts:6869 setInterval"
+        "routes/chat.ts:4510 setInterval",
+        "routes/chat.ts:6542 setInterval",
+        "routes/chat.ts:6656 setInterval",
+        "routes/chat.ts:6664 setInterval",
+        "routes/chat.ts:6752 setInterval",
+        "routes/chat.ts:6786 setInterval",
+        "routes/chat.ts:6849 setInterval",
+        "routes/chat.ts:6876 setInterval"
       ],
       "reason": "per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close"
     },
@@ -11056,6 +11063,7 @@
     {
       "path": "/api/skills",
       "files": [
+        "apps/web/src/components/app-shell/catalogue-graph.tsx",
         "apps/web/src/components/automation/ThreadSkillPicker.tsx",
         "apps/web/src/components/settings/SkillSettings.tsx",
         "apps/web/src/hooks/useSkills.ts"
@@ -11412,6 +11420,11 @@
     }
   ],
   "clientRequestReviews": [
+    {
+      "key": "apps/web/src/components/app-shell/catalogue-graph.tsx|fetchCatalogue",
+      "count": 1,
+      "reason": "helper; callers in this file pass /api/tools and /api/skills"
+    },
     {
       "key": "apps/web/src/components/project/project-members.tsx|ProjectMembers.change",
       "count": 1,

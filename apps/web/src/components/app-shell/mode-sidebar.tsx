@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { OverflowSidebarNavigation } from './overflow-sidebar-navigation'
 import { allocateRailSections } from './rail-allocation'
 import { UsageModal } from '@/components/app-shell/usage-modal'
-import { CatalogueLauncher, CatalogueModal, useCatalogueDialog } from '@/components/app-shell/catalogue-modal'
+import { CatalogueModal, useCatalogueDialog } from '@/components/app-shell/catalogue-modal'
 import { JaitIcon } from '@/components/icons/model-icons'
 import type { ThemeMode } from '@/hooks/useAuth'
 
@@ -205,7 +205,6 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
       </div>
       <div className="flex shrink-0 flex-col gap-1 border-t pt-2">
         {account?.updateControl?.(collapsed)}
-        {account?.username && <CatalogueLauncher compact={collapsed} onClick={() => catalogue.setOpen(true)} />}
         {bottomItems.map(renderItem)}
         {account?.agentControl?.(collapsed)}
         <DropdownMenu>

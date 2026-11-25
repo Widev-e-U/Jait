@@ -1,19 +1,25 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FileOrchestrationLease, LEASE_FILE_NAME, leasePathForDatabase } from "./process-lease.js";
 
 let dir: string;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "jait-lease-test-"));
+  dir = await mkdtemp(join(await workflowArtifactsRoot(), "jait-lease-test-"));
 });
 
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
+
+
+async function workflowArtifactsRoot(): Promise<string> {
+  const root = resolve(import.meta.dirname, "../../../../../.jait/artifacts");
+  await mkdir(root, { recursive: true });
+  return root;
+}
 
 const leaseFile = () => join(dir, LEASE_FILE_NAME);
 const onlyAlive = (...pids: number[]) => (pid: number) => pids.includes(pid);
