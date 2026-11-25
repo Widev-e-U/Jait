@@ -235,6 +235,10 @@ impl ConsentAwareExecutor {
             }
             irreversible = tool_permissions::classify_irreversible_command(command).reason;
         }
+        // Elevated runs always re-ask, as the reference does, even when `command` is not a string.
+        if name == "terminal.run" && input.get("elevated") == Some(&Value::Bool(true)) {
+            irreversible.get_or_insert("Runs with elevated privileges (sudo / UAC)");
+        }
         let needs_consent = requires || irreversible.is_some();
         let approve_all = self
             .consent

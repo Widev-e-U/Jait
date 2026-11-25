@@ -294,6 +294,19 @@ async fn real_typescript_executor_matches_policy_dryrun_trust_aliases_overrides_
         json!({"permissions":[permission("terminal.run","none")],"steps":[{"name":"terminal.run","input":{"command":"git reset --hard"},"decision":"reject"}]}),
     ]);
     scenarios.push(json!({"permissions":[permission("terminal.run","none")],"steps":[{"name":"execute","input":{"command":"printf safe"},"decision":"reject"},{"name":"jait.terminal","input":{"command":"printf safe"},"decision":"reject"}]}));
+    // Elevated terminal runs re-ask past session approvals, approve-all and the scheduler,
+    // keep an irreversible reason, and apply only to a boolean `elevated` on terminal.run.
+    scenarios.extend([
+        json!({"permissions":[permission("terminal.run","once")],"approvals":["terminal.run"],"steps":[{"name":"terminal.run","input":{"command":"printf safe","elevated":true},"decision":"reject"}]}),
+        json!({"permissions":[permission("terminal.run","none")],"approveAll":true,"steps":[{"name":"terminal.run","input":{"command":"printf safe","elevated":true},"decision":"reject"},{"name":"terminal.run","input":{"command":"printf safe","elevated":true}}]}),
+        json!({"permissions":[permission("terminal.run","none")],"origin":"scheduler","steps":[{"name":"terminal.run","input":{"command":"printf safe","elevated":true},"decision":"reject"}]}),
+        json!({"permissions":[permission("terminal.run","none")],"steps":[{"name":"terminal.run","input":{"command":"git reset --hard","elevated":true},"decision":"reject"}]}),
+        json!({"permissions":[permission("terminal.run","none")],"steps":[{"name":"terminal.run","input":{"command":42,"elevated":true},"decision":"reject"},{"name":"terminal.run","input":{"elevated":true},"decision":"reject"}]}),
+        json!({"permissions":[permission("terminal.run","none")],"steps":[{"name":"terminal.run","input":{"command":"printf safe","elevated":"true"},"decision":"reject"},{"name":"terminal.run","input":{"command":"printf safe","elevated":1},"decision":"reject"}]}),
+        json!({"permissions":[permission("terminal.run","none"),permission("execute","none"),permission("terminal.stream","none")],"steps":[{"name":"execute","input":{"command":"printf safe","elevated":true},"decision":"reject"},{"name":"terminal.stream","input":{"command":"printf safe","elevated":true},"decision":"reject"}]}),
+        json!({"permissions":[permission("terminal.run","none")],"runtimeMode":"full-access","steps":[{"name":"terminal.run","input":{"command":"printf safe","elevated":true},"decision":"reject"}]}),
+        json!({"permissions":[permission("terminal.run","none")],"steps":[{"name":"terminal.run","input":{"command":"printf safe","elevated":true},"dryRun":true}]}),
+    ]);
     let mut calls = vec![];
     let mut scenarios_with_markers = vec![];
     for (i, scenario) in scenarios.into_iter().enumerate() {
