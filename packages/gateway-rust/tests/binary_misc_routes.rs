@@ -518,6 +518,18 @@ async fn update_activation_is_unavailable_through_the_binary() {
     assert_eq!(register.status(), 200);
     let register = register.json::<Value>().await.unwrap();
     let owner = register["access_token"].as_str().unwrap();
+    for path in [
+        "/api/update/check",
+        "/api/update/changelog",
+        "/api/mobile-update/check?currentVersion=1.0.0",
+    ] {
+        let response = client
+            .get(format!("{}{path}", gateway.base))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 401, "{path} must require authentication");
+    }
     let url = format!("{}/api/update/apply", gateway.base);
     assert_eq!(
         client
