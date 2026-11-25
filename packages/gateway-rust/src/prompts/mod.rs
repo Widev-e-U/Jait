@@ -322,6 +322,10 @@ impl PromptRegistry {
         }
         append(
             &mut prompt,
+            &format!("\n\n{}", shared("OPENUI_INSTRUCTIONS").unwrap()),
+        );
+        append(
+            &mut prompt,
             &format!(
                 "\n\n<liveBrowserUpdates>\n{}\n</liveBrowserUpdates>",
                 shared("LIVE_BROWSER_UPDATE_INSTRUCTIONS").unwrap()
@@ -521,19 +525,20 @@ mod tests {
     }
 
     #[test]
-    fn lite_external_section_ends_with_live_browser_text() {
+    fn lite_external_section_ends_with_live_browser_and_openui_text() {
         let live = shared("LIVE_BROWSER_UPDATE_INSTRUCTIONS").expect("shared live-browser text");
+        let openui = shared("OPENUI_INSTRUCTIONS").expect("shared openUI text");
         let lite = shared("JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE").expect("shared lite text");
         assert!(
-            lite.ends_with(&format!("\n{live}")),
-            "LITE section must end with the live-browser paragraph"
+            lite.ends_with(&format!("\n{live}\n{openui}")),
+            "LITE section must end with the live-browser paragraph and the openUI block"
         );
-        // The TS parity contract: the lite variant appends the live-browser paragraph,
+        // The TS parity contract: the lite variant appends both sections,
         // while the full variant ends at its "blocking condition" sentence and does not.
         let full = shared("JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS").expect("shared full text");
         assert!(
-            !full.ends_with(live),
-            "full external section must not append the live-browser paragraph"
+            !full.ends_with(openui),
+            "full external section must not append the openUI block"
         );
         assert!(lite.len() < full.len());
     }
