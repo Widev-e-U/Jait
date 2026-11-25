@@ -818,14 +818,15 @@ impl<'a> ProjectService<'a> {
         // Project visibility and session sharing must both hold in the same
         // database snapshot. Membership alone never exposes a private session.
         let mut statement = self.db.prepare(&format!(
-            "SELECT {},shared_with_project FROM sessions WHERE project_id IN ({clause}) AND status=?{status_param} AND (?{n} IS NULL OR (EXISTS (SELECT 1 FROM projects p WHERE p.id=sessions.project_id AND (p.user_id=?{n} OR (p.status='active' AND EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?{n})))) AND (user_id=?{n} OR (shared_with_project=1 AND EXISTS (SELECT 1 FROM projects active_project WHERE active_project.id=sessions.project_id AND active_project.status='active'))))) ORDER BY last_active_at DESC",
+            "SELECT {} FROM sessions WHERE project_id IN ({clause}) AND status=?{status_param} AND (?{n} IS NULL OR (EXISTS (SELECT 1 FROM projects p WHERE p.id=sessions.project_id AND (p.user_id=?{n} OR (p.status='active' AND EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?{n})))) AND (user_id=?{n} OR (shared_with_project=1 AND EXISTS (SELECT 1 FROM projects active_project WHERE active_project.id=sessions.project_id AND active_project.status='active'))))) ORDER BY last_active_at DESC",
             super::sessions::COLUMNS
         ))?;
         statement
             .query_map(params_from_iter(values), |row| {
+                let record = super::sessions::record(row)?;
                 Ok(VisibleSession {
-                    record: super::sessions::record(row)?,
-                    shared: row.get::<_, i64>(10)? == 1,
+                    shared: record.shared_with_project,
+                    record,
                 })
             })?
             .collect()

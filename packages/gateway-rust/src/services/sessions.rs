@@ -80,6 +80,8 @@ pub struct SessionRecord {
     pub id: String,
     pub user_id: Option<String>,
     pub project_id: Option<String>,
+    #[serde(default)]
+    pub shared_with_project: bool,
     pub name: Option<String>,
     pub project_path: Option<String>,
     pub created_at: String,
@@ -114,8 +116,7 @@ pub struct SessionFilter<'a> {
     pub personal_only: bool,
     pub limit: Option<f64>,
 }
-pub(crate) const COLUMNS: &str =
-    "id,user_id,project_id,name,project_path,created_at,last_active_at,viewed_at,status,metadata";
+pub(crate) const COLUMNS: &str = "id,user_id,project_id,name,project_path,created_at,last_active_at,viewed_at,status,metadata,shared_with_project";
 pub(crate) fn record(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRecord> {
     Ok(SessionRecord {
         id: row.get(0)?,
@@ -128,6 +129,7 @@ pub(crate) fn record(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRecord>
         viewed_at: row.get(7)?,
         status: row.get(8)?,
         metadata: row.get(9)?,
+        shared_with_project: row.get(10)?,
     })
 }
 fn nonempty(value: Option<&str>) -> Option<&str> {
@@ -399,6 +401,10 @@ impl<'a> SessionService<'a> {
         path: Option<&str>,
         user: Option<&str>,
     ) -> rusqlite::Result<Option<SessionRecord>> {
+        self.db.execute(
+            "UPDATE sessions SET shared_with_project=0 WHERE id=?1 AND (?2 IS NULL OR user_id=?2)",
+            params![id, nonempty(user)],
+        )?;
         self.update(
             id,
             json!({"projectId":project,"projectPath":path})

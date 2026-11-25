@@ -4,6 +4,22 @@
 
 The Rust project routes support owner-managed membership and members can list and read accessible projects. Owners can set session sharing and active project members can read shared session details and filtered message history; access is checked on each request and message access is checked in the projection transaction. Project list, search, detail, and project-session projections include the caller's own sessions and explicitly shared sessions in accessible active projects; membership and session visibility are checked in a consistent read transaction. The shared chat stream provides a filtered snapshot and request, token, and done events, with access rechecked on delivery and while idle; its bounded stream closes on lag or size exhaustion. Binary membership tests cover private denial, filtered snapshots, and idle revocation; HTTP fixture tests cover live turn delivery, filtering, cursor suppression, and revocation. Project mutations remain owner-scoped. Unlike TypeScript, member listings exclude archived projects, consistent with revoking member access when a project is archived. This is partial behavior and does not establish project-sharing parity.
 
+### Session record sharing compatibility — 2026-11-25
+
+Native session records now include the stored boolean `sharedWithProject`, matching
+the TypeScript `SessionService` projection. New chats default to private, ordinary
+updates preserve sharing, and `move_to_project` clears sharing under the same
+owner filter before updating the destination, as TypeScript `moveToProject` does.
+No database migration or access-policy change is introduced.
+
+The live differential test
+`session_records_preserve_sharing_flags_but_new_and_moved_chats_are_private` in
+`tests/contract/tests/gateway_rust_sessions.rs` compares record shapes, owner
+filtering, moves, and persisted rows. The complete session-service and session-HTTP
+differential targets and the existing binary membership/session route tests cover
+the affected paths. This focused slice does not establish full sharing parity or
+replacement readiness; coverage manifests remain unchanged.
+
 ## Native compatibility checks for ownership and failed writes
 
 The Rust session tool endpoints return only the authenticated caller's sessions

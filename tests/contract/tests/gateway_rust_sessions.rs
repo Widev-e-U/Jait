@@ -238,6 +238,32 @@ const SEED:&str="INSERT INTO sessions(id,user_id,project_id,name,project_path,cr
 ('s2','foreign','p','Other',NULL,'2026-10-18T10:00:00.000Z','2026-10-18T11:30:00.000Z',NULL,'active',NULL),
 ('s3','owner',NULL,'Personal',NULL,'2026-10-18T10:00:00.000Z','2026-10-18T11:15:00.000Z',NULL,'archived',NULL);";
 #[test]
+fn session_records_preserve_sharing_flags_but_new_and_moved_chats_are_private() {
+    let seed = format!("{SEED} UPDATE sessions SET shared_with_project=1 WHERE id='s1';");
+    scenario(
+        &seed,
+        vec![
+            json!({"op":"get","id":"s1","user":"owner"}),
+            json!({"op":"get","id":"s1","user":"foreign"}),
+            json!({"op":"get","id":"s2","user":"foreign"}),
+            json!({"op":"list","user":"owner"}),
+            json!({"op":"projectList","project":"p","user":"owner"}),
+            json!({"op":"update","id":"s1","data":{"name":"Renamed"},"user":"owner"}),
+            json!({"op":"get","id":"s1","user":"owner"}),
+            json!({"op":"move","id":"s1","project":null,"path":null,"user":"foreign"}),
+            json!({"op":"get","id":"s1","user":"owner"}),
+            json!({"op":"move","id":"s1","project":null,"path":null,"user":"owner"}),
+            json!({"op":"get","id":"s1","user":"owner"}),
+            json!({"op":"sql","sql":"UPDATE sessions SET shared_with_project=1 WHERE id='s1'"}),
+            json!({"op":"move","id":"s1","project":"p","path":"/project","user":"owner"}),
+            json!({"op":"sql","sql":"UPDATE sessions SET shared_with_project=0 WHERE id='s1'"}),
+            json!({"op":"get","id":"s1","user":"owner"}),
+            json!({"op":"create","data":{"userId":"owner","projectId":"p","name":"Private chat"}}),
+            json!({"op":"get","id":"$created","user":"owner"}),
+        ],
+    );
+}
+#[test]
 fn session_crud_scope_filters_limits_moves_and_nullable_patches_match_reference() {
     let mut steps = vec![
         json!({"op":"get","id":"s1","user":"foreign"}),
