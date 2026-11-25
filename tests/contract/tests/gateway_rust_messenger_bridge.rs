@@ -219,17 +219,26 @@ async fn command_schema_matches_strict_defaults_and_unicode_boundaries() {
         json!({"action":"status"}),
         json!({"action":"status","extra":true}),
     ];
-    for action in ["rooms", "messages", "search", "send", "open"] {
+    for action in ["rooms", "messages", "attachment", "search", "send", "open"] {
         let base = match action {
             "rooms" => json!({"action":action}),
             "messages" => json!({"action":action,"roomId":"!ok"}),
+            "attachment" => json!({"action":action,"roomId":"!ok","eventId":"$event"}),
             "search" => json!({"action":action,"query":" word "}),
             "send" => json!({"action":action,"roomId":"!ok","text":"body"}),
             _ => json!({"action":action,"userId":"@a:server"}),
         };
         inputs.push(base.clone());
         for key in [
-            "query", "service", "limit", "roomId", "text", "userId", "earlier",
+            "query",
+            "service",
+            "limit",
+            "roomId",
+            "text",
+            "userId",
+            "earlier",
+            "attachmentsOnly",
+            "eventId",
         ] {
             for value in [
                 json!(null),
@@ -251,11 +260,35 @@ async fn command_schema_matches_strict_defaults_and_unicode_boundaries() {
             }
         }
     }
-    let calls = inputs
-        .chunks(64)
-        .map(|inputs| json!({"op":"nativebridge.parse","inputs":inputs}))
-        .collect();
-    compare(calls).await;
+    for event in [
+        "x".repeat(512),
+        "x".repeat(513),
+        "😀".repeat(256),
+        "😀".repeat(257),
+    ] {
+        inputs.push(json!({"action":"attachment","roomId":"!ok","eventId":event}));
+    }
+    // Separate driver calls keep each request under the 64 KiB driver input bound.
+    for chunk in inputs.chunks(64) {
+        compare(vec![json!({"op":"nativebridge.parse","inputs":chunk})]).await;
+    }
+}
+#[tokio::test(start_paused = true)]
+async fn attachments_are_refused_on_the_browser_rpc_and_routed_to_the_gateway() {
+    let attachment = json!({"action":"attachment","roomId":"!room","eventId":"$event"});
+    compare(vec![sequence(vec![
+        register("a", "alice"),
+        request("browser", Some("alice"), attachment.clone()),
+        request("nobody", Some("bob"), attachment.clone()),
+        request(
+            "listing",
+            Some("alice"),
+            json!({"action":"messages","roomId":"!room","attachmentsOnly":true}),
+        ),
+        json!({"op":"gateway","enabled":true}),
+        request("gateway", Some("alice"), attachment),
+    ])])
+    .await;
 }
 #[tokio::test(start_paused = true)]
 async fn ownership_unique_active_client_and_failures_match() {

@@ -44,7 +44,8 @@ pub fn parse_messenger_command(input: &Value) -> Option<Value> {
     let keys: &[&str] = match action {
         "status" => &["action"],
         "rooms" => &["action", "query", "service", "limit"],
-        "messages" => &["action", "roomId", "limit", "earlier"],
+        "messages" => &["action", "roomId", "limit", "earlier", "attachmentsOnly"],
+        "attachment" => &["action", "roomId", "eventId"],
         "search" => &["action", "query", "roomId", "limit"],
         "send" => &["action", "roomId", "text"],
         "open" => &["action", "userId"],
@@ -81,6 +82,19 @@ pub fn parse_messenger_command(input: &Value) -> Option<Value> {
                 return None;
             }
             result["earlier"] = json!(object.get("earlier").map_or(Some(false), Value::as_bool)?);
+            result["attachmentsOnly"] = json!(
+                object
+                    .get("attachmentsOnly")
+                    .map_or(Some(false), Value::as_bool)?
+            );
+        }
+        "attachment" => {
+            if !room(object.get("roomId")?.as_str()?) {
+                return None;
+            }
+            if !(1..=512).contains(&length(object.get("eventId")?.as_str()?)) {
+                return None;
+            }
         }
         "search" => {
             let query = js_trim(object.get("query")?.as_str()?);
@@ -308,6 +322,10 @@ impl MessengerBridge {
         let gateway = self.state.lock().unwrap().gateway.clone();
         if let Some(gateway) = gateway {
             return gateway(owner.into(), command, signal);
+        }
+        // Attachment bytes and encryption metadata stay on the gateway; the browser RPC cannot carry them.
+        if command["action"] == "attachment" {
+            return denied("Attachment retrieval requires the gateway-owned Messenger connection.");
         }
         let clients = self.state.lock().unwrap().clients.clone();
         let mut active = vec![];
