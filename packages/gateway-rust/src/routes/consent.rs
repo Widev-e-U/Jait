@@ -372,25 +372,31 @@ impl ConsentRoutes {
         reason: Option<String>,
     ) -> Result<Vec<String>, String> {
         let mut ids = vec![];
+        let audit = |id: &str| {
+            let mut inputs = json!({"requestId":id,"bulk":true});
+            if let Some(reason) = &reason {
+                inputs["reason"] = json!(reason);
+            }
+            self.write_audit(Some(session), "consent.approve", inputs)
+        };
         if let Some(batch) = &self.batch_claim {
+            // The leased batch resolves every request first; audit follows once the lease is released.
             ids = batch(user, session, reason.clone())?;
+            for id in &ids {
+                audit(id)?;
+            }
         } else {
+            // As in the reference, each approval is audited before the next is decided.
             for entry in self.manager.list_pending(Some(session)) {
                 let id = entry.snapshot().id;
                 if self
                     .manager
                     .approve(&id, Some(DecisionVia::Click), reason.clone())?
                 {
+                    audit(&id)?;
                     ids.push(id);
                 }
             }
-        }
-        for id in &ids {
-            let mut inputs = json!({"requestId":id,"bulk":true});
-            if let Some(reason) = &reason {
-                inputs["reason"] = json!(reason);
-            }
-            self.write_audit(Some(session), "consent.approve", inputs)?;
         }
         Ok(ids)
     }
