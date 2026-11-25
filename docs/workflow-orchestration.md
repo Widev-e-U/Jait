@@ -4,6 +4,16 @@ The TypeScript gateway runs approved plans as dependency-ordered workflow runs. 
 
 The engine is general-purpose. It has no built-in knowledge of Rust, TypeScript or any migration workflow. A workflow is an approved plan with tasks, dependencies, resource claims and gates.
 
+## Executable example
+
+Run the no-model example with:
+
+```sh
+bun run vitest run packages/gateway/src/services/orchestration/orchestrator-workspace.test.ts -t "runs analysis, two parallel writers, and a verified join"
+```
+
+It analyzes a fixture repository, runs two independent writers concurrently, verifies their artifacts (and one command gate), then runs a join task against the integrated results. It uses real Git worktrees and the workflow scheduler, with a scripted worker and a stand-in for the consent-aware executor. It makes no paid model calls and does not exercise consent prompts or a deployed gateway. Scratch repositories are created under `.jait/artifacts` and removed after the test.
+
 ## Components
 
 | Module (`packages/gateway/src/services/orchestration/`) | Role |
@@ -217,7 +227,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 
 | Setting | Range | Default |
 | --- | --- | --- |
-| Tasks per plan | max 100 | — |
+| Tasks per plan | max 200 | — |
 | `maxWorkers` per run | 1–8 | 2 |
 | `maxAttempts` per task | 1–5 | 2 (plus one operator retry) |
 | `timeoutSeconds` per attempt | 1–86400 | 1800 |

@@ -21,7 +21,7 @@ export const ORCHESTRATION_RUN_STATES = ["running", "interrupted", "passed", "fa
 export type OrchestrationRunState = (typeof ORCHESTRATION_RUN_STATES)[number];
 
 export const ORCHESTRATION_LIMITS = {
-  maxTasks: 100,
+  maxTasks: 200,
   minWorkers: 1,
   defaultWorkers: 2,
   maxWorkers: 8,

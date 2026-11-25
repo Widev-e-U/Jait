@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type { PlanTask } from "@jait/shared";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../config.js";
@@ -30,6 +29,7 @@ const model = process.env["JAIT_LIVE_WORKFLOW_MODEL"];
 const baseUrl = process.env["JAIT_LIVE_WORKFLOW_BASE_URL"] ?? "http://127.0.0.1:11434/v1";
 const owner = "owner";
 const config = { ...loadConfig(), jwtSecret: "plan-runs-live-secret" };
+const artifacts = resolve(import.meta.dirname, "../../../../.jait/artifacts");
 const GREETING = "hello from a live workflow check";
 
 async function auth(userId: string) {
@@ -39,8 +39,9 @@ async function auth(userId: string) {
 
 describe.skipIf(!model)("plan run against a live model", () => {
   it("runs one approved writing workflow through the real worker and integrates its file", async () => {
-    const stateDir = await mkdtemp(join(tmpdir(), "workflow-live-state-"));
-    const repoDir = await mkdtemp(join(tmpdir(), "workflow-live-repo-"));
+    await mkdir(artifacts, { recursive: true });
+    const stateDir = await mkdtemp(join(artifacts, "workflow-live-state-"));
+    const repoDir = await mkdtemp(join(artifacts, "workflow-live-repo-"));
     const previousStateDir = process.env["JAIT_STATE_DIR"];
     process.env["JAIT_STATE_DIR"] = stateDir;
     const database = await openDatabase(":memory:");
@@ -120,8 +121,9 @@ Do not include the delimiters or any punctuation outside them. Then reply with t
   }, 1_000_000);
 
   it("halts a real in-flight model request, leaves its attempt interrupted, and integrates nothing", async () => {
-    const stateDir = await mkdtemp(join(tmpdir(), "workflow-live-halt-state-"));
-    const repoDir = await mkdtemp(join(tmpdir(), "workflow-live-halt-repo-"));
+    await mkdir(artifacts, { recursive: true });
+    const stateDir = await mkdtemp(join(artifacts, "workflow-live-halt-state-"));
+    const repoDir = await mkdtemp(join(artifacts, "workflow-live-halt-repo-"));
     const previousStateDir = process.env["JAIT_STATE_DIR"];
     process.env["JAIT_STATE_DIR"] = stateDir;
     const database = await openDatabase(":memory:");

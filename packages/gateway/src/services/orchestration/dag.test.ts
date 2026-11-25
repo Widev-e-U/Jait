@@ -44,7 +44,8 @@ describe("validatePlanGraph", () => {
 
   it("rejects empty and oversized plans", () => {
     expect(codesOf([])).toEqual(["empty_plan"]);
-    expect(codesOf(Array.from({ length: 101 }, (_, index) => task(`T${index}`)))).toEqual(["too_many_tasks"]);
+    expect(codesOf(Array.from({ length: 200 }, (_, index) => task(`T${index}`)))).toEqual([]);
+    expect(codesOf(Array.from({ length: 201 }, (_, index) => task(`T${index}`)))).toEqual(["too_many_tasks"]);
   });
 
   it("rejects duplicate, malformed and self-referencing ids", () => {

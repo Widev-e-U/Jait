@@ -1,19 +1,23 @@
 /**
  * End-to-end plan runs over real git worktrees. The agent is a scripted executor
- * that writes files into its workspace, and command gates run through a stand-in
- * for the consent-aware executor (the real consent path has its own tests). No
- * model is called.
+ * that writes files into its workspace. Most command gates use a shell fixture;
+ * the consent cases also exercise the real consent manager and executor. No model
+ * is called.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { VerificationGate } from "@jait/shared/types";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type JaitDB, migrateDatabase, openDatabase } from "../../db/connection.js";
 import type { SqliteDatabase } from "../../db/sqlite-shim.js";
-import type { ToolContext } from "../../tools/contracts.js";
+import type { ToolContext, ToolDefinition } from "../../tools/contracts.js";
+import { ToolRegistry } from "../../tools/registry.js";
+import { ConsentAwareExecutor } from "../../security/consent-executor.js";
+import { ConsentManager } from "../../security/consent-manager.js";
+import type { ToolPermission } from "../../security/tool-permissions.js";
+import { TrustEngine } from "../../security/trust-engine.js";
 import { PlanService } from "../plans.js";
 import type { RepositoryService } from "../repositories.js";
 import { createWorkflowVerifier, type ToolExecutorFn } from "./command-verifier.js";
@@ -119,7 +123,9 @@ describe("plan runs over real worktrees", () => {
   let commands: Recorded[];
 
   beforeEach(async () => {
-    base = await mkdtemp(join(tmpdir(), "jait-run-"));
+    const artifacts = resolve(import.meta.dirname, "../../../../../.jait/artifacts");
+    await mkdir(artifacts, { recursive: true });
+    base = await mkdtemp(join(artifacts, "jait-run-"));
     repo = join(base, "repo");
     await mkdir(repo);
     git(repo, "init", "-q", "-b", "main");
@@ -157,13 +163,13 @@ describe("plan runs over real worktrees", () => {
 
   function makeService(
     executor: TaskExecutor,
-    options: { halted?: Set<string>; workspaces?: WorkflowWorkspaces } = {},
+    options: { halted?: Set<string>; workspaces?: WorkflowWorkspaces; toolExecutor?: ToolExecutorFn } = {},
   ): { service: OrchestrationService; workspaces: WorkflowWorkspaces } {
     const workspaces = options.workspaces ?? new WorkflowWorkspaces({ root: join(base, "worktrees"), repositories });
     const service = new OrchestrationService({
       db,
       executor,
-      verifier: createWorkflowVerifier({ repositories, toolExecutor: shellExecutor }),
+      verifier: createWorkflowVerifier({ repositories, toolExecutor: options.toolExecutor ?? shellExecutor }),
       workspaces,
       isHalted: (userId) => options.halted?.has(userId) ?? false,
     });
@@ -175,6 +181,60 @@ describe("plan runs over real worktrees", () => {
     const plan = plans.create({ repoId, userId: OWNER, title: "Feature plan", tasks });
     return plan.id;
   }
+
+  it.each([true, false])("waits for owner consent before a command gate can advance (approved: %s)", async (approve) => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "terminal.run",
+      description: "Run a command in the terminal",
+      parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+      execute: (input: unknown, context: ToolContext) => shellExecutor("terminal.run", input, context),
+    } as unknown as ToolDefinition);
+    const consentManager = new ConsentManager({ defaultTimeoutMs: 5_000 });
+    const permissions = new Map<string, ToolPermission>([["terminal.run", {
+      consentLevel: "always", risk: "high", description: "Run a terminal command", knownTool: true, source: "profile",
+    } as unknown as ToolPermission]]);
+    const consentExecutor = new ConsentAwareExecutor({
+      toolRegistry: registry, consentManager, trustEngine: new TrustEngine(), permissions, sessionApprovals: new Set<string>(),
+    });
+    const toolExecutor: ToolExecutorFn = (name, input, context, options) => consentExecutor.execute(name, input, context, options);
+    const started: string[] = [];
+    const { service } = makeService({
+      async execute(input) {
+        started.push(input.taskId);
+        if (input.taskId === "A") {
+          await writeIn(input.workspace!.path, "out/result.txt", "verified\n");
+          return reportFor(input, ["out/result.txt"]);
+        }
+        return reportFor(input);
+      },
+    }, { toolExecutor });
+    const planId = createPlan([
+      approvedTask({ id: "A", writes: ["out/result.txt"], maxAttempts: 1, verification: [commandGate("check", "test -s out/result.txt")] }),
+      approvedTask({ id: "B", dependsOn: ["A"], reads: ["out/result.txt"], verification: [artifactGate("result", "out/result.txt")] }),
+    ]);
+    const run = service.createRun(OWNER, { planId });
+    await until(() => consentManager.listPending(`workflow:${run.id}`).length === 1);
+    expect(started).toEqual(["A"]);
+    expect(commands).toHaveLength(0);
+    const [request] = consentManager.listPending(`workflow:${run.id}`);
+    expect(request?.toolName).toBe("terminal.run");
+    if (approve) consentManager.approve(request!.id, "click");
+    else consentManager.reject(request!.id, "click", "not approved");
+    await service.settle();
+    const view = service.getRun(OWNER, run.id);
+    if (approve) {
+      expect(view.status, JSON.stringify(view.tasks)).toBe("passed");
+      expect(started).toEqual(["A", "B"]);
+      expect(commands).toHaveLength(1);
+      expect(commands[0]).toMatchObject({ command: "test -s out/result.txt", requestedBy: "workflow" });
+      expect(commands[0]!.projectRoot).not.toBe(repo);
+    } else {
+      expect(view.status).toBe("failed");
+      expect(started).toEqual(["A"]);
+      expect(commands).toHaveLength(0);
+    }
+  });
 
   it("runs analysis, two parallel writers, and a verified join, then integrates everything", async () => {
     const planId = createPlan([
@@ -203,6 +263,11 @@ describe("plan runs over real worktrees", () => {
         running += 1;
         maxRunning = Math.max(maxRunning, running);
         try {
+          if (input.taskId === "A") {
+            const readme = await readFile(join(repo, "README.md"), "utf8");
+            expect(readme).toBe("project\n");
+            return { ...reportFor(input), summary: `Analyzed README: ${readme.trim()}` };
+          }
           if (input.taskId === "B" || input.taskId === "C") {
             // Both writers must be active at once, or the test fails: parallel start is what is being verified.
             await until(() => maxRunning >= 2);

@@ -84,6 +84,44 @@ it("keeps the trusted worker identity on an attempt after cancellation and rejec
 });
 
 describe("dependency ordering", () => {
+  it("schedules 200 dependent tasks with bounded worker concurrency", async () => {
+    const completed = new Set<string>();
+    let running = 0;
+    let maxRunning = 0;
+    const executor: TaskExecutor = {
+      async execute(input) {
+        const index = Number(input.taskId.slice(1));
+        if (index >= 10) {
+          expect(completed.has(`T${index - 10}`)).toBe(true);
+          expect(completed.has(`T${index - 9}`)).toBe(true);
+        }
+        running += 1;
+        maxRunning = Math.max(maxRunning, running);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        running -= 1;
+        completed.add(input.taskId);
+        return report(input);
+      },
+    };
+    const tasks = Array.from({ length: 200 }, (_, index) => task(`T${index}`, {
+      resources: {},
+      dependsOn: index >= 10 ? [`T${index - 10}`, `T${index - 9}`] : [],
+    }));
+    const service = makeService(executor);
+    const start = performance.now();
+    const run = service.createRun(USER, { title: "200 task scheduling", maxWorkers: 4, tasks });
+    await service.settle();
+    const elapsed = Math.round(performance.now() - start);
+    const final = service.getRun(USER, run.id);
+    expect(final.status).toBe("passed");
+    expect(final.tasks).toHaveLength(200);
+    expect(final.tasks.every((item) => item.state === "passed" && item.attemptCount === 1)).toBe(true);
+    expect(completed.size).toBe(200);
+    expect(maxRunning).toBeGreaterThan(1);
+    expect(maxRunning).toBeLessThanOrEqual(4);
+    console.info(`200-task workflow completed in ${elapsed} ms; peak workers: ${maxRunning}`);
+  }, 30_000);
+
   it("starts a join only after both branches pass", async () => {
     const events: string[] = [];
     const executor: TaskExecutor = {
