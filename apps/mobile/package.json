@@ -40,7 +40,7 @@
     "react-native": "0.74.5"
   },
   "devDependencies": {
-    "@types/react": "^18.3.31",
+    "@types/react": "^18.3.32",
     "typescript": "^5.9.3",
     "@capacitor/cli": "^6.2.3",
     "@capacitor/android": "^6.2.3",
