@@ -41,6 +41,8 @@
   "mutatingTools": [
     "agent.profiles",
     "team.chat",
+    "project.chat.create",
+    "chat.control",
     "edit",
     "execute",
     "agent",
@@ -67,6 +69,7 @@
     "browser.select",
     "browser.scroll",
     "browser.screenshot",
+    "browser.record",
     "browser.sandbox.start",
     "windows.sandbox.start",
     "windows.sandbox.stop",
