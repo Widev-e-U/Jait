@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCatalogueGraph, type CatalogueTool } from './catalogue-graph'
+import { buildCatalogueGraph, getCataloguePath, type CatalogueSkill, type CatalogueTool } from './catalogue-graph'
 
 const tools: CatalogueTool[] = [
   { name: 'agent.profiles', description: 'Manage saved people and teams', page: 'agents' },
@@ -60,3 +60,31 @@ describe('live catalogue graph', () => {
     expect(buildCatalogueGraph(tools, 'all', 'unmatched-query').nodes).toHaveLength(1)
   })
 });
+
+
+describe('catalogue selection paths', () => {
+  it('finds installed skills by their metadata and links them under Settings', () => {
+    const skills: CatalogueSkill[] = [
+      { id: 'my-review', name: 'Review checklist', description: 'Check test coverage', source: 'user', enabled: false },
+      { id: 'team-review', name: 'Team review', description: 'Check procedures', source: 'project', enabled: true },
+    ]
+    const graph = buildCatalogueGraph(tools, 'all', 'test coverage', skills)
+    expect(graph.nodes.filter((node) => node.kind === 'skill').map((node) => node.skill)).toEqual([skills[0]])
+    expect(getCataloguePath(graph, 'skill:my-review').map((node) => node.id)).toEqual([
+      'jait', 'page:settings', 'feature:settings:installed-skills', 'skill:my-review',
+    ])
+    expect(buildCatalogueGraph([], 'agents', '', skills).nodes.some((node) => node.kind === 'skill')).toBe(false)
+  })
+
+  it('preserves the chosen parent for a shared tool after the canvas resolves endpoints', () => {
+    const graph = buildCatalogueGraph(tools)
+    const nodes = new Map(graph.nodes.map((node) => [node.id, node]))
+    graph.links = graph.links.map(({ source, target }) => ({ source: nodes.get(String(source))!, target: nodes.get(String(target))! }))
+    expect(getCataloguePath(graph, 'tool:thread.control').map((node) => node.id)).toEqual([
+      'jait', 'page:threads', 'feature:threads:execution', 'tool:thread.control',
+    ])
+    expect(getCataloguePath(graph, 'tool:thread.control', 'feature:agents:work').map((node) => node.id)).toEqual([
+      'jait', 'page:agents', 'feature:agents:work', 'tool:thread.control',
+    ])
+  })
+})

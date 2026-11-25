@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { OverflowSidebarNavigation } from './overflow-sidebar-navigation'
 import { allocateRailSections } from './rail-allocation'
 import { UsageModal } from '@/components/app-shell/usage-modal'
-import { CatalogueModal } from '@/components/app-shell/catalogue-modal'
+import { CatalogueLauncher, CatalogueModal, useCatalogueDialog } from '@/components/app-shell/catalogue-modal'
 import { JaitIcon } from '@/components/icons/model-icons'
 import type { ThemeMode } from '@/hooks/useAuth'
 
@@ -65,7 +65,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
     setDragId(null)
     setDropId(null)
   }
-  const [catalogueModalOpen, setCatalogueModalOpen] = useState(false)
+  const catalogue = useCatalogueDialog()
   const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('jait.navigationSidebarCollapsed') === 'true')
 
   useEffect(() => {
@@ -205,6 +205,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
       </div>
       <div className="flex shrink-0 flex-col gap-1 border-t pt-2">
         {account?.updateControl?.(collapsed)}
+        {account?.username && <CatalogueLauncher compact={collapsed} onClick={() => catalogue.setOpen(true)} />}
         {bottomItems.map(renderItem)}
         {account?.agentControl?.(collapsed)}
         <DropdownMenu>
@@ -239,10 +240,10 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
               </TooltipTrigger>
               {collapsed && <TooltipContent side="right">{account.username}</TooltipContent>}
             </Tooltip>
-            <DropdownMenuContent side={collapsed ? "right" : "top"} align={collapsed ? "end" : "start"} sideOffset={8} className={`w-52 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-150 ease-out motion-reduce:animate-none ${collapsed ? "origin-left data-[state=open]:slide-in-from-left-2" : "origin-bottom data-[state=open]:slide-in-from-bottom-2"}`}>
+            <DropdownMenuContent onCloseAutoFocus={catalogue.onMenuCloseAutoFocus} side={collapsed ? "right" : "top"} align={collapsed ? "end" : "start"} sideOffset={8} className={`w-52 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-150 ease-out motion-reduce:animate-none ${collapsed ? "origin-left data-[state=open]:slide-in-from-left-2" : "origin-bottom data-[state=open]:slide-in-from-bottom-2"}`}>
               <DropdownMenuItem onSelect={onOpenSettings}><Settings className="mr-2 h-4 w-4" />Settings</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setUsageModalOpen(true)}><BarChart3 className="mr-2 h-4 w-4" />Usage</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setCatalogueModalOpen(true)}><Network className="mr-2 h-4 w-4" />Catalogue</DropdownMenuItem>
+              <DropdownMenuItem onSelect={catalogue.selectFromMenu}><Network className="mr-2 h-4 w-4" />Catalogue</DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5">
                 <span className="text-xs text-muted-foreground">Theme</span>
@@ -271,7 +272,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         {renderItem({ id: 'rail-measure-description', label: 'Measure', description: 'Measure', icon: Sun, onSelect: () => {} })}
       </div>
       <UsageModal open={usageModalOpen} onOpenChange={setUsageModalOpen} />
-      <CatalogueModal open={catalogueModalOpen} onOpenChange={setCatalogueModalOpen} />
+      <CatalogueModal open={catalogue.open} onOpenChange={catalogue.setOpen} />
     </aside>
   )
 }

@@ -30,7 +30,7 @@ import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/compone
 import { NotificationBell } from '@/components/ui/notification-center'
 import { UpdateButton } from '@/components/app-shell/update-button'
 import { UsageModal } from '@/components/app-shell/usage-modal'
-import { CatalogueModal } from '@/components/app-shell/catalogue-modal'
+import { CatalogueLauncher, CatalogueModal, useCatalogueDialog } from '@/components/app-shell/catalogue-modal'
 import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/components/voice/voice-header-controls'
 import type { ThemeMode } from '@/hooks/useAuth'
 
@@ -113,7 +113,7 @@ export function AppHeader(props: AppHeaderProps) {
 
   // Provider usage modal (avatar dropdown → "Usage")
   const [usageModalOpen, setUsageModalOpen] = useState(false)
-  const [catalogueModalOpen, setCatalogueModalOpen] = useState(false)
+  const catalogue = useCatalogueDialog()
 
   const sidebarOwnsNavigation = !isMobile
 
@@ -213,6 +213,7 @@ export function AppHeader(props: AppHeaderProps) {
             {/* Mobile avatar + menu group */}
             {isMobile ? (
               <div className="flex items-center gap-0 shrink-0">
+                {isAuthenticated && <CatalogueLauncher compact onClick={() => catalogue.setOpen(true)} />}
                 {isAuthenticated && <NotificationBell />}
                 {isAuthLoading ? (
                   <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" aria-label="Loading account" />
@@ -227,7 +228,7 @@ export function AppHeader(props: AppHeaderProps) {
                         </Avatar>
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" onCloseAutoFocus={catalogue.onMenuCloseAutoFocus}>
                       <DropdownMenuLabel className="flex flex-col items-start gap-0.5">
                         <TooltipHint content={user?.username}>
                         <span className="max-w-[12rem] truncate text-sm font-semibold">
@@ -249,7 +250,7 @@ export function AppHeader(props: AppHeaderProps) {
                         <BarChart3 className="h-4 w-4 mr-2" />
                         Usage
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setCatalogueModalOpen(true)}>
+                      <DropdownMenuItem onSelect={catalogue.selectFromMenu}>
                         <Network className="h-4 w-4 mr-2" />
                         Catalogue
                       </DropdownMenuItem>
@@ -305,7 +306,7 @@ export function AppHeader(props: AppHeaderProps) {
                     </Avatar>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" onCloseAutoFocus={catalogue.onMenuCloseAutoFocus}>
                   <DropdownMenuLabel className="flex flex-col items-start gap-0.5">
                     <TooltipHint content={user?.username}>
                     <span className="max-w-[12rem] truncate text-sm font-semibold">
@@ -327,7 +328,7 @@ export function AppHeader(props: AppHeaderProps) {
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Usage
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setCatalogueModalOpen(true)}>
+                  <DropdownMenuItem onSelect={catalogue.selectFromMenu}>
                     <Network className="h-4 w-4 mr-2" />
                     Catalogue
                   </DropdownMenuItem>
@@ -381,7 +382,7 @@ export function AppHeader(props: AppHeaderProps) {
           </div>
             </header>
             <UsageModal open={usageModalOpen} onOpenChange={setUsageModalOpen} />
-            <CatalogueModal open={catalogueModalOpen} onOpenChange={setCatalogueModalOpen} />
+            <CatalogueModal open={catalogue.open} onOpenChange={catalogue.setOpen} />
             </>
   )
 }

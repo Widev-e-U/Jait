@@ -1,102 +1,163 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import { JAIT_PAGES, JAIT_PAGE_IDS, type JaitPageId } from '@jait/shared'
-import { ExternalLink, Loader2, RefreshCw, Search, Scan, ZoomIn, ZoomOut } from 'lucide-react'
+import { BookOpen, RefreshCw, Search, Scan, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getAuthToken } from '@/lib/auth-token'
 import { openNotification } from '@/lib/notification-navigation'
-import { buildCatalogueGraph, type CatalogueTool, type CatalogueNode, type CatalogueLink } from '@/lib/catalogue-graph'
+import { buildCatalogueGraph, catalogueEndpointId, getCataloguePath, type CatalogueTool, type CatalogueSkill, type CatalogueNode, type CatalogueLink } from '@/lib/catalogue-graph'
+import { CatalogueDetails } from './catalogue-details'
 
-const COLORS = { root: '#f472b6', page: '#38bdf8', feature: '#a78bfa', tool: '#34d399' }
+const COLORS = { root: '#f472b6', page: '#38bdf8', feature: '#a78bfa', tool: '#34d399', skill: '#fb7185' }
+const RADII = { root: 10, page: 8, feature: 5, tool: 3, skill: 4 }
+const SKILLS_LINK = `${JAIT_PAGES.settings.path}?tab=skills&skillsTab=installed`
+
 function escapeLabel(value: string): string {
   return value.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!)
 }
-export default function CatalogueGraph({ onOpenPage }: { onOpenPage: () => void }) {
-  const [tools, setTools] = useState<CatalogueTool[] | null>(null)
+
+function cameraDuration(duration: number): number {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : duration
+}
+
+async function fetchCatalogue<T>(path: string, options: RequestInit, label: string, parse: (data: unknown) => T): Promise<T> {
+  const response = await fetch(`${getApiUrl()}${path}`, options)
+  if (!response.ok) throw new Error(`Could not load ${label} (${response.status})`)
+  return parse(await response.json())
+}
+
+function readTools(data: unknown): CatalogueTool[] {
+  const tools = (data as { tools?: CatalogueTool[] } | null)?.tools
+  if (!Array.isArray(tools) || !tools.every((tool) => typeof tool?.name === 'string' && typeof tool.description === 'string')) {
+    throw new Error('Invalid catalogue response')
+  }
+  return tools
+}
+
+function readSkills(data: unknown): CatalogueSkill[] {
+  const skills = data as CatalogueSkill[]
+  if (!Array.isArray(skills) || !skills.every((skill) => typeof skill?.id === 'string' && typeof skill.name === 'string'
+    && typeof skill.description === 'string' && typeof skill.source === 'string' && typeof skill.enabled === 'boolean')) {
+    throw new Error('Invalid skills response')
+  }
+  return skills.map(({ id, name, description, source, enabled, toolsSatisfied }) => ({ id, name, description, source, enabled, toolsSatisfied }))
+}
+
+export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void }) {
+  const [tools, setTools] = useState<CatalogueTool[]>([])
+  const [skills, setSkills] = useState<CatalogueSkill[] | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState<string[]>([])
   const [refresh, setRefresh] = useState(0)
   const [pageFilter, setPageFilter] = useState<JaitPageId | 'all'>('all')
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState('jait')
-  const detailsRef = useRef<HTMLElement>(null)
-  const fitPendingRef = useRef(true)
-  const textColorRef = useRef("#94a3b8")
+  const [selection, setSelection] = useState<{ id: string; parent?: string }>({ id: 'jait' })
+  const [collapsed, setCollapsed] = useState(false)
+  const textColorRef = useRef('#94a3b8')
+  const primaryColorRef = useRef('#3b82f6')
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraphMethods<CatalogueNode, CatalogueLink> | undefined>(undefined)
+  const hasFitRef = useRef(false)
   const [size, setSize] = useState({ width: 0, height: 0 })
+  const focusedPage = pageFilter !== 'all'
+  const searching = Boolean(query.trim())
   const graph = useMemo(() => {
-    const data = buildCatalogueGraph(tools ?? [], pageFilter, query)
-    if (pageFilter !== 'all') {
-      const toolNodes = data.nodes.filter((node) => node.kind === 'tool')
-      const positions = new Map(toolNodes.map((node, index) => [node.id, (index - (toolNodes.length - 1) / 2) * 70]))
-      for (const node of data.nodes) {
-        const x = node.kind === 'root' ? -180 : node.kind === 'page' ? -85 : node.kind === 'feature' ? 10 : 160
-        const children = data.links.filter((link) => link.source === node.id)
-          .map((link) => positions.get(String(link.target))).filter((y): y is number => y !== undefined)
-        const y = node.kind === 'tool' ? positions.get(node.id) ?? 0
-          : node.kind === 'feature' && children.length ? children.reduce((sum, value) => sum + value, 0) / children.length : 0
-        node.x = node.fx = x
-        node.y = node.fy = y
-      }
+    const data = buildCatalogueGraph(tools, pageFilter, query, skills ?? [])
+    if (!focusedPage) return data
+    const leaves = data.nodes.filter((node) => node.kind === 'tool' || node.kind === 'skill')
+    const positions = new Map(leaves.map((node, index) => [node.id, (index - (leaves.length - 1) / 2) * 54]))
+    for (const node of data.nodes) {
+      const leafY = positions.get(node.id)
+      const children = data.links.filter((link) => link.source === node.id)
+        .map((link) => positions.get(catalogueEndpointId(link.target))).filter((y): y is number => y !== undefined)
+      node.x = node.fx = node.kind === 'root' ? -180 : node.kind === 'page' ? -85 : node.kind === 'feature' ? 10 : 160
+      node.y = node.fy = leafY ?? (node.kind === 'feature' && children.length
+        ? children.reduce((sum, value) => sum + value, 0) / children.length : 0)
     }
     return data
-  }, [tools, pageFilter, query])
-  const selected = graph.nodes.find((node) => node.id === selectedId) ?? graph.nodes[0]
-  const pageId = selected?.pageId
-  const page = pageId ? JAIT_PAGES[pageId] : null
-  const visibleTools = graph.nodes.filter((node) => node.kind === 'tool')
-  const choose = useCallback((node: CatalogueNode) => {
-    setSelectedId(node.id)
-    detailsRef.current?.scrollTo({ top: 0 })
-    if (node.kind === 'page' && node.pageId) setPageFilter(node.pageId)
-    if (node.kind === 'root') setPageFilter('all')
-  }, [])
+  }, [tools, skills, focusedPage, pageFilter, query])
+  const path = useMemo(() => getCataloguePath(graph, selection.id, selection.parent), [graph, selection])
+  const selected = path[path.length - 1] ?? graph.nodes[0]
+  const pathEdges = useMemo(() => new Map(path.slice(1).map((node, index) => [node.id, path[index].id])), [path])
+  const onPath = useCallback(({ source, target }: CatalogueLink) => pathEdges.get(catalogueEndpointId(target)) === catalogueEndpointId(source), [pathEdges])
+  const skillDestination = selected.skill || selected.id === 'feature:settings:installed-skills'
+  const page = selected.pageId ? JAIT_PAGES[selected.pageId] : undefined
+  const destination = selected.skill ? `${SKILLS_LINK}&${new URLSearchParams({ skillsQ: selected.skill.id })}`
+    : skillDestination ? SKILLS_LINK : page?.path
 
-  useEffect(() => { fitPendingRef.current = true }, [graph, size.width, size.height])
+  const fitGraph = useCallback(() => {
+    const graph = graphRef.current
+    if (!graph) return
+    graph.zoomToFit(hasFitRef.current ? cameraDuration(280) : 0, focusedPage ? 28 : 45)
+    hasFitRef.current = true
+  }, [focusedPage])
+
+  const focusPage = useCallback((id: JaitPageId | 'all') => {
+    if (pageFilter === id) fitGraph()
+    setPageFilter(id)
+    setSelection({ id: id === 'all' ? 'jait' : `page:${id}` })
+  }, [fitGraph, pageFilter])
+
+  const choose = useCallback((node: CatalogueNode) => {
+    if (node.kind === 'root') {
+      focusPage('all')
+    } else if (node.kind === 'page' && node.pageId) {
+      focusPage(node.pageId)
+    } else {
+      const connected = graph.links.some(({ source, target }) => catalogueEndpointId(source) === selected.id && catalogueEndpointId(target) === node.id)
+      setSelection({ id: node.id, parent: connected ? selected.id : node.id === selection.id ? selection.parent : undefined })
+      const camera = graphRef.current
+      if (camera && node.x !== undefined && node.y !== undefined) {
+        const duration = cameraDuration(320)
+        camera.centerAt(node.x, node.y, duration)
+        if (camera.zoom() < 0.95) camera.zoom(0.95, duration)
+      }
+    }
+    setCollapsed(false)
+  }, [focusPage, graph.links, selected.id, selection])
 
   useEffect(() => {
-    let active: AbortController | null = null
-    let disposed = false
+    let active: AbortController | undefined
     const load = async () => {
       active?.abort()
       const controller = new AbortController()
       active = controller
-      setLoading(true)
       const token = getAuthToken()
-      try {
-        const response = await fetch(`${getApiUrl()}/api/tools`, { signal: controller.signal,
-          headers: token ? { Authorization: `Bearer ${token}` } : {} })
-        if (!response.ok) throw new Error(`Could not load catalogue (${response.status})`)
-        const data = await response.json() as { tools?: CatalogueTool[] }
-        if (!Array.isArray(data.tools) || !data.tools.every((tool) => typeof tool.name === 'string' && typeof tool.description === 'string')) throw new Error('Invalid catalogue response')
-        if (!disposed && active === controller) {
-          setTools((previous) => JSON.stringify(previous) === JSON.stringify(data.tools) ? previous : data.tools!)
-          setError('')
-        }
-      } catch (cause) {
-        if (!disposed && !controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not load catalogue')
-      } finally {
-        if (!disposed && active === controller) setLoading(false)
-      }
+      const options = { signal: controller.signal, headers: token ? { Authorization: `Bearer ${token}` } : undefined }
+      setLoading(true)
+      const [toolResult, skillResult] = await Promise.allSettled([
+        fetchCatalogue('/api/tools', options, 'catalogue tools', readTools),
+        fetchCatalogue('/api/skills', options, 'installed skills', readSkills),
+      ])
+      if (controller.signal.aborted) return
+      if (toolResult.status === 'fulfilled') setTools((previous) => JSON.stringify(previous) === JSON.stringify(toolResult.value) ? previous : toolResult.value)
+      if (skillResult.status === 'fulfilled') setSkills((previous) => JSON.stringify(previous) === JSON.stringify(skillResult.value) ? previous : skillResult.value)
+      setErrors([toolResult, skillResult].flatMap((result) => result.status === 'rejected' ? [result.reason instanceof Error ? result.reason.message : String(result.reason)] : []))
+      setLoading(false)
     }
     void load()
-    const focus = () => { void load() }
-    const interval = setInterval(focus, 30_000)
-    window.addEventListener('focus', focus)
-    return () => { disposed = true; active?.abort(); clearInterval(interval); window.removeEventListener('focus', focus) }
+    const reload = () => { void load() }
+    const interval = setInterval(reload, 30_000)
+    window.addEventListener('focus', reload)
+    return () => { active?.abort(); clearInterval(interval); window.removeEventListener('focus', reload) }
   }, [refresh])
 
   useEffect(() => {
     const element = containerRef.current
     if (!element) return
-    const readColor = () => { textColorRef.current = getComputedStyle(element).color }
-    readColor()
-    const themeObserver = new MutationObserver(readColor)
-    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style", "data-theme"] })
+    const readColors = () => {
+      const style = getComputedStyle(element)
+      textColorRef.current = style.color
+      const primary = style.getPropertyValue('--primary').trim()
+      if (primary) primaryColorRef.current = `hsl(${primary})`
+    }
+    readColors()
+    const themeObserver = new MutationObserver(readColors)
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] })
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setSize({ width: Math.round(entry.contentRect.width), height: Math.round(entry.contentRect.height) })
     })
@@ -104,88 +165,129 @@ export default function CatalogueGraph({ onOpenPage }: { onOpenPage: () => void 
     return () => { observer.disconnect(); themeObserver.disconnect() }
   }, [])
 
+  useEffect(() => {
+    const frame = requestAnimationFrame(fitGraph)
+    return () => cancelAnimationFrame(frame)
+  }, [size, fitGraph])
+
   const drawNode = useCallback((node: CatalogueNode, ctx: CanvasRenderingContext2D, scale: number) => {
-    const radius = node.kind === 'root' ? 10 : node.kind === 'page' ? 8 : node.kind === 'feature' ? 5 : 3
+    const radius = RADII[node.kind]
     const color = node.available === false ? '#f59e0b' : COLORS[node.kind]
-    const x = node.x ?? 0, y = node.y ?? 0
+    const x = node.x ?? 0
+    const y = node.y ?? 0
     ctx.beginPath()
     ctx.arc(x, y, radius, 0, Math.PI * 2)
     ctx.fillStyle = color
     ctx.fill()
-    if (node.id === selectedId) { ctx.strokeStyle = color; ctx.lineWidth = 2 / scale; ctx.stroke() }
-    if (pageFilter === 'all' && node.kind === 'tool' && scale < 0.7 && node.id !== selectedId) return
-    ctx.font = `${11 / scale}px sans-serif`
+    const isSelected = selected.id === node.id
+    if (isSelected) {
+      ctx.beginPath()
+      ctx.arc(x, y, radius + 4 / scale, 0, Math.PI * 2)
+      ctx.strokeStyle = primaryColorRef.current
+      ctx.lineWidth = 1.5 / scale
+      ctx.stroke()
+    }
+    const isLeaf = node.kind === 'tool' || node.kind === 'skill'
+    const isDetail = node.kind === 'feature' || isLeaf
+    if (!focusedPage && isDetail && !pathEdges.has(node.id) && scale < 1 && node.id !== 'feature:settings:installed-skills') return
+    ctx.font = `${isSelected ? '600 ' : ''}${12 / scale}px sans-serif`
     ctx.fillStyle = textColorRef.current
-    ctx.textAlign = node.kind === 'tool' && pageFilter !== 'all' ? 'right' : 'center'
+    ctx.textAlign = isLeaf && focusedPage ? 'right' : 'center'
     ctx.textBaseline = 'top'
-    ctx.fillText(node.label.length > 42 ? node.label.slice(0, 40) + '…' : node.label, node.kind === 'tool' && pageFilter !== 'all' ? x - 5 : x, y + radius + 3)
-  }, [selectedId, pageFilter])
+    const label = node.label.length > 42 ? node.label.slice(0, 40) + '…' : node.label
+    ctx.fillText(label, isLeaf && focusedPage ? x - 8 : x, y + radius + 3)
+  }, [selected.id, focusedPage, pathEdges])
 
-  return <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="catalogue-explorer">
+  const update = () => setRefresh((value) => value + 1)
+  const zoomBy = (factor: number) => {
+    const camera = graphRef.current
+    if (camera) camera.zoom(camera.zoom() * factor, cameraDuration(200))
+  }
+  const skillsMessage = !searching && (pageFilter === 'all' || pageFilter === 'settings')
+    ? skills ? 'No installed skills.' : loading ? 'Loading installed skills…' : 'Installed skills unavailable.'
+    : undefined
+  const controls = [
+    { label: 'Fit catalogue graph', Icon: Scan, onClick: fitGraph },
+    { label: 'Zoom in catalogue graph', Icon: ZoomIn, onClick: () => zoomBy(1.5) },
+    { label: 'Zoom out catalogue graph', Icon: ZoomOut, onClick: () => zoomBy(1 / 1.5) },
+  ]
+
+  return <div className="flex min-h-0 flex-1 flex-col gap-2.5" data-testid="catalogue-explorer">
     <div className="flex shrink-0 flex-wrap items-center gap-2">
-      <div className="relative min-w-36 flex-1">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input className="pl-8" placeholder="Find a page, feature, or tool…" aria-label="Search catalogue" value={query} onChange={(event) => setQuery(event.target.value)} />
+      <div className="relative min-w-40 flex-1">
+        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input type="search" className="h-10 pl-9" placeholder="Search…" aria-label="Search catalogue"
+          value={query} onChange={(event) => { setQuery(event.target.value); setCollapsed(false) }} />
       </div>
-      <Select value={pageFilter} onValueChange={(value) => {
-        const id = value as JaitPageId | 'all'
-        setPageFilter(id); setSelectedId(id === 'all' ? 'jait' : 'page:' + id)
-      }}>
-        <SelectTrigger aria-label="Catalogue page" className="h-9 w-40 shrink-0">
-          <SelectValue placeholder="All pages" />
-        </SelectTrigger>
+      <Select value={pageFilter} onValueChange={(value) => focusPage(value as JaitPageId | 'all')}>
+        <SelectTrigger aria-label="Catalogue page" className="h-10 w-32 shrink-0 sm:w-40"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All pages</SelectItem>
           {JAIT_PAGE_IDS.map((id) => <SelectItem key={id} value={id}>{JAIT_PAGES[id].title}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Button variant="outline" size="icon" aria-label="Refresh catalogue" disabled={loading} onClick={() => setRefresh((value) => value + 1)}>
-        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+      <Button type="button" variant="outline" className="h-10" onClick={() => {
+        setQuery('')
+        focusPage('settings')
+        setSelection({ id: 'feature:settings:installed-skills' })
+        setCollapsed(false)
+      }}>
+        <BookOpen aria-hidden="true" /> Skills
       </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button type="button" variant="outline" size="icon" className="size-10" aria-label="Refresh catalogue" disabled={loading} onClick={update}>
+            <RefreshCw aria-hidden="true" className={loading ? 'motion-safe:animate-spin' : undefined} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Refresh catalogue</TooltipContent>
+      </Tooltip>
     </div>
-    {error && <div role="alert" className="shrink-0 text-sm text-destructive">{error} <button className="underline" onClick={() => setRefresh((value) => value + 1)}>Retry</button></div>}
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto md:flex-row md:overflow-hidden">
-      <div ref={containerRef} className="relative min-h-[220px] min-w-0 flex-1 md:min-h-0 overflow-hidden rounded-lg border bg-muted/15 text-foreground" data-testid="catalogue-graph" aria-label="Interactive catalogue graph">
-        {tools && size.width > 0 && size.height > 0 ? <ForceGraph2D
-          key={pageFilter}
-          ref={graphRef} width={size.width} height={size.height}
-          graphData={graph} nodeId="id" dagMode={pageFilter === "all" ? "radialout" : undefined} dagLevelDistance={90}
+    {errors.length > 0 && <div role="alert" className="shrink-0 rounded-md border border-destructive/30 px-3 py-2 text-sm text-destructive">
+      {errors.join(' · ')} <button type="button" className="ml-2 rounded underline focus-visible:ring-2 focus-visible:ring-ring" onClick={update}>Retry</button>
+    </div>}
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto md:flex-row md:overflow-hidden">
+      <div ref={containerRef} className="relative min-h-[7rem] min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted/20 md:min-h-0" data-testid="catalogue-graph" aria-label="Interactive catalogue graph" role="region">
+        {size.width > 0 && size.height > 0 && <ForceGraph2D
+          ref={graphRef} width={size.width} height={size.height} graphData={graph} nodeId="id"
+          dagMode={focusedPage ? undefined : 'radialout'} dagLevelDistance={90}
           nodeCanvasObject={drawNode} nodeLabel={(node: CatalogueNode) => escapeLabel(node.label)}
-          nodePointerAreaPaint={(node: CatalogueNode, color, ctx) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(node.x ?? 0, node.y ?? 0, 12, 0, Math.PI * 2); ctx.fill() }}
-          linkColor={() => '#94a3b866'} linkWidth={1} linkDirectionalArrowLength={3}
-          onNodeClick={choose}
-          onEngineTick={() => { if (fitPendingRef.current) { graphRef.current?.zoomToFit(0, pageFilter === "all" ? 45 : 20); fitPendingRef.current = false } }}
-          onEngineStop={() => graphRef.current?.zoomToFit(0, pageFilter === "all" ? 45 : 20)}
-          warmupTicks={50} cooldownTicks={1} d3VelocityDecay={0.4} minZoom={0.2} maxZoom={8} backgroundColor="transparent"
-        /> : <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">{loading ? <><Loader2 className="h-4 w-4 animate-spin" />Loading tools…</> : 'Catalogue unavailable'}</div>}
-        {tools && <div className="absolute bottom-2 left-2 flex gap-1">
-          <Button variant="outline" size="icon" className="h-8 w-8 bg-background" aria-label="Fit catalogue graph" onClick={() => graphRef.current?.zoomToFit(250, pageFilter === "all" ? 45 : 20)}><Scan className="h-4 w-4" /></Button>
-          <Button variant="outline" size="icon" className="h-8 w-8 bg-background" aria-label="Zoom in catalogue graph" onClick={() => { const graph = graphRef.current; if (graph) graph.zoom(graph.zoom() * 1.5, 200) }}><ZoomIn className="h-4 w-4" /></Button>
-          <Button variant="outline" size="icon" className="h-8 w-8 bg-background" aria-label="Zoom out catalogue graph" onClick={() => { const graph = graphRef.current; if (graph) graph.zoom(graph.zoom() / 1.5, 200) }}><ZoomOut className="h-4 w-4" /></Button>
-        </div>}
-        {tools && graph.nodes.length === 1 && <p className="absolute inset-x-4 top-4 text-sm text-muted-foreground">No matching pages or tools.</p>}
+          nodePointerAreaPaint={(node: CatalogueNode, color, ctx) => {
+            ctx.fillStyle = color
+            ctx.beginPath()
+            ctx.arc(node.x ?? 0, node.y ?? 0, 11, 0, Math.PI * 2)
+            ctx.fill()
+          }}
+          linkColor={(link: CatalogueLink) => onPath(link) ? primaryColorRef.current : '#94a3b866'}
+          linkWidth={(link: CatalogueLink) => onPath(link) ? 2.5 : 1}
+          linkDirectionalArrowLength={(link: CatalogueLink) => onPath(link) ? 5 : 0}
+          onNodeClick={choose} onEngineStop={fitGraph} warmupTicks={50} cooldownTicks={1}
+          d3VelocityDecay={0.4} minZoom={0.2} maxZoom={8} backgroundColor="transparent"
+        />}
+        {searching && graph.nodes.length === 1 && <p role="status" className="pointer-events-none absolute inset-x-3 top-3 rounded bg-background/95 px-3 py-2 text-sm text-muted-foreground">No matching catalogue entries.</p>}
+        <div className="absolute bottom-2 left-2 flex gap-1">
+          {controls.map(({ label, Icon, onClick }) => <Tooltip key={label}>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="outline" size="icon" className="size-9 bg-background" aria-label={label} onClick={onClick}><Icon aria-hidden="true" /></Button>
+            </TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+          </Tooltip>)}
+        </div>
       </div>
-      <aside ref={detailsRef} aria-label="Catalogue details" className="max-h-[36dvh] w-full shrink-0 space-y-3 overflow-y-auto rounded-lg border p-3 md:max-h-none md:w-72">
-        <div><p className="text-xs capitalize text-muted-foreground">{selected?.kind}</p><h2 className="break-words text-sm font-semibold">{selected?.label}</h2><p className="mt-1 text-xs text-muted-foreground">{selected?.description}</p></div>
-        {selected?.available === false && <p className="text-xs text-amber-600 dark:text-amber-400">Tool unavailable in this gateway</p>}
-        {selected?.tool && <p className="text-xs text-muted-foreground">{selected.tool.category} · {selected.tool.risk ?? 'unknown'} risk · {selected.tool.source ?? 'builtin'}</p>}
-        {page && pageId && <Button variant="outline" size="sm" className="w-full" onClick={() => { onOpenPage(); openNotification({ id: 'catalogue:' + pageId, link: page.path }) }}><ExternalLink className="mr-2 h-3.5 w-3.5" />Open {page.title}</Button>}
-        <div className="space-y-1"><h3 className="text-xs font-medium">Pages</h3>
-          {graph.nodes.filter((node) => node.kind === 'page').map((node) => <button key={node.id} className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-muted" onClick={() => choose(node)}>{node.label}</button>)}
-          {pageFilter !== 'all' && <button className="px-2 py-1 text-xs text-primary" onClick={() => { setPageFilter('all'); setSelectedId('jait') }}>Show all pages</button>}
-        </div>
-        <div className="space-y-1"><h3 className="text-xs font-medium">Features</h3>
-          {graph.nodes.filter((node) => node.kind === 'feature').map((node) => <button key={node.id} className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-muted" onClick={() => choose(node)}>{node.pageId ? JAIT_PAGES[node.pageId].title + ' · ' : ''}{node.label}</button>)}
-        </div>
-        <div className="space-y-1"><h3 className="text-xs font-medium">Tools ({visibleTools.length})</h3>
-          {visibleTools.map((node) => <button key={node.id} className="block w-full break-words rounded px-2 py-1 text-left text-xs hover:bg-muted" onClick={() => choose(node)}>{node.label}{node.available === false && <span className="ml-1 text-amber-600">Unavailable</span>}</button>)}
-        </div>
-      </aside>
+      <CatalogueDetails nodes={graph.nodes} path={path} selected={selected} collapsed={collapsed} focusedPage={focusedPage}
+        searching={searching} skillsMessage={skillsMessage} destinationLabel={skillDestination ? 'Open Skills settings' : page && `Open ${page.title}`}
+        onToggle={() => setCollapsed((value) => !value)} onChoose={choose} onNavigate={() => {
+          if (destination) {
+            onNavigate()
+            openNotification({ id: 'catalogue:' + selected.id, link: destination })
+          }
+        }} />
     </div>
-    <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Catalogue graph legend">
-      {(['page', 'feature', 'tool'] as const).map((kind) => <span key={kind} className="inline-flex items-center gap-1.5 capitalize"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[kind] }} />{kind}</span>)}
-      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" />Unavailable tool</span>
-      <span className="ml-auto">{tools?.length ?? 0} registered tools · Updates automatically</span>
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="Catalogue graph legend">
+      {(['page', 'feature', 'tool', 'skill'] as const).map((kind) => <span key={kind} className="inline-flex items-center gap-1.5 capitalize">
+        <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: COLORS[kind] }} />{kind}
+      </span>)}
+      <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="size-2 rounded-full bg-amber-500" />Unavailable tool</span>
     </div>
   </div>
 }
