@@ -186,10 +186,19 @@ pub struct UsageSummary {
     pub duration_ms: f64,
     pub prompt_tokens: Option<f64>,
     pub cached_prompt_tokens: Option<f64>,
+    pub cache_write_tokens: Option<f64>,
     pub completion_tokens: Option<f64>,
     pub total_tokens: Option<f64>,
     pub token_usage_estimated: Option<bool>,
     pub request_count: Option<f64>,
+    pub cost: Option<UsageCost>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UsageCost {
+    pub amount: f64,
+    pub currency: String,
+    pub basis: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -197,38 +206,57 @@ pub struct UsageRound {
     pub metrics: Option<UsageSummary>,
 }
 
+/// A counter is reported only when every round reports it, so a partial sum is never shown as complete.
 pub fn summarize_usage(rounds: &[UsageRound]) -> Option<Value> {
     let values: Vec<_> = rounds.iter().filter_map(|r| r.metrics.as_ref()).collect();
     if values.is_empty() {
         return None;
     }
-    let mut result = json!({
-        "durationMs":number(values.iter().fold(0.0, |n, m| n + m.duration_ms)),
-        "promptTokens":number(values.iter().fold(0.0, |n, m| n + m.prompt_tokens.unwrap_or(0.0))),
-        "completionTokens":number(values.iter().fold(0.0, |n, m| n + m.completion_tokens.unwrap_or(0.0))),
-        "totalTokens":number(values.iter().fold(0.0, |n, m| n + m.total_tokens.unwrap_or_else(|| m.prompt_tokens.unwrap_or(0.0) + m.completion_tokens.unwrap_or(0.0)))),
-        "tokenUsageEstimated":values.iter().any(|m| m.token_usage_estimated.unwrap_or(false)),
-    });
-    for (key, counters) in [
-        (
-            "cachedPromptTokens",
-            values
-                .iter()
-                .map(|v| v.cached_prompt_tokens)
-                .collect::<Option<Vec<_>>>(),
-        ),
-        (
-            "requestCount",
-            values
-                .iter()
-                .map(|v| v.request_count)
-                .collect::<Option<Vec<_>>>(),
-        ),
-    ] {
-        if let Some(counters) = counters {
-            result[key] = number(counters.iter().fold(0.0, |n, v| n + v));
+    let total = |field: &dyn Fn(&UsageSummary) -> Option<f64>| {
+        values
+            .iter()
+            .map(|m| field(m))
+            .collect::<Option<Vec<_>>>()
+            .map(|counters| number(counters.iter().fold(0.0, |n, v| n + v)))
+    };
+    let mut result =
+        json!({"durationMs":number(values.iter().fold(0.0, |n, m| n + m.duration_ms))});
+    let mut set = |key: &str, value: Option<Value>| {
+        if let Some(value) = value {
+            result[key] = value;
         }
-    }
+    };
+    set("promptTokens", total(&|m| m.prompt_tokens));
+    set("completionTokens", total(&|m| m.completion_tokens));
+    set(
+        "totalTokens",
+        total(&|m| {
+            m.total_tokens
+                .or_else(|| Some(m.prompt_tokens? + m.completion_tokens?))
+        }),
+    );
+    set(
+        "tokenUsageEstimated",
+        Some(json!(
+            values
+                .iter()
+                .any(|m| m.token_usage_estimated.unwrap_or(false))
+        )),
+    );
+    set("cachedPromptTokens", total(&|m| m.cached_prompt_tokens));
+    set("cacheWriteTokens", total(&|m| m.cache_write_tokens));
+    let currency = values[0].cost.as_ref().map(|c| c.currency.as_str());
+    set(
+        "cost",
+        total(&|m| {
+            m.cost
+                .as_ref()
+                .filter(|c| Some(c.currency.as_str()) == currency && c.basis == "configured-rates")
+                .map(|c| c.amount)
+        })
+        .map(|amount| json!({"amount":amount,"currency":currency,"basis":"configured-rates"})),
+    );
+    set("requestCount", total(&|m| m.request_count));
     Some(result)
 }
 

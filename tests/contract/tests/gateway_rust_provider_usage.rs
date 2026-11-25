@@ -271,6 +271,19 @@ fn round_summaries_retain_omitted_metrics_and_optional_totals() {
         json!({"op":"nativeusage.summary","rounds":[
           {"metrics":{"durationMs":10,"promptTokens":5,"cachedPromptTokens":2,"requestCount":1}},
           {"metrics":{"durationMs":20,"completionTokens":3,"tokenUsageEstimated":false}}]}),
+        // Counters, cache writes and configured-rate cost are reported only when every round has them.
+        json!({"op":"nativeusage.summary","rounds":[
+          {"metrics":{"durationMs":1,"promptTokens":4,"completionTokens":1,"cacheWriteTokens":2,"cost":{"amount":0.25,"currency":"USD","basis":"configured-rates"}}},
+          {"metrics":{"durationMs":2,"promptTokens":6,"completionTokens":3,"cacheWriteTokens":0,"cost":{"amount":0.5,"currency":"USD","basis":"configured-rates"}}}]}),
+        json!({"op":"nativeusage.summary","rounds":[
+          {"metrics":{"durationMs":1,"promptTokens":4,"cacheWriteTokens":2,"cost":{"amount":0.25,"currency":"USD","basis":"configured-rates"}}},
+          {"metrics":{"durationMs":2,"totalTokens":9,"cost":{"amount":0.5,"currency":"EUR","basis":"configured-rates"}}}]}),
+        json!({"op":"nativeusage.summary","rounds":[
+          {"metrics":{"durationMs":1,"totalTokens":5,"cost":{"amount":1,"currency":"USD","basis":"estimated"}}},
+          {"metrics":{"durationMs":2,"promptTokens":1,"completionTokens":2,"cost":{"amount":1,"currency":"USD","basis":"estimated"}}}]}),
+        json!({"op":"nativeusage.summary","rounds":[
+          {"metrics":{"durationMs":1,"cost":{"amount":1,"currency":"USD","basis":"configured-rates"}}},
+          {"metrics":{"durationMs":2}}]}),
     ]);
 }
 #[test]
