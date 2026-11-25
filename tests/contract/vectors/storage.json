@@ -1456,7 +1456,8 @@
           "status",
           "metadata",
           "project_id",
-          "viewed_at"
+          "viewed_at",
+          "shared_with_project"
         ]
       },
       {
@@ -5176,7 +5177,8 @@
           "segments",
           "context_flow",
           "thinking",
-          "persona"
+          "persona",
+          "author_user_id"
         ]
       },
       {
