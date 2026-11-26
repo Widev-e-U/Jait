@@ -33,6 +33,8 @@ import type { JaitBackend } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
+import { AndroidPermissionsDialog } from './AndroidPermissionsDialog'
+import { hasAndroidPermissions } from '@/lib/android-permissions'
 import { getGatewayProviderAccounts, shouldShowProviderLoginAction } from './provider-account-actions'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
@@ -1337,6 +1339,9 @@ export function SettingsPage({
     'connectors channels telegram bot botfather token whatsapp teams messaging connect link pair qr inbound outbound',
   )
   const showThemeSection = matchesSearch(...getVsCodeThemeSearchTerms(), 'import json token colors workbench sidebar tabs')
+  const showAndroidPermissionsSection = hasAndroidPermissions() && matchesSearch(
+    'android permissions microphone notifications calendar display over other apps full-screen alarms reminders install updates',
+  )
   const showChatBehaviorSection = matchesSearch(
     'chat streaming behavior default action steer queue thread interrupt while agent running busy message submit enter',
   )
@@ -1347,7 +1352,7 @@ export function SettingsPage({
   const tabHasMatch = (tab: SettingsTab): boolean => {
     switch (tab) {
       case 'general':
-        return showUpdateSection || showWatchSection || showThemeSection || showDesktopSection || showGatewaySection || showArchiveSection || showProjectArchiveSection || showSpeechSection || showChatBehaviorSection
+        return showAndroidPermissionsSection || showUpdateSection || showWatchSection || showThemeSection || showDesktopSection || showGatewaySection || showArchiveSection || showProjectArchiveSection || showSpeechSection || showChatBehaviorSection
       case 'api':
         return filteredApiFields.length > 0 || showJaitBackendSection || showProviderAccountsSection
       case 'tools':
@@ -1673,6 +1678,12 @@ const providerAccountsCard = (
 
         <TabsContent value="general" className="space-y-6">
           <AccountInvitations token={token} />
+          {showAndroidPermissionsSection && (
+            <Card className="space-y-3 p-5">
+              <h2 className="text-base font-medium">{highlight('Android permissions')}</h2>
+              <AndroidPermissionsDialog />
+            </Card>
+          )}
           {showUpdateSection && (
             <Card className="space-y-4 p-5">
               <div>

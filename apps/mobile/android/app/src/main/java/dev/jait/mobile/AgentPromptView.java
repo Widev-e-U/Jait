@@ -1,18 +1,29 @@
 package dev.jait.mobile;
 
 import android.content.Context;
-import dev.jait.mobile.common.QuestionLinks;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.graphics.drawable.StateListDrawable;
+import android.os.Build;
+import android.text.InputType;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.BackgroundColorSpan;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.RelativeSizeSpan;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
@@ -20,6 +31,7 @@ import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.core.content.ContextCompat;
+import dev.jait.mobile.common.QuestionLinks;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -39,6 +51,15 @@ public class AgentPromptView {
         void onResult(JSONObject result, boolean cancelled);
     }
 
+    private static final int CARD_HEIGHT_DP = 440;
+    private static final int FOREGROUND = 0xfff3f5f7;
+    private static final int MUTED = 0xffa0a7b3;
+    private static final int BORDER = 0xff363b45;
+    private static final int DIVIDER = 0xff2b2f38;
+    private static final int INPUT = 0xff101114;
+    private static final int PRIMARY = 0xff3c83f6;
+    private static final int BADGE = 0xff262a32;
+
     private final Context context;
     private final Listener listener;
     private final Map<String, List<CompoundButton>> optionInputs = new LinkedHashMap<>();
@@ -55,82 +76,85 @@ public class AgentPromptView {
         freeTextInputs.clear();
         questionIds.clear();
 
-        ScrollView scrollView = new ScrollView(context);
-        scrollView.setFillViewport(true);
-        scrollView.setBackground(
-            ContextCompat.getDrawable(context, R.drawable.agent_prompt_card_background)
-        );
-
-        LinearLayout root = new LinearLayout(context);
+        LinearLayout root = new LinearLayout(context) {
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                // Keep the card height independent of its content and shrink in a smaller window.
+                int height = View.resolveSize(dp(CARD_HEIGHT_DP), heightMeasureSpec);
+                super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+            }
+        };
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(20), dp(20), dp(18));
-        root.setGravity(Gravity.START);
-        scrollView.addView(root, new ScrollView.LayoutParams(
-            ScrollView.LayoutParams.MATCH_PARENT,
-            ScrollView.LayoutParams.WRAP_CONTENT
-        ));
+        root.setBackground(ContextCompat.getDrawable(context, R.drawable.agent_prompt_card_background));
+        root.setClipToOutline(true);
+        root.setFocusableInTouchMode(true);
+        root.setPadding(dp(1), dp(1), dp(1), dp(1));
 
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(header, layoutMatch(0, 0, 0, 6));
+        header.setPadding(dp(14), dp(10), dp(14), dp(10));
+        root.addView(header, layoutMatch(0, 0, 0, 0));
 
-        FrameLayout mark = new FrameLayout(context);
-        mark.setBackground(rounded(Color.WHITE, 10, Color.rgb(228, 231, 235)));
-        ImageView markIcon = new ImageView(context);
-        markIcon.setImageResource(R.drawable.ic_jait_mark_dark);
-        markIcon.setPadding(dp(8), dp(8), dp(8), dp(8));
-        mark.addView(markIcon, new FrameLayout.LayoutParams(dp(40), dp(40), Gravity.CENTER));
-        header.addView(mark, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        ImageView icon = new ImageView(context);
+        icon.setImageResource(R.drawable.ic_agent_question);
+        icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        header.addView(icon, new LinearLayout.LayoutParams(dp(18), dp(18)));
 
-        LinearLayout heading = new LinearLayout(context);
-        heading.setOrientation(LinearLayout.VERTICAL);
-        header.addView(heading, weightedLayoutWrap(1f, 12, 0, 0, 0));
+        TextView title = text(AgentQuestionPresentation.titleFor(request.optString("title")), 14, FOREGROUND, true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) title.setAccessibilityHeading(true);
+        LinearLayout.LayoutParams titleParams = layout(0, LinearLayout.LayoutParams.WRAP_CONTENT, 8, 0, 0, 0);
+        titleParams.weight = 1;
+        header.addView(title, titleParams);
 
-        TextView brand = text("JAIT", 10, Color.rgb(96, 165, 250), true);
-        brand.setLetterSpacing(0.14f);
-        heading.addView(brand);
-
-        TextView title = text(
-            AgentQuestionPresentation.titleFor(request.optString("title")),
-            18,
-            Color.rgb(242, 244, 247),
-            true
-        );
-        heading.addView(title, layoutMatch(0, 2, 0, 0));
-
-        TextView subtitle = text(
-            AgentQuestionPresentation.subtitleFor(request.optString("attention", "normal")),
-            12,
-            Color.rgb(133, 139, 149),
-            false
-        );
-        root.addView(subtitle, layoutMatch(0, 0, 0, 16));
+        if ("urgent".equals(request.optString("attention"))) {
+            TextView urgent = text("Urgent", 11, 0xfff7ce82, true);
+            urgent.setPadding(dp(6), dp(2), dp(6), dp(2));
+            urgent.setBackground(rounded(0xff392b1b, 5, Color.TRANSPARENT));
+            header.addView(urgent, layout(LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 8, 0, 0, 0));
+        }
+        addDivider(root);
 
         JSONArray questions = request.optJSONArray("questions");
         if (questions == null || questions.length() == 0) {
             throw new JSONException("questions are required");
         }
 
+        ScrollView scrollView = new ScrollView(context);
+        scrollView.setScrollbarFadingEnabled(false);
+        root.addView(scrollView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        LinearLayout body = new LinearLayout(context);
+        body.setOrientation(LinearLayout.VERTICAL);
+        scrollView.addView(body, new ScrollView.LayoutParams(
+            ScrollView.LayoutParams.MATCH_PARENT,
+            ScrollView.LayoutParams.WRAP_CONTENT
+        ));
+
         for (int index = 0; index < questions.length(); index++) {
             JSONObject question = questions.getJSONObject(index);
-            root.addView(buildQuestion(question), layoutMatch(0, 0, 0, 12));
+            body.addView(buildQuestion(question), layoutMatch(0, 0, 0, 0));
         }
 
+        addDivider(root);
         LinearLayout actions = new LinearLayout(context);
         actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setGravity(Gravity.END);
-        root.addView(actions, layoutMatch(0, 10, 0, 0));
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        actions.setPadding(dp(10), dp(4), dp(10), dp(4));
+        root.addView(actions, layoutMatch(0, 0, 0, 0));
 
-        Button cancel = button("Dismiss", Color.rgb(34, 38, 44), Color.rgb(228, 231, 235));
+        Button cancel = button("Cancel", Color.TRANSPARENT, MUTED);
         cancel.setOnClickListener(view -> dispatch(true));
-        actions.addView(cancel, weightedLayout(1f, 0, 0, 5, 0));
+        actions.addView(cancel);
 
-        Button submit = button("Submit", Color.rgb(59, 130, 246), Color.WHITE);
+        Button submit = button("Submit ↵", PRIMARY, Color.WHITE);
+        submit.setContentDescription("Submit");
         submit.setOnClickListener(view -> dispatch(false));
-        actions.addView(submit, weightedLayout(1f, 5, 0, 0, 0));
+        actions.addView(submit, layout(LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT, 4, 0, 0, 0));
 
-        return scrollView;
+        return root;
     }
 
     public void cancel() {
@@ -143,20 +167,19 @@ public class AgentPromptView {
 
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(14), dp(14), dp(14), dp(14));
-        card.setBackground(rounded(Color.rgb(24, 26, 31), 10, Color.rgb(52, 57, 66)));
+        card.setPadding(dp(12), dp(12), dp(12), dp(8));
 
         card.addView(text(
             question.optString("header", "Question"),
-            11,
-            Color.rgb(174, 180, 189),
+            14,
+            FOREGROUND,
             true
         ));
 
         TextView questionText = text(
             question.optString("question", ""),
-            14,
-            Color.rgb(242, 244, 247),
+            13,
+            MUTED,
             false
         );
         QuestionLinks.apply(questionText);
@@ -165,7 +188,8 @@ public class AgentPromptView {
 
         List<CompoundButton> controls = new ArrayList<>();
         JSONArray options = question.optJSONArray("options");
-        if (options != null && options.length() > 0) {
+        boolean hasOptions = options != null && options.length() > 0;
+        if (hasOptions) {
             if (question.optBoolean("multiSelect", false)) {
                 for (int index = 0; index < options.length(); index++) {
                     CheckBox checkBox = new CheckBox(context);
@@ -179,25 +203,69 @@ public class AgentPromptView {
                 for (int index = 0; index < options.length(); index++) {
                     RadioButton radioButton = new RadioButton(context);
                     configureOption(radioButton, options.getJSONObject(index));
-                    group.addView(radioButton, layoutMatch(0, 3, 0, 3));
+                    RadioGroup.LayoutParams params = new RadioGroup.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                    );
+                    params.setMargins(0, dp(3), 0, dp(3));
+                    group.addView(radioButton, params);
                     controls.add(radioButton);
                 }
                 card.addView(group);
+                Button clear = button("Clear selection", Color.TRANSPARENT, MUTED);
+                clear.setVisibility(View.GONE);
+                clear.setOnClickListener(view -> group.clearCheck());
+                group.setOnCheckedChangeListener((radioGroup, checkedId) ->
+                    clear.setVisibility(checkedId == View.NO_ID ? View.GONE : View.VISIBLE));
+                card.addView(clear, layout(LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, 0));
             }
         }
         optionInputs.put(questionId, controls);
 
         if (question.optBoolean("allowFreeformInput", true)) {
             EditText freeText = new EditText(context);
-            freeText.setHint("Type an answer...");
-            freeText.setHintTextColor(Color.rgb(104, 111, 121));
-            freeText.setTextColor(Color.rgb(242, 244, 247));
+            freeText.setHint(hasOptions ? "Or write your own answer…" : "Type your answer…");
+            freeText.setHintTextColor(MUTED);
+            freeText.setTextColor(FOREGROUND);
             freeText.setTextSize(14);
+            freeText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+            freeText.setHorizontallyScrolling(false);
             freeText.setMinLines(2);
-            freeText.setGravity(Gravity.TOP);
+            freeText.setMaxLines(4);
+            freeText.setImeOptions(EditorInfo.IME_ACTION_SEND);
+            freeText.setOnEditorActionListener((view, actionId, event) -> {
+                if (event != null) {
+                    int keyCode = event.getKeyCode();
+                    if (keyCode != KeyEvent.KEYCODE_ENTER && keyCode != KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                        return false;
+                    }
+                    if (event.getAction() != KeyEvent.ACTION_UP || event.isCanceled()) return true;
+                } else if (actionId != EditorInfo.IME_ACTION_SEND) {
+                    return false;
+                }
+                dispatch(false);
+                return true;
+            });
+            freeText.setGravity(Gravity.TOP | Gravity.START);
             freeText.setPadding(dp(11), dp(9), dp(11), dp(9));
-            freeText.setBackground(rounded(Color.rgb(16, 18, 22), 8, Color.rgb(52, 57, 66)));
-            card.addView(freeText, layoutMatch(0, 9, 0, 0));
+            freeText.setBackground(rounded(INPUT, 8, BORDER));
+            if (hasOptions) {
+                freeText.setVisibility(View.GONE);
+                Button write = button("Write another answer", Color.TRANSPARENT, MUTED);
+                write.setOnClickListener(view -> {
+                    freeText.setVisibility(View.VISIBLE);
+                    write.setVisibility(View.GONE);
+                    if (freeText.requestFocus()) {
+                        InputMethodManager keyboard = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+                        if (keyboard != null) {
+                            freeText.post(() -> keyboard.showSoftInput(freeText, InputMethodManager.SHOW_IMPLICIT));
+                        }
+                    }
+                });
+                card.addView(write, layout(LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, 0));
+            }
+            card.addView(freeText, layoutMatch(0, 6, 0, 4));
             freeTextInputs.put(questionId, freeText);
         }
 
@@ -207,18 +275,37 @@ public class AgentPromptView {
     private void configureOption(CompoundButton control, JSONObject option) {
         String label = option.optString("label", "");
         String description = option.optString("description", "");
-        String recommended = option.optBoolean("recommended", false) ? "  ·  Recommended" : "";
-        String visibleText = description.isEmpty()
-            ? label + recommended
-            : label + recommended + "\n" + description;
+        String badge = option.optBoolean("recommended", false) ? "  Recommended  " : "";
+        String heading = badge.isEmpty() ? label : label + "   " + badge;
+        SpannableString visibleText = new SpannableString(description.isEmpty() ? heading : heading + "\n" + description);
+        if (!badge.isEmpty()) {
+            int start = heading.length() - badge.length();
+            visibleText.setSpan(new BackgroundColorSpan(BADGE), start, heading.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            visibleText.setSpan(new RelativeSizeSpan(0.82f), start, heading.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        if (!description.isEmpty()) {
+            visibleText.setSpan(new ForegroundColorSpan(MUTED), heading.length() + 1, visibleText.length(),
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
         control.setText(visibleText);
         control.setTag(label);
         QuestionLinks.apply(control);
-        control.setTextColor(Color.rgb(228, 231, 235));
-        control.setTextSize(14);
-        control.setPadding(dp(8), dp(8), dp(8), dp(8));
-        control.setButtonTintList(android.content.res.ColorStateList.valueOf(Color.rgb(59, 130, 246)));
-        control.setBackground(optionBackground());
+        control.setTextColor(FOREGROUND);
+        control.setTextSize(13);
+        control.setMinHeight(dp(44));
+        control.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        control.setPaddingRelative(dp(12), dp(6), dp(12), dp(6));
+        control.setCompoundDrawablePadding(dp(8));
+        control.setButtonTintList(new ColorStateList(
+            new int[][] { { android.R.attr.state_checked }, {} }, new int[] { PRIMARY, MUTED }
+        ));
+        control.setBackground(touchFeedback(optionBackground(), 8));
+    }
+
+    private void addDivider(LinearLayout parent) {
+        View divider = new View(context);
+        divider.setBackgroundColor(DIVIDER);
+        parent.addView(divider, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)));
     }
 
     private void dispatch(boolean cancelled) {
@@ -259,8 +346,13 @@ public class AgentPromptView {
         button.setTextColor(textColor);
         button.setTextSize(13);
         button.setAllCaps(false);
-        button.setTypeface(Typeface.DEFAULT_BOLD);
-        button.setBackground(rounded(backgroundColor, 11, Color.TRANSPARENT));
+        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        button.setMinimumWidth(0);
+        button.setMinWidth(0);
+        button.setMinimumHeight(dp(44));
+        button.setMinHeight(dp(44));
+        button.setPaddingRelative(dp(12), dp(6), dp(12), dp(6));
+        button.setBackground(touchFeedback(rounded(backgroundColor, 8, Color.TRANSPARENT), 8));
         return button;
     }
 
@@ -272,15 +364,20 @@ public class AgentPromptView {
         return drawable;
     }
 
+    private RippleDrawable touchFeedback(Drawable background, int radiusDp) {
+        return new RippleDrawable(ColorStateList.valueOf(0x20ffffff), background,
+            rounded(Color.WHITE, radiusDp, Color.TRANSPARENT));
+    }
+
     private StateListDrawable optionBackground() {
         StateListDrawable drawable = new StateListDrawable();
         drawable.addState(
             new int[] { android.R.attr.state_checked },
-            rounded(Color.rgb(20, 33, 58), 8, Color.rgb(59, 130, 246))
+            rounded(0xff1a2537, 8, 0xff4b6d9e)
         );
         drawable.addState(
             new int[] {},
-            rounded(Color.rgb(19, 21, 25), 8, Color.rgb(52, 57, 66))
+            rounded(INPUT, 8, BORDER)
         );
         return drawable;
     }
@@ -312,37 +409,6 @@ public class AgentPromptView {
             marginEnd,
             marginBottom
         );
-    }
-
-    private LinearLayout.LayoutParams weightedLayout(
-        float weight,
-        int marginStart,
-        int marginTop,
-        int marginEnd,
-        int marginBottom
-    ) {
-        LinearLayout.LayoutParams params = layout(0, dp(48), marginStart, marginTop, marginEnd, marginBottom);
-        params.weight = weight;
-        return params;
-    }
-
-    private LinearLayout.LayoutParams weightedLayoutWrap(
-        float weight,
-        int marginStart,
-        int marginTop,
-        int marginEnd,
-        int marginBottom
-    ) {
-        LinearLayout.LayoutParams params = layout(
-            0,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            marginStart,
-            marginTop,
-            marginEnd,
-            marginBottom
-        );
-        params.weight = weight;
-        return params;
     }
 
     private int dp(int value) {

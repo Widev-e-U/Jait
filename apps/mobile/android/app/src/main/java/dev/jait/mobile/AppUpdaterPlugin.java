@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
 import android.provider.Settings;
 import androidx.activity.result.ActivityResult;
 import androidx.core.content.ContextCompat;
@@ -55,7 +54,7 @@ public class AppUpdaterPlugin extends Plugin {
         }
 
         Context context = getContext();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.getPackageManager().canRequestPackageInstalls()) {
+        if (!PermissionsPlugin.canInstallUpdates(context)) {
             waitingForInstallPermission = true;
             Intent intent = new Intent(
                 Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -146,8 +145,8 @@ public class AppUpdaterPlugin extends Plugin {
         }
 
         Context context = getContext();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.getPackageManager().canRequestPackageInstalls()) {
-            call.reject("Install permission was not granted");
+        if (!PermissionsPlugin.canInstallUpdates(context)) {
+            call.reject("To install the update, allow Jait under Settings → General → Android permissions → Install updates.");
             return;
         }
 

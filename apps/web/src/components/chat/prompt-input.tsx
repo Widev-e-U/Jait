@@ -4,7 +4,7 @@ import { EmojiPickerPanel } from '../messenger/messenger-emoji-picker'
 import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
 import { createPastedTextAttachment, isLongPaste } from '@/lib/pasted-text-attachment'
 import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle, forwardRef, type ReactNode } from 'react'
-import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, Copy, Check, GitFork, GitBranch, ChevronUp, Smile } from 'lucide-react'
+import { CornerDownLeft, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, Copy, Check, GitFork, GitBranch, ChevronUp, Keyboard, Smile } from 'lucide-react'
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider, TooltipHint } from '@/components/ui/tooltip'
@@ -738,35 +738,28 @@ function insertSegmentsAtCursor(
   selection.addRange(nextRange)
 }
 
-function insertTextAtCursor(el: HTMLElement, text: string): Text | undefined {
+function insertTextAtCursor(el: HTMLElement, text: string, inactiveRange?: Range): Text | undefined {
   if (!text) return
 
-  const selection = window.getSelection()
-  if (!selection || selection.rangeCount === 0) {
-    const textNode = document.createTextNode(text)
+  const selection = inactiveRange ? null : window.getSelection()
+  const range = inactiveRange ?? (selection?.rangeCount ? selection.getRangeAt(0) : null)
+  const textNode = document.createTextNode(text)
+  if (!range || !el.contains(range.commonAncestorContainer)) {
     el.appendChild(textNode)
-    moveCursorToEnd(el)
-    return textNode
-  }
-
-  const range = selection.getRangeAt(0)
-  const ancestor = range.commonAncestorContainer
-  if (ancestor !== el && !el.contains(ancestor)) {
-    const textNode = document.createTextNode(text)
-    el.appendChild(textNode)
-    moveCursorToEnd(el)
+    if (selection) moveCursorToEnd(el)
     return textNode
   }
 
   range.deleteContents()
-  const textNode = document.createTextNode(text)
   range.insertNode(textNode)
 
-  const nextRange = document.createRange()
-  nextRange.setStart(textNode, textNode.length)
-  nextRange.collapse(true)
-  selection.removeAllRanges()
-  selection.addRange(nextRange)
+  if (selection) {
+    const nextRange = document.createRange()
+    nextRange.setStart(textNode, textNode.length)
+    nextRange.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(nextRange)
+  }
   return textNode
 }
 
@@ -936,7 +929,7 @@ const COMPOSER_SEND_META: Record<ComposerSendAction, Omit<ComposerSendOption, 'i
     tooltip: 'Steer the running agent',
     name: 'Steer',
     description: 'Send this into the response that is streaming right now',
-    icon: <ArrowUp className="h-4 w-4" />,
+    icon: <CornerDownLeft className="h-4 w-4" />,
   },
   queue: {
     tooltip: 'Add to queue',
@@ -1108,6 +1101,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const isMobile = useIsMobile()
   const isMessenger = variant === 'messenger'
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
+  const emojiToggleRef = useRef<HTMLButtonElement>(null)
   const [compactFooterControls, setCompactFooterControls] = useState(false)
 
   const [dragging, setDragging] = useState(false)
@@ -2402,7 +2396,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
   }, [variant, onChange, handleRemoveChip, addFilesAsAttachments, syncComposerSegments])
 
-  // The picker takes focus for search, which can reset the editor's selection.
+  // Moving focus away from the editor can reset its selection.
   const saveComposerSelection = useCallback(() => {
     const el = editableRef.current
     const selection = window.getSelection()
@@ -2410,8 +2404,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     savedSelectionRef.current = range && el?.contains(range.commonAncestorContainer) ? range.cloneRange() : null
   }, [])
 
-  // Insert an emoji from the composer picker at the caret and keep the draft in sync.
-  const insertEmoji = useCallback((emoji: string) => {
+  const focusComposerAtSavedSelection = useCallback(() => {
     const el = editableRef.current
     if (!el) return
     const range = savedSelectionRef.current
@@ -2423,7 +2416,25 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     } else {
       moveCursorToEnd(el)
     }
-    insertTextAtCursor(el, emoji)
+  }, [])
+
+  const insertEmoji = useCallback((emoji: string) => {
+    const el = editableRef.current
+    if (!el) return
+    if (isMobile) {
+      // Editing a detached range lets repeated picks advance the caret without
+      // focusing the editor and bringing the system keyboard back.
+      const range = savedSelectionRef.current ?? document.createRange()
+      const node = insertTextAtCursor(el, emoji, range)
+      if (node) {
+        range.setStart(node, node.length)
+        range.collapse(true)
+        savedSelectionRef.current = range
+      }
+    } else {
+      focusComposerAtSavedSelection()
+      insertTextAtCursor(el, emoji)
+    }
     draftSegmentsRef.current = syncComposerSegments(el)
     isSyncing.current = true
     const next = getTextFromEditable(el)
@@ -2431,8 +2442,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = false
     setIsEmpty(isTextEmpty(next) && !hasChipRefs(el))
     pushUndoRef.current(true)
-    scrollCaretIntoView(el)
-  }, [syncComposerSegments])
+    if (!isMobile) scrollCaretIntoView(el)
+  }, [focusComposerAtSavedSelection, isMobile, syncComposerSegments])
 
   const attachButton = (
     <TooltipHint side="bottom" content="Attach files">
@@ -2450,21 +2461,36 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     </TooltipHint>
   )
 
-  const emojiButton = (
+  const showKeyboard = isMobile && emojiPickerOpen
+  const EmojiToggleIcon = showKeyboard ? Keyboard : Smile
+  const emojiToggle = (
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground [&_svg]:size-[22px]"
+      disabled={composerDisabled}
+      ref={emojiToggleRef}
+      aria-label={showKeyboard ? 'Show keyboard' : 'Emoji'}
+      aria-expanded={emojiPickerOpen}
+      onClick={() => {
+        if (showKeyboard) {
+          setEmojiPickerOpen(false)
+          focusComposerAtSavedSelection()
+        } else {
+          const editor = editableRef.current
+          if (isMobile && editor && document.activeElement === editor) editor.blur()
+          setEmojiPickerOpen(open => !open)
+        }
+      }}
+    >
+      <EmojiToggleIcon aria-hidden="true" />
+    </Button>
+  )
+  const emojiButton = isMobile ? emojiToggle : (
     <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
       <PopoverAnchor asChild>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
-          disabled={composerDisabled}
-          aria-label="Emoji"
-          aria-expanded={emojiPickerOpen}
-          onClick={() => setEmojiPickerOpen(open => !open)}
-        >
-          <Smile className="h-[18px] w-[18px]" />
-        </Button>
+        {emojiToggle}
       </PopoverAnchor>
       <PopoverContent
         side="top"
@@ -2536,7 +2562,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       >
         {submitLoading
           ? <Loader2 className="h-4 w-4 animate-spin" />
-          : submitLabel ?? <ArrowUp className="h-4 w-4" />}
+          : submitLabel ?? <CornerDownLeft className="h-4 w-4" aria-hidden="true" />}
       </Button>
     </TooltipHint>
   ) : (
@@ -2684,7 +2710,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           'relative',
           // 8px/12px here plus the 1px box border and the `px-2` editable keeps
           // the typed text on the transcript's 16px/20px gutter.
-          isMessenger ? 'flex items-end gap-0.5 py-1 pl-1.5 pr-1.5' : 'px-2 pt-3 pb-1.5 sm:px-3',
+          isMessenger ? 'flex items-end gap-0.5 py-1 pl-1 pr-1.5' : 'px-2 pt-3 pb-1.5 sm:px-3',
         )}
       >
         {isMessenger && (
@@ -2706,6 +2732,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           <div
             ref={editableRef}
             contentEditable={!composerDisabled}
+            enterKeyHint="send"
             role="textbox"
             aria-label="Message"
             aria-disabled={composerDisabled}
@@ -2713,6 +2740,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             suppressContentEditableWarning
             onKeyDown={handleKeyDown}
             onBlur={saveComposerSelection}
+            onFocus={() => { if (isMobile) setEmojiPickerOpen(false) }}
             onPaste={handlePaste}
             onCopy={handleCopy}
             onCut={handleCopy}
@@ -2916,6 +2944,26 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             {!isMessenger && dictateButton}
             {composerTrailingControls}
           </div>
+        </div>
+      )}
+      {isMessenger && showKeyboard && !composerDisabled && (
+        <div
+          role="region"
+          aria-label="Emoji picker"
+          className="border-t px-2 pt-2 pb-2"
+          onKeyDown={event => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return
+            event.preventDefault()
+            setEmojiPickerOpen(false)
+            emojiToggleRef.current?.focus()
+          }}
+        >
+          <EmojiPickerPanel
+            className="h-[min(19rem,38dvh)]"
+            actionLabel="Insert"
+            autoFocusSearch={false}
+            onSelect={insertEmoji}
+          />
         </div>
       )}
     </div>

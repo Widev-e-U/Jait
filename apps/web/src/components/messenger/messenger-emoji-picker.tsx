@@ -33,11 +33,12 @@ export function loadEmojiData(): Promise<EmojiData> {
  * Mounted only while open, so it always starts on a fresh search.
  */
 export function EmojiPickerPanel({
-  onSelect, actionLabel = 'React with', className,
+  onSelect, actionLabel = 'React with', autoFocusSearch = true, className,
 }: {
   onSelect: (emoji: string) => void
   /** Leading words for the quick-row accessible labels. */
   actionLabel?: string
+  autoFocusSearch?: boolean
   className?: string
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -85,7 +86,7 @@ export function EmojiPickerPanel({
       <div className="relative">
         <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          autoFocus value={query} onChange={event => setQuery(event.target.value)}
+          autoFocus={autoFocusSearch} value={query} onChange={event => setQuery(event.target.value)}
           placeholder="Search emoji" aria-label="Search emoji" className="h-9 pl-8"
         />
       </div>

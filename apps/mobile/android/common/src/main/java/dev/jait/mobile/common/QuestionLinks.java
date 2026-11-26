@@ -36,18 +36,21 @@ public final class QuestionLinks {
     }
 
     public static void apply(TextView view, Opener opener) {
-        String source = view.getText().toString();
-        SpannableStringBuilder text = new SpannableStringBuilder();
+        CharSequence source = view.getText();
+        SpannableStringBuilder text = new SpannableStringBuilder(source);
         Matcher matcher = MARKDOWN.matcher(source);
-        int end = 0;
+        int removed = 0;
         while (matcher.find()) {
-            text.append(source, end, matcher.start());
-            int start = text.length();
-            text.append(matcher.group(1));
-            text.setSpan(new URLSpan(matcher.group(2)), start, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            end = matcher.end();
+            int start = matcher.start() - removed;
+            int labelStart = matcher.start(1) - removed;
+            int labelEnd = matcher.end(1) - removed;
+            int end = matcher.end() - removed;
+            text.delete(labelEnd, end);
+            text.delete(start, labelStart);
+            text.setSpan(new URLSpan(matcher.group(2)), start, start + labelEnd - labelStart,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            removed += (end - labelEnd) + (labelStart - start);
         }
-        text.append(source, end, source.length());
         // Preserve explicit Markdown destinations while auto-linking bare web addresses.
         URLSpan[] explicit = text.getSpans(0, text.length(), URLSpan.class);
         int[] starts = new int[explicit.length];

@@ -1,7 +1,7 @@
 import { MessageLink } from '@/components/ui/message-link'
 import { chatNotificationLink } from '@jait/shared'
-import { useState, useEffect, useCallback, useRef, useId, type ReactNode } from 'react'
-import { ArrowUpRight, Check, ChevronDown, ChevronLeft, Eye, EyeOff, KeyRound, Loader2, MessageCircleQuestion } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useId, type KeyboardEvent, type ReactNode } from 'react'
+import { ArrowUpRight, Check, ChevronDown, ChevronLeft, CornerDownLeft, Eye, EyeOff, KeyRound, Loader2, MessageCircleQuestion } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -74,6 +74,12 @@ export function InputPromptCard({ title, kind, children, testId, urgent = false,
   )
 }
 
+function submitTextareaOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
+  if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  if (!event.repeat) event.currentTarget.form?.requestSubmit()
+}
+
 function PromptActions({ submitting, disabled, onCancel, children, submitLabel = 'Submit' }: {
   submitting: boolean
   disabled: boolean
@@ -87,7 +93,9 @@ function PromptActions({ submitting, disabled, onCancel, children, submitLabel =
       <div className="ml-auto flex gap-1.5">
         <Button type="button" variant="ghost" size="sm" className="h-9 px-3 text-xs" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
         <Button type="submit" size="sm" className="h-9 gap-1.5 px-3 text-xs" disabled={submitting || disabled}>
-          {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+          {submitting
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            : <CornerDownLeft className="h-3.5 w-3.5" aria-hidden="true" />}
           {submitLabel}
         </Button>
       </div>
@@ -355,7 +363,7 @@ export function SecretInputForm({
           <Label className="sr-only" htmlFor={`secret-input-${request.id}`}>Secret</Label>
           <div className="relative">
             <Input ref={inputRef} id={`secret-input-${request.id}`} type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password" placeholder="Password" value={value} disabled={submitting}
+              autoComplete="current-password" enterKeyHint="send" placeholder="Password" value={value} disabled={submitting}
               onChange={(event) => onValueChange(event.target.value)} className="h-10 pr-10 text-base sm:text-sm" />
             <Button type="button" variant="ghost" size="icon" className="absolute inset-y-0 right-0 h-10 w-10 text-muted-foreground"
               aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} disabled={submitting}
@@ -468,7 +476,6 @@ export function useUserQuestionPrompt({
   useEffect(() => {
     if (!token) return
     const overlay = (window.Capacitor as { Plugins?: { AgentOverlay?: {
-      requestPermissions?: () => Promise<unknown>
       getPushToken?: () => Promise<{ token: string }>
       configurePush?: (options: { gatewayUrl: string; authToken: string; deviceId: string }) => Promise<unknown>
     } } } | undefined)?.Plugins?.AgentOverlay
@@ -476,7 +483,6 @@ export function useUserQuestionPrompt({
     const deviceId = generateDeviceId()
     // Watch sync and answers need these credentials even without Firebase.
     void Promise.resolve(overlay.configurePush?.({ gatewayUrl: API_URL, authToken: token, deviceId }))
-      .then(() => overlay.requestPermissions?.())
       .then(() => overlay.getPushToken?.())
       .then(async (result) => {
       const pushToken = result?.token
@@ -732,10 +738,10 @@ export function BrowserHandoffPrompt({ message, submitting, onRespond }: {
       <Button type="button" size="sm" variant="ghost" disabled={submitting} aria-expanded={reasonOpen}
         onClick={() => setReasonOpen(value => !value)}>Another reason</Button>
     </div>
-    {reasonOpen && <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (reason.trim()) void onRespond("Another reason", reason.trim()) }}>
-      <Textarea aria-label="Why the browser step did not work" placeholder="Describe what did not work. Do not include passwords." maxLength={2000}
+    {reasonOpen && <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (!submitting && reason.trim()) void onRespond("Another reason", reason.trim()) }}>
+      <Textarea enterKeyHint="send" onKeyDown={submitTextareaOnEnter} aria-label="Why the browser step did not work" placeholder="Describe what did not work. Do not include passwords." maxLength={2000}
         value={reason} onChange={event => setReason(event.target.value)} disabled={submitting} />
-      <Button type="submit" size="sm" disabled={submitting || !reason.trim()}>Send reason</Button>
+      <Button type="submit" size="sm" disabled={submitting || !reason.trim()}><CornerDownLeft aria-hidden="true" />Send reason</Button>
     </form>}
   </div>
 }
@@ -774,8 +780,9 @@ export function UserQuestionForm({
     <form onSubmit={(event) => {
       event.preventDefault()
       if (submitting) return
-      if (!lastQuestion && question && isAnswered(question.id)) setActiveIndex(activeIndex + 1)
-      else if (canSubmit) void onSubmit()
+      if (!lastQuestion) {
+        if (question && isAnswered(question.id)) setActiveIndex(activeIndex + 1)
+      } else if (canSubmit) void onSubmit()
     }}>
       {request.questions.length > 1 && <div className="flex gap-1 overflow-x-auto border-b border-border/60 px-3 py-2" aria-label="Questions">
         {request.questions.map((item, index) => <Button key={item.id} type="button" size="sm" variant={index === activeIndex ? 'secondary' : 'ghost'}
@@ -816,9 +823,13 @@ export function UserQuestionForm({
             </label>
           })}
         </div> : null}
+        {!question.multiSelect && answer.selected.length > 0 && <Button type="button" variant="ghost" size="sm"
+          className="h-8 px-2 text-xs text-muted-foreground" disabled={submitting}
+          onClick={() => onAnswerChange(question.id, { selected: [] })}>Clear selection</Button>}
         {question.allowFreeformInput !== false && (
           !question.options?.length || freeformOpen[question.id] || answer.freeText
             ? <Textarea aria-label={`Answer: ${question.header}`} value={answer.freeText ?? ''} rows={2}
+                enterKeyHint="send" onKeyDown={submitTextareaOnEnter}
                 placeholder={question.options?.length ? 'Or write your own answer…' : 'Type your answer…'}
                 disabled={submitting} className="min-h-14 resize-y text-base sm:text-sm"
                 onChange={(event) => onAnswerChange(question.id, { freeText: event.target.value, skipped: false })} />

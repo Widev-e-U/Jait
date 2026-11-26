@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import type { VoiceAssistantState, VoiceServerMessage } from '@jait/shared'
 import { VOICE_ASSISTANT_INITIAL_STATE } from '@jait/shared'
 import { getApiUrl } from '@/lib/gateway-url'
+import { hasAndroidPermissions, requestAndroidMicrophone } from '@/lib/android-permissions'
 
 /** PCM16 sample rate for OpenAI Realtime API (both input and output). */
 const SAMPLE_RATE = 24000
@@ -278,6 +279,15 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
     try {
       if (initialCommand.length > 4000) throw new Error('That request was too long. Please try again.')
+
+      if (hasAndroidPermissions()) {
+        const granted = await requestAndroidMicrophone()
+        if (connectionGenerationRef.current !== generation) return
+        if (!granted) {
+          setState(VOICE_ASSISTANT_INITIAL_STATE)
+          return
+        }
+      }
 
       // The gateway checks both the user's key and server configuration on connect.
       const ws = new WebSocket(`${getApiUrl().replace(/^http/i, 'ws')}/ws/voice-assistant?token=${encodeURIComponent(authToken)}`)

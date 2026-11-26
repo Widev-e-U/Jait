@@ -75,8 +75,9 @@ for (const choice of ['Done', "I'm not able to do it", 'Another reason']) {
     await prompt.getByRole('button', { name: choice, exact: true }).click()
     if (choice === 'Another reason') {
       expect(submitted).toBeNull()
-      await prompt.getByRole('textbox', { name: 'Why the browser step did not work' }).fill('The login page never loads')
-      await prompt.getByRole('button', { name: 'Send reason' }).click()
+      const reason = prompt.getByRole('textbox', { name: 'Why the browser step did not work' })
+      await reason.fill('The login page never loads')
+      await reason.press('Enter')
     }
     await expect(prompt).toBeHidden()
     expect(submitted).toEqual({ answers: { browser: { selected: [choice], freeText: choice === 'Another reason' ? 'The login page never loads' : null, skipped: false } } })

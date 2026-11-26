@@ -9,6 +9,16 @@ async function openComposer(page: Page, variant: 'assistant' | 'messenger') {
   return editor
 }
 
+test('Enter sends the message from the chat composer', async ({ page }) => {
+  const editor = await openComposer(page, 'assistant')
+  const send = page.getByRole('button', { name: 'Send message' })
+  await expect(editor).toHaveAttribute('enterkeyhint', 'send')
+  await expect(send).toBeEnabled()
+  await editor.press('Enter')
+  await expect(editor).toBeEmpty()
+  await expect(send).toBeDisabled()
+})
+
 for (const variant of ['assistant', 'messenger'] as const) {
   test(`paste stays on the current line in ${variant}`, async ({ page }) => {
     const editor = await openComposer(page, variant)
@@ -41,4 +51,31 @@ test('the Messenger emoji picker replaces the selected text and returns the care
   await expect(editor).toBeFocused()
   await page.keyboard.insertText('!')
   await expect(editor).toHaveText('👍! line')
+})
+
+test.describe('mobile Messenger emoji keyboard', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+  test('opens below the editor and keeps the caret through repeated emoji picks', async ({ page }) => {
+    const editor = await openComposer(page, 'messenger')
+    await editor.press('Home')
+    for (let index = 0; index < 'first'.length; index++) await editor.press('Shift+ArrowRight')
+    await page.getByRole('button', { name: 'Emoji', exact: true }).tap()
+
+    const picker = page.getByRole('region', { name: 'Emoji picker' })
+    await expect(picker).toBeVisible()
+    expect((await picker.boundingBox())!.y).toBeGreaterThan((await editor.boundingBox())!.y)
+    await expect(editor).not.toBeFocused()
+    await expect(picker.getByRole('textbox', { name: 'Search emoji' })).not.toBeFocused()
+    await picker.getByRole('button', { name: 'Insert 👍', exact: true }).tap()
+    await picker.getByRole('button', { name: 'Insert 👍', exact: true }).tap()
+    await expect(editor).toHaveText('👍👍 line')
+    await expect(editor).not.toBeFocused()
+
+    await page.getByRole('button', { name: 'Show keyboard' }).tap()
+    await expect(picker).toBeHidden()
+    await expect(editor).toBeFocused()
+    await page.keyboard.insertText('!')
+    await expect(editor).toHaveText('👍👍! line')
+  })
 })

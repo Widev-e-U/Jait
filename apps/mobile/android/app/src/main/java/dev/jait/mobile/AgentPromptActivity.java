@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -69,7 +70,10 @@ public class AgentPromptActivity extends AppCompatActivity {
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
                 .cancel(notificationId(requestId));
             promptView = new AgentPromptView(this, this::handleResult);
-            setContentView(promptView.build(request));
+            setContentView(promptView.build(request), new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
         } catch (JSONException error) {
             finish();
         }

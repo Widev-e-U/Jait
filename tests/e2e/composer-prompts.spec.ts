@@ -89,6 +89,35 @@ test('compact questions preserve answers across steps and support custom text', 
   } }])
 })
 
+test('Enter advances and submits a custom answer after clearing a preset choice', async ({ page }) => {
+  const submissions = await openPrompt(page, 'question', {
+    ...question,
+    questions: [question.questions[0], { id: 'notes', header: 'Notes', question: 'Anything else?' }],
+  })
+  await page.getByRole('radio').first().check()
+  await page.getByRole('button', { name: 'Write another answer' }).click()
+  const approach = page.getByRole('textbox', { name: 'Answer: Approach' })
+  await approach.fill('Use the regression test.')
+  await page.getByRole('button', { name: 'Clear selection' }).click()
+  await expect(page.getByRole('radio').first()).not.toBeChecked()
+  await expect(approach).toHaveValue('Use the regression test.')
+  await approach.press('Enter')
+
+  const notes = page.getByRole('textbox', { name: 'Answer: Notes' })
+  await notes.press('Enter')
+  expect(submissions).toEqual([])
+  await notes.fill('First line')
+  await notes.press('Shift+Enter')
+  await notes.press('x')
+  await expect(notes).toHaveValue('First line\nx')
+  await notes.press('Enter')
+  await expect(page.getByTestId('inline-user-question-prompt')).toHaveCount(0)
+  expect(submissions).toEqual([{ answers: {
+    approach: { selected: [], freeText: 'Use the regression test.', skipped: false },
+    notes: { selected: [], freeText: 'First line\nx', skipped: false },
+  } }])
+})
+
 test('prompt cards do not nest a second frame inside the composer shell', async ({ page }) => {
   await openPrompt(page, 'question')
   const card = page.getByTestId('inline-user-question-prompt')

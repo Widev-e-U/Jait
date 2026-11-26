@@ -375,7 +375,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     this.started = true;
     if (typeof window !== 'undefined') window.addEventListener('storage', this.onStorage);
     // Chrome only shows the permission prompt from a user gesture.
-    if (typeof window !== 'undefined' && 'Notification' in window && !window.jaitDesktop?.notify && Notification.permission === 'default')
+    if (typeof window !== 'undefined' && Capacitor.getPlatform() !== 'android' && 'Notification' in window && !window.jaitDesktop?.notify && Notification.permission === 'default')
       window.addEventListener('pointerdown', () => { void Notification.requestPermission().catch(() => {}); }, { once: true });
     const poll = async () => {
       try {
@@ -532,6 +532,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     if (!key) throw new Error('Connect to Matrix first.');
     if (
       enabled &&
+      Capacitor.getPlatform() !== 'android' &&
       'Notification' in window &&
       !window.jaitDesktop?.notify &&
       (await Notification.requestPermission()) !== 'granted'

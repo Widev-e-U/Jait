@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useVoiceAssistant } from './useVoiceAssistant'
 
 vi.mock('@/lib/gateway-url', () => ({ getApiUrl: () => 'http://localhost:8000' }))
+const androidPermissions = vi.hoisted(() => ({
+  hasAndroidPermissions: vi.fn(() => false),
+  requestAndroidMicrophone: vi.fn(),
+}))
+vi.mock('@/lib/android-permissions', () => androidPermissions)
 
 const hooks = vi.hoisted(() => ({ effects: [] as Array<() => unknown> }))
 vi.mock('react', () => ({
@@ -84,4 +89,17 @@ describe('voice session handoff', () => {
     expect(stop).toHaveBeenCalledOnce()
     expect(workletConnect).not.toHaveBeenCalled()
   })
+})
+
+it('asks for Android microphone access before opening a voice session', async () => {
+  const getUserMedia = vi.fn()
+  const voice = setup(getUserMedia)
+  androidPermissions.hasAndroidPermissions.mockReturnValueOnce(true)
+  androidPermissions.requestAndroidMicrophone.mockResolvedValueOnce(false)
+
+  await voice.connect()
+
+  expect(androidPermissions.requestAndroidMicrophone).toHaveBeenCalledOnce()
+  expect(Socket.latest).toBeUndefined()
+  expect(getUserMedia).not.toHaveBeenCalled()
 })

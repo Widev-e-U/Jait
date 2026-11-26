@@ -65,9 +65,6 @@ final class AgentOverlayWindow {
             return false;
         }
 
-        card.setBackground(
-            ContextCompat.getDrawable(appContext, R.drawable.agent_prompt_card_background)
-        );
         // Absorb taps anywhere on the card so they don't fall through to the scrim's
         // tap-outside-to-cancel handler below - only non-interactive children otherwise.
         card.setClickable(true);
@@ -100,6 +97,7 @@ final class AgentOverlayWindow {
         );
         params.dimAmount = 0.62f;
         params.gravity = Gravity.CENTER;
+        params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
 
         WindowManager wm = (WindowManager) appContext.getSystemService(Context.WINDOW_SERVICE);
         try {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SttProvider } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
+import { hasAndroidPermissions, requestAndroidMicrophone } from '@/lib/android-permissions'
 import {
   VOICE_LEVEL_SAMPLE_INTERVAL_MS,
   appendVoiceLevel,
@@ -50,6 +51,8 @@ export function useVoiceRecording({
   const [voiceRecording, setVoiceRecording] = useState(false)
   const [voiceTranscribing, setVoiceTranscribing] = useState(false)
   const [voiceLevels, setVoiceLevels] = useState<number[]>(() => createSilentVoiceLevels())
+  const mountedRef = useRef(true)
+  const startingRecordingRef = useRef(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const audioStreamRef = useRef<MediaStream | null>(null)
@@ -286,6 +289,7 @@ export function useVoiceRecording({
   }, [activeSessionId, applyVoiceTranscript, buildWavBlob, sttProvider, stopVoiceVisualizer, token])
 
   const handleVoiceInput = useCallback(async (options?: VoiceInputOptions) => {
+    if (!mountedRef.current || startingRecordingRef.current || mediaRecorderRef.current) return
     voiceTranscriptTargetRef.current = options?.onTranscript ?? null
     if (!token) {
       voiceTranscriptTargetRef.current = null
@@ -293,11 +297,21 @@ export function useVoiceRecording({
       return
     }
 
-    // Whisper / Wyoming provider: push-to-talk with MediaRecorder
+    startingRecordingRef.current = true
     try {
+      if (hasAndroidPermissions() && !(await requestAndroidMicrophone())) {
+        voiceTranscriptTargetRef.current = null
+        return
+      }
+
+      if (!mountedRef.current) return
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
       })
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
       audioStreamRef.current = stream
       audioChunksRef.current = []
       startVoiceVisualizer(stream)
@@ -312,8 +326,12 @@ export function useVoiceRecording({
       recorder.start()
       setVoiceRecording(true)
     } catch (err) {
+      if (!mountedRef.current) return
       voiceTranscriptTargetRef.current = null
       stopVoiceVisualizer()
+      audioStreamRef.current?.getTracks().forEach((track) => track.stop())
+      audioStreamRef.current = null
+      mediaRecorderRef.current = null
       console.error('Microphone access failed:', err)
 
       // `navigator.mediaDevices` is undefined on insecure (plain http) origins,
@@ -334,11 +352,15 @@ export function useVoiceRecording({
         message = 'No microphone was found on this device.'
       }
       window.alert(message)
+    } finally {
+      startingRecordingRef.current = false
     }
   }, [onAuthRequired, startVoiceVisualizer, stopVoiceVisualizer, token])
 
   useEffect(() => {
+    mountedRef.current = true
     return () => {
+      mountedRef.current = false
       stopVoiceVisualizer()
       audioStreamRef.current?.getTracks().forEach((track) => track.stop())
     }
