@@ -505,6 +505,65 @@ fn fixture_executor(
 }
 
 #[tokio::test]
+async fn dropping_an_authorized_execution_cancels_its_effect_without_cancelling_the_parent() {
+    let directory = work();
+    let parent = ProcessCancellation::default();
+    let ctx = context(&directory, parent.clone());
+    let (entered, receive) = tokio::sync::oneshot::channel();
+    let entered = Arc::new(Mutex::new(Some(entered)));
+    let delegate: ToolDelegate = Arc::new(move |_, _, ctx, permit| {
+        assert!(
+            entered
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap()
+                .send(ctx.cancellation.clone())
+                .is_ok()
+        );
+        Box::pin(async move {
+            let _permit = permit;
+            std::future::pending::<Result<ToolResult, String>>().await
+        })
+    });
+    let trust = Arc::new(Trust {
+        level: 0.0,
+        approvals: Mutex::new(vec![]),
+    });
+    let mut executor = fixture_executor(
+        ConsentManager::default(),
+        trust,
+        delegate,
+        HashMap::from([(
+            "fixture".into(),
+            serde_json::from_value(permission("fixture", "none")).unwrap(),
+        )]),
+    );
+    Arc::get_mut(&mut executor)
+        .unwrap()
+        .set_effect_authority(Arc::new(|_| Box::pin(async { Ok(()) })));
+    let running = tokio::spawn(async move {
+        executor
+            .execute("fixture", &json!({}), &ctx, ExecuteOptions::default())
+            .await
+    });
+    let effect = tokio::time::timeout(Duration::from_secs(2), receive)
+        .await
+        .unwrap()
+        .unwrap();
+    running.abort();
+    assert!(running.await.unwrap_err().is_cancelled());
+    assert!(
+        effect.is_cancelled(),
+        "abandoning the caller must cancel the retained effect token"
+    );
+    assert!(
+        !parent.is_cancelled(),
+        "sibling effects must keep their parent authority"
+    );
+}
+
+#[tokio::test]
 async fn model_arguments_cannot_impersonate_owner_or_enable_full_access() {
     let directory = work();
     let manager = ConsentManager::default();

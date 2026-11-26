@@ -1,5 +1,42 @@
 # Gateway migration to Rust
 
+## Scheduled job lifecycle integration — 2026-11-26
+
+The native application now owns a scheduler poller shared with the job routes.
+It starts only when the application serves, polls every 30 seconds as the Node
+entrypoint does, and retains overlapping ticks rather than detaching their tasks.
+Execution still uses the existing owner-scoped consent executor, disabled-tool
+settings and path authority; no provider catalogue or dependency change is made.
+The executor checks that the owning user still exists before preparing session
+state or settings, refusing orphaned jobs before their effects run.
+
+Native process shutdown stops polling, cancels job effects and drains ticks with
+a five-second ceiling. An abandoned caller cancels its per-effect token as well,
+so work retained by another executor task receives cancellation. This tightens
+the Node interval-only `stop` contract at the application lifecycle boundary;
+standalone native `start`/`stop` behavior and ordinary manual triggers remain
+unchanged.
+
+Recovery marks unfinished runs failed with an unknown-outcome warning, disables
+one-off jobs, and preserves the normal schedule of recurring jobs. A pending run
+also blocks automatic retry before the supervisor observes a failed task. The
+recovery transaction rolls back on failure, startup fails closed, and the database
+owner is released. Failed records do not establish that external effects rolled
+back, and blocking work already in progress may still complete.
+
+Binary job tests verify automatic delivery, disabled jobs and ownership. Native
+scheduler tests cover task ownership, draining, deadlines and recovery.
+Application tests cover command/descendant-effect cancellation, interrupted-run
+recovery and failed-startup rollback; the consent-executor regression covers
+effect cancellation when the caller is dropped. The previous job routes and
+reference scheduler contracts remain covered separately.
+Preview and WebSocket test session schemas are also aligned with the earlier
+sharing-column port; their production authorization checks are unchanged.
+
+This scoped integration does not implement scheduled agent/thread execution,
+notifications/hooks, capacity/soak validation or complete replacement readiness.
+Coverage manifests remain unchanged.
+
 ## Project membership — partial implementation
 
 The Rust project routes support owner-managed membership and members can list and read accessible projects. Owners can set session sharing and active project members can read shared session details and filtered message history; access is checked on each request and message access is checked in the projection transaction. Project list, search, detail, and project-session projections include the caller's own sessions and explicitly shared sessions in accessible active projects; membership and session visibility are checked in a consistent read transaction. The shared chat stream provides a filtered snapshot and request, token, and done events, with access rechecked on delivery and while idle; its bounded stream closes on lag or size exhaustion. Binary membership tests cover private denial, filtered snapshots, and idle revocation; HTTP fixture tests cover live turn delivery, filtering, cursor suppression, and revocation. Project mutations remain owner-scoped. Unlike TypeScript, member listings exclude archived projects, consistent with revoking member access when a project is archived. This is partial behavior and does not establish project-sharing parity.

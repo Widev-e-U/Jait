@@ -3,6 +3,7 @@
 use super::cron::is_valid_cron_expression;
 use crate::{
     db::worker::{DatabaseError, DatabaseWorker, OperationError},
+    execution::process_runner::ProcessCancellation,
     services::{calendar::truthy, storage::json_text, subscription_usage_fetchers::js_date_parse},
     text::js_trim,
     time::{Clock, default_clock, iso},
@@ -23,6 +24,9 @@ use std::{
 pub const MINUTE_MS: i64 = 60_000;
 pub const ONE_SHOT_RETENTION_MS: i64 = 86_400_000;
 pub const PURGE_INTERVAL_MS: i64 = 3_600_000;
+const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
+const INTERRUPTED_RUN: &str =
+    "Gateway stopped before the execution outcome was recorded; verify effects before retrying.";
 type Result<T> = std::result::Result<T, OperationError>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -267,10 +271,49 @@ impl SchedulerRepository<'_> {
         }
         Ok(spent.len())
     }
+    /// Call only before admitting jobs or after all execution futures have stopped.
+    pub fn reconcile_interrupted_runs(&self) -> Result<usize> {
+        let now = self.now()?;
+        let tx = self.db.unchecked_transaction()?;
+        let pending = {
+            let mut query = tx.prepare(
+                "SELECT job_id,max(started_at) FROM scheduled_job_runs WHERE status='running' GROUP BY job_id",
+            )?;
+            query
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        for (id, started) in pending {
+            let Some(job) = self.get(&id, None)? else {
+                continue;
+            };
+            tx.execute(
+                "UPDATE scheduled_jobs SET enabled=CASE WHEN ?1 THEN 0 ELSE enabled END,last_run_at=CASE WHEN last_run_at IS NULL OR last_run_at<?2 THEN ?2 ELSE last_run_at END,updated_at=?3 WHERE id=?4",
+                params![is_one_shot_job(&job.input), started, now, id],
+            )?;
+        }
+        let recovered = tx.execute(
+            "UPDATE scheduled_job_runs SET status='failed',error=?1,completed_at=?2 WHERE status='running'",
+            params![INTERRUPTED_RUN, now],
+        )?;
+        tx.commit()?;
+        Ok(recovered)
+    }
     fn begin(&self, id: &str, user: Option<&str>, run_ms: i64, trigger: &str) -> Result<Run> {
         let job = self
             .get(id, user)?
             .ok_or_else(|| format!("Job not found: {id}"))?;
+        if trigger == "schedule"
+            && self.db.query_row(
+                "SELECT EXISTS(SELECT 1 FROM scheduled_job_runs WHERE job_id=?1 AND status='running')",
+                [id],
+                |row| row.get::<_, bool>(0),
+            )?
+        {
+            return Err("Scheduled job has an unfinished run; verify its outcome before retrying".into());
+        }
         let action_id = crate::db::identifiers::uuidv7().to_string();
         let started = iso(run_ms)?;
         self.db.execute("INSERT INTO scheduled_job_runs(id,job_id,status,triggered_by,started_at) VALUES(?,?,'running',?,?)",
@@ -471,6 +514,17 @@ impl SchedulerService {
         self.with_repository(move |r| r.purge_spent_one_shots(now_ms, retention_ms))
             .await
     }
+    pub async fn reconcile_interrupted_runs(&self) -> std::result::Result<usize, String> {
+        let recovered = self
+            .with_repository(|r| r.reconcile_interrupted_runs())
+            .await?;
+        if recovered > 0 {
+            (self.inner.options.log)(&format!(
+                "Scheduler: recorded {recovered} interrupted run(s) with unknown execution outcomes"
+            ));
+        }
+        Ok(recovered)
+    }
     pub async fn trigger(
         &self,
         id: String,
@@ -526,6 +580,66 @@ impl SchedulerService {
     pub fn stop(&self) {
         if let Some(timer) = self.inner.timer.lock().expect("scheduler timer").take() {
             timer.abort();
+        }
+    }
+    /// Owned application poller. Preserve overlapping ticks, but retain every task and drain
+    /// after stopping admission. Dropping this future aborts its owned ticks.
+    pub async fn run_until_stopped(
+        &self,
+        stopped: ProcessCancellation,
+        poll_ms: u64,
+    ) -> std::result::Result<(), String> {
+        let period = Duration::from_millis(poll_ms.max(1));
+        let mut interval = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut ticks = tokio::task::JoinSet::new();
+        let mut failure = None;
+        loop {
+            tokio::select! {
+                biased;
+                _ = stopped.wait_cancelled() => break,
+                result = ticks.join_next(), if !ticks.is_empty() => {
+                    if result.is_some_and(|result| result.is_err()) {
+                        failure = Some("Scheduler poll task failed".to_owned());
+                        break;
+                    }
+                }
+                _ = interval.tick() => {
+                    let service = self.clone();
+                    let now_ms = (service.inner.options.clock)();
+                    ticks.spawn(async move {
+                        if let Err(error) = service.tick(now_ms).await {
+                            (service.inner.options.log)(&format!("Scheduler preflight failed: {error}"));
+                        }
+                    });
+                }
+            }
+        }
+        stopped.cancel();
+        let drained = tokio::time::timeout(SHUTDOWN_DRAIN, async {
+            while let Some(result) = ticks.join_next().await {
+                if result.is_err() {
+                    failure.get_or_insert_with(|| "Scheduler poll task failed".to_owned());
+                }
+            }
+        })
+        .await;
+        if drained.is_err() {
+            ticks.abort_all();
+            while let Some(result) = ticks.join_next().await {
+                if result.is_err_and(|error| error.is_panic()) {
+                    (self.inner.options.log)("Scheduler poll task failed during shutdown");
+                }
+            }
+            failure = Some(
+                "Scheduler drain exceeded five seconds; execution outcomes may be unknown".into(),
+            );
+        }
+        if let Some(error) = failure {
+            (self.inner.options.log)(&error);
+            Err(error)
+        } else {
+            Ok(())
         }
     }
     pub async fn tick(&self, now_ms: i64) -> std::result::Result<(), String> {
@@ -629,6 +743,191 @@ impl crate::tools::cron::CronScheduler for SchedulerRepository<'_> {
 mod tests {
     use super::*;
     use std::{num::NonZeroU16, path::Path, sync::atomic::AtomicUsize};
+
+    fn owned_service(execute: ExecuteTool) -> (SchedulerService, DatabaseWorker) {
+        let connection = crate::db::open_database(Path::new(":memory:")).unwrap();
+        crate::db::migrate_database(&connection).unwrap();
+        let worker = DatabaseWorker::new(connection, NonZeroU16::new(32).unwrap()).unwrap();
+        let mut options = SchedulerOptions::new(worker.clone(), "/fixture".into(), execute);
+        options.clock = Arc::new(|| 60_000);
+        options.log = Arc::new(|_| {});
+        (SchedulerService::new(options), worker)
+    }
+
+    fn job(name: &str, once: bool) -> CreateJob {
+        CreateJob {
+            user_id: Some("alice".into()),
+            name: name.into(),
+            cron: "* * * * *".into(),
+            tool_name: "fixture.execute".into(),
+            input: Some(json!({"__jaitJobMeta":{"once":once}})),
+            session_id: None,
+            project_root: None,
+            enabled: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn unfinished_run_blocks_automatic_retry_but_not_an_explicit_manual_trigger() {
+        let executions = Arc::new(AtomicUsize::new(0));
+        let count = executions.clone();
+        let (service, worker) = owned_service(Arc::new(move |_| {
+            count.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Ok(json!({"ok":true,"message":"explicitly retried"})) })
+        }));
+        let job = service.create(job("unfinished", false)).await.unwrap();
+        let id = job.id.clone();
+        service.with_repository(move |r| {
+            r.db.execute(
+                "INSERT INTO scheduled_job_runs(id,job_id,status,triggered_by,started_at) VALUES('unfinished-run',?1,'running','schedule','1970-01-01T00:00:00.000Z')",
+                [id],
+            )?;
+            Ok(())
+        }).await.unwrap();
+        service.tick(60_000).await.unwrap();
+        assert_eq!(executions.load(Ordering::SeqCst), 0);
+        service
+            .trigger(
+                job.id.clone(),
+                Some("alice".into()),
+                60_000,
+                "manual".into(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(executions.load(Ordering::SeqCst), 1);
+        assert_eq!(service.list_runs(job.id).await.unwrap().len(), 2);
+        assert_eq!(service.reconcile_interrupted_runs().await.unwrap(), 1);
+        worker.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn owned_poller_stops_admission_and_drains_the_started_execution() {
+        let entered = Arc::new(tokio::sync::Semaphore::new(0));
+        let release = Arc::new(tokio::sync::Semaphore::new(0));
+        let captured_entered = entered.clone();
+        let captured_release = release.clone();
+        let (service, worker) = owned_service(Arc::new(move |_| {
+            captured_entered.add_permits(1);
+            let release = captured_release.clone();
+            Box::pin(async move {
+                release.acquire().await.unwrap().forget();
+                Ok(json!({"ok":true,"message":"delivered"}))
+            })
+        }));
+        let job = service.create(job("drain", false)).await.unwrap();
+        let stop = ProcessCancellation::default();
+        let runner = {
+            let (service, stop) = (service.clone(), stop.clone());
+            tokio::spawn(async move { service.run_until_stopped(stop, 1).await })
+        };
+        tokio::time::timeout(Duration::from_secs(2), entered.acquire())
+            .await
+            .unwrap()
+            .unwrap()
+            .forget();
+        stop.cancel();
+        assert!(!runner.is_finished());
+        assert_eq!(
+            service.list_runs(job.id.clone()).await.unwrap()[0]["status"],
+            "running"
+        );
+        release.add_permits(1);
+        tokio::time::timeout(Duration::from_secs(2), runner)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let runs = service.list_runs(job.id).await.unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0]["status"], "completed");
+        assert_eq!(runs[0]["output"], "delivered");
+        assert_eq!(entered.available_permits(), 0);
+        worker.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn owned_poller_deadline_and_recovery_do_not_retry_interrupted_one_offs() {
+        let entered = Arc::new(tokio::sync::Semaphore::new(0));
+        let executions = Arc::new(AtomicUsize::new(0));
+        let count = executions.clone();
+        let captured_entered = entered.clone();
+        let (service, worker) = owned_service(Arc::new(move |_| {
+            let pending = count.fetch_add(1, Ordering::SeqCst) < 2;
+            captured_entered.add_permits(1);
+            Box::pin(async move {
+                if pending {
+                    std::future::pending::<()>().await;
+                }
+                Ok(json!({"ok":true,"message":"next scheduled occurrence"}))
+            })
+        }));
+        let once = service.create(job("one off", true)).await.unwrap();
+        let periodic = service.create(job("periodic", false)).await.unwrap();
+        let stop = ProcessCancellation::default();
+        let runner = {
+            let (service, stop) = (service.clone(), stop.clone());
+            tokio::spawn(async move { service.run_until_stopped(stop, 1).await })
+        };
+        tokio::time::timeout(Duration::from_secs(2), entered.acquire_many(2))
+            .await
+            .unwrap()
+            .unwrap()
+            .forget();
+        stop.cancel();
+        let result = tokio::time::timeout(Duration::from_secs(7), runner)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            result.unwrap_err(),
+            "Scheduler drain exceeded five seconds; execution outcomes may be unknown"
+        );
+        assert!(service.inner.running.lock().unwrap().is_empty());
+        assert_eq!(service.reconcile_interrupted_runs().await.unwrap(), 2);
+        for id in [&once.id, &periodic.id] {
+            let runs = service.list_runs(id.clone()).await.unwrap();
+            assert_eq!(runs[0]["status"], "failed");
+            assert_eq!(runs[0]["error"], INTERRUPTED_RUN);
+        }
+        assert!(!service.get(once.id, None).await.unwrap().unwrap().enabled);
+        assert!(
+            service
+                .get(periodic.id.clone(), None)
+                .await
+                .unwrap()
+                .unwrap()
+                .enabled
+        );
+        service.tick(60_000).await.unwrap();
+        assert_eq!(executions.load(Ordering::SeqCst), 2);
+        service.tick(120_000).await.unwrap();
+        assert_eq!(executions.load(Ordering::SeqCst), 3);
+        assert_eq!(service.list_runs(periodic.id).await.unwrap().len(), 2);
+        worker.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn owned_poller_observes_panics_and_stops_before_recovery() {
+        let (service, worker) = owned_service(Arc::new(|_| {
+            Box::pin(async { panic!("fixture effect panicked") })
+        }));
+        let job = service.create(job("panic", true)).await.unwrap();
+        let stop = ProcessCancellation::default();
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            service.run_until_stopped(stop.clone(), 1),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.unwrap_err(), "Scheduler poll task failed");
+        assert!(stop.is_cancelled());
+        assert!(service.inner.running.lock().unwrap().is_empty());
+        assert_eq!(service.reconcile_interrupted_runs().await.unwrap(), 1);
+        assert!(!service.get(job.id, None).await.unwrap().unwrap().enabled);
+        worker.shutdown().await.unwrap();
+    }
+
     #[tokio::test]
     async fn stopping_polls_keeps_inflight_execution_and_its_persisted_result() {
         let connection = crate::db::open_database(Path::new(":memory:")).unwrap();

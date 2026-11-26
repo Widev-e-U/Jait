@@ -48,14 +48,21 @@ const SCHEDULED_SESSION_NAME: &str = "Scheduled jobs";
 /// (the shared "default") is never trusted: the run uses the owner's own session, creating a
 /// "Scheduled jobs" one on demand. Only the tools the gateway can really run are available;
 /// anything else fails the run. Consent, disabled tools and path confinement are unchanged.
+/// The application token stops these executions during shutdown; effect revocation keeps its
+/// separate per-effect token.
 pub fn scheduled_tool_executor(
     auth: AuthState,
     consent: ConsentManager,
     project_root: PathBuf,
+    cancellation: ProcessCancellation,
 ) -> crate::scheduler::service::ExecuteTool {
     std::sync::Arc::new(move |execution: Value| {
         let (auth, consent, gateway_root) = (auth.clone(), consent.clone(), project_root.clone());
+        let cancellation = cancellation.clone();
         Box::pin(async move {
+            if cancellation.is_cancelled() {
+                return Ok(json!({"ok":false,"message":"Cancelled"}));
+            }
             let Some(user_id) = execution["userId"]
                 .as_str()
                 .filter(|u| !u.is_empty())
@@ -74,6 +81,10 @@ pub fn scheduled_tool_executor(
             let (owner, wanted) = (user_id.clone(), requested);
             let (session_id, project_path, disabled) = auth
                 .with_database(move |db| {
+                    let users = UserService::new(db);
+                    if users.find_by_id(&owner)?.is_none() {
+                        return Ok(None);
+                    }
                     let sessions = SessionService::new(db);
                     let session = match sessions
                         .get(&wanted, Some(&owner))?
@@ -103,12 +114,16 @@ pub fn scheduled_tool_executor(
                             }
                         }
                     };
-                    let disabled: Vec<String> =
-                        UserService::new(db).get_settings(&owner)?.disabled_tools;
-                    Ok((session.id.clone(), session.project_path.clone(), disabled))
+                    let disabled: Vec<String> = users.get_settings(&owner)?.disabled_tools;
+                    Ok(Some((
+                        session.id.clone(),
+                        session.project_path.clone(),
+                        disabled,
+                    )))
                 })
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| "Scheduled tool owner is no longer available".to_owned())?;
             let root = project_path
                 .map(PathBuf::from)
                 .unwrap_or(gateway_root.clone());
@@ -130,7 +145,7 @@ pub fn scheduled_tool_executor(
                 project_root: root,
                 origin: ExecutionOrigin::Scheduler,
                 runtime_mode: RuntimeMode::Guarded,
-                cancellation: ProcessCancellation::default(),
+                cancellation,
                 on_output: None,
             };
             let mut input = execution["input"].clone();
@@ -292,5 +307,52 @@ async fn execute_tool(State(state): State<ToolsState>, request: Request) -> Resp
     match executor.execute(&tool, &input, &context, options).await {
         Ok(result) => auth::response(200, serde_json::to_value(result).unwrap_or(Value::Null)),
         Err(_) => auth::internal_error(),
+    }
+}
+
+#[cfg(test)]
+mod scheduler_owner_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn scheduled_execution_refuses_a_removed_owner_before_preparing_effects() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/scheduler-owner")
+            .join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        let database = crate::db::open_database(std::path::Path::new(":memory:")).unwrap();
+        crate::db::migrate_database(&database).unwrap();
+        database.execute(
+            "INSERT INTO sessions(id,user_id,name,project_path,created_at,last_active_at,status) VALUES('orphan','removed-owner','orphan',?1,'now','now','active')",
+            [root.to_string_lossy().as_ref()],
+        ).unwrap();
+        let auth = AuthState::new(database, "scheduler-owner-fixture".into()).unwrap();
+        let execute = scheduled_tool_executor(
+            auth.clone(),
+            ConsentManager::default(),
+            root.clone(),
+            ProcessCancellation::default(),
+        );
+        let result = execute(json!({
+            "userId":"removed-owner","sessionId":"orphan","toolName":"file.write",
+            "input":{"path":"unexpected.txt","content":"must not execute"},
+        }))
+        .await;
+        let settings: i64 = auth
+            .with_database(|db| {
+                Ok(db.query_row("SELECT count(*) FROM user_settings", [], |row| row.get(0))?)
+            })
+            .await
+            .unwrap();
+        auth.shutdown().await.unwrap();
+        let wrote = root.join("unexpected.txt").exists();
+        std::fs::remove_dir_all(root).unwrap();
+        assert_eq!(
+            result.unwrap_err(),
+            "Scheduled tool owner is no longer available"
+        );
+        assert_eq!(settings, 0);
+        assert!(!wrote, "a removed owner's scheduled effect must not run");
     }
 }

@@ -371,6 +371,19 @@ pub struct Application {
     preview_ports: crate::routes::preview_proxy::PreviewPortRegistry,
     live_view_ports: crate::routes::preview_proxy::PreviewPortRegistry,
     terminals: TerminalRoutes,
+    scheduler: crate::scheduler::service::SchedulerService,
+    scheduler_stop: crate::execution::process_runner::ProcessCancellation,
+}
+
+struct SchedulerOwner {
+    stopped: crate::execution::process_runner::ProcessCancellation,
+    task: tokio::task::JoinHandle<Result<(), String>>,
+}
+impl Drop for SchedulerOwner {
+    fn drop(&mut self) {
+        self.stopped.cancel();
+        self.task.abort();
+    }
 }
 
 struct SessionRuntimeAdapter {
@@ -743,6 +756,23 @@ impl Application {
                 omniroute_api_key: std::env::var("OMNIROUTE_API_KEY").unwrap_or_default(),
             },
         });
+        let scheduler_stop = crate::execution::process_runner::ProcessCancellation::default();
+        let scheduler = crate::scheduler::service::SchedulerService::new(
+            crate::scheduler::service::SchedulerOptions::new(
+                auth.worker(),
+                config.project_root.to_string_lossy().into_owned(),
+                super::tools_mount::scheduled_tool_executor(
+                    auth.clone(),
+                    consent.clone(),
+                    config.project_root.clone(),
+                    scheduler_stop.clone(),
+                ),
+            ),
+        );
+        if let Err(error) = scheduler.reconcile_interrupted_runs().await {
+            auth.shutdown().await?;
+            return Err(error.into());
+        }
         let mut router = Router::new()
             .route("/health", get(application_health))
             .with_state((auth.clone(), health))
@@ -964,17 +994,7 @@ impl Application {
                     auth: auth.clone(),
                     // Scheduled tools run through the chat's consent executor on the owner's
                     // own session; tools the gateway cannot run natively fail the run.
-                    scheduler: crate::scheduler::service::SchedulerService::new(
-                        crate::scheduler::service::SchedulerOptions::new(
-                            auth.worker(),
-                            config.project_root.to_string_lossy().into_owned(),
-                            super::tools_mount::scheduled_tool_executor(
-                                auth.clone(),
-                                consent.clone(),
-                                config.project_root.clone(),
-                            ),
-                        ),
-                    ),
+                    scheduler: scheduler.clone(),
                     project_root: config.project_root.to_string_lossy().into_owned(),
                     clock: crate::time::default_clock(),
                     providers: Some(provider_registry.clone()),
@@ -1097,6 +1117,8 @@ impl Application {
                 preview_ports,
                 live_view_ports,
                 terminals: terminal_routes,
+                scheduler,
+                scheduler_stop,
             }),
             Err(error) => {
                 auth.shutdown().await?;
@@ -1208,6 +1230,14 @@ impl Application {
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), ApplicationError> {
+        let scheduler = self.scheduler.clone();
+        let scheduler_stop = self.scheduler_stop.clone();
+        let poller = scheduler.clone();
+        let stopped = scheduler_stop.clone();
+        let mut scheduler_owner = SchedulerOwner {
+            stopped: scheduler_stop.clone(),
+            task: tokio::spawn(async move { poller.run_until_stopped(stopped, 30_000).await }),
+        };
         let shutdown_error = Arc::new(Mutex::new(None));
         let error_slot = shutdown_error.clone();
         let chat = self.chat;
@@ -1216,6 +1246,7 @@ impl Application {
         let ws = self.ws_transport.clone();
         let shutdown = async move {
             shutdown.await;
+            scheduler_stop.cancel();
             // Refuse new upgrades and wait out live sockets first: their handlers issue
             // bounded reads through the chat and database workers closed below.
             if let Some(transport) = &ws {
@@ -1236,9 +1267,20 @@ impl Application {
         } else {
             self.gateway.serve(shutdown).await
         };
+        scheduler_owner.stopped.cancel();
+        let scheduler_result = match (&mut scheduler_owner.task).await {
+            Ok(result) => result,
+            Err(_) => {
+                eprintln!("Scheduler owner task failed");
+                Err("Scheduler owner task failed".to_owned())
+            }
+        };
         drop(chat);
+        let recovered = scheduler.reconcile_interrupted_runs().await;
         let cleanup = self.auth.shutdown().await;
         result?;
+        scheduler_result?;
+        recovered?;
         cleanup?;
         if let Some(error) = shutdown_error.lock().unwrap().take() {
             return Err(error.into());

@@ -1,5 +1,37 @@
 # Native Rust gateway
 
+## Automatic scheduled jobs — 2026-11-26
+
+The composed application now starts an owned scheduler poller when it begins
+serving, using the Node gateway's 30-second interval. The job routes and poller
+share one scheduler instance and the existing owner-scoped, consent-aware local
+tool executor. Owner existence is checked before preparing a session or settings,
+so an orphaned job cannot execute after its user has been removed. Disabled jobs
+remain idle; manual triggers keep their route and execution policy. Existing
+enabled jobs will now run when due; review them before switching to this native
+build.
+
+Shutdown stops polling, cancels job tool executions and drains owned ticks for
+up to five seconds before aborting overdue work. Dropping an authorized execution
+also cancels its per-effect token without cancelling unrelated parent authority.
+Interrupted runs are recorded as failed with an explicit unknown-outcome warning.
+One-off jobs are disabled rather than silently retried; recurring jobs retain
+their schedule and the latest interrupted start time prevents a same-minute
+repeat. Automatic execution refuses a job that still has an unfinished run.
+Recovery is transactional and startup fails closed if it cannot complete.
+
+Evidence: `binary_jobs_routes` runs an enabled cron job without a manual trigger,
+keeps a disabled job idle and checks owner isolation. Scheduler unit tests cover
+poll ownership, draining, deadlines, panics and recovery. The `scheduler_*` tests
+in `application_mounts` cover command/descendant-effect cancellation, cold-start
+recovery, rollback and database ownership release. The effect-drop regression is
+in `gateway_rust_consent_executor`.
+
+This is not a cutover or capacity claim. Scheduler notifications/hooks and
+scheduled agent/thread execution remain unintegrated. Already-started blocking
+effects may finish; failed recovery records do not prove rollback of external
+effects. Production remains TypeScript pending the separate replacement gates.
+
 ## Web chat options through the composed binary — 2026-11-20
 
 The web client sends a few options with each chat message. The binary now honors them against the
@@ -85,8 +117,9 @@ Tests: `jobs_routes_through_the_binary` in `tests/binary_jobs_routes.rs` checks 
 GET, PATCH, DELETE, runs and trigger), PATCH validation, runs and the provider catalogue, a manual `file.list` trigger that
 completes and lists the fixture project, and an unknown tool that fails the run.
 
-Not done: the cron timer. `SchedulerService::start` is called only from tests, so scheduled jobs never fire on their own
-in production (see "Not mapped" below).
+The automatic timer is now owned by `Application::serve`; see "Automatic
+scheduled jobs" above. `SchedulerService::start` remains the legacy interval API,
+not the production lifecycle owner.
 
 Mapped as native-tested: `POST /api/jobs/:id/trigger`.
 
@@ -227,9 +260,10 @@ Not mapped, and why:
 - `tests/application_mounts.rs` drives `PATCH /api/skills/:id` and the session plan routes in process through
   `Application`, not through the spawned binary. The manifest counts binary tests only, so these stay unmapped. (`POST
   /api/chat/prewarm` is now mapped to a binary test; see the 2026-11-25 section.)
-- Scheduler timer. The job CRUD routes and the manual trigger are native (see the scheduled job section at the top).
-  `SchedulerService::start` is called only from tests in `scheduler/service.rs`, so the cron timer never starts in
-  production and scheduled jobs never fire on their own. The timer stays missing.
+- Scheduled agent/thread execution and scheduler notifications/hooks. The timer,
+  job CRUD and manual trigger are native, but the scheduled executor still exposes
+  only its existing local file and terminal tools; this lifecycle integration adds
+  neither agent/thread dispatch nor notification delivery.
 - Session plan execute and reject, and `PATCH /api/sessions/:id/state`, are asserted only as 404 (no pending plan, or a
   non-owner). They are not mapped.
 

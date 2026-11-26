@@ -270,6 +270,71 @@ async fn jobs_routes_through_the_binary() {
     assert_eq!(st, 200, "{run}");
     assert_eq!(run["status"], "failed", "{run}");
 
+    // No manual trigger: the production cron poll must run an enabled job.
+    let (st, automatic) = call(
+        M::POST,
+        "/api/jobs".into(),
+        owner.clone(),
+        Some(json!({
+            "name":"automatic list","cron_expression":"* * * * *","enabled":true,
+            "payload":{"command":"file.list","args":{"path":"."}},
+        })),
+    )
+    .await;
+    assert_eq!(st, 201, "{automatic}");
+    let automatic_id = automatic["id"].as_str().unwrap();
+    let (st, disabled) = call(
+        M::POST,
+        "/api/jobs".into(),
+        owner.clone(),
+        Some(json!({
+            "name":"disabled list","cron_expression":"* * * * *","enabled":false,
+            "payload":{"command":"file.list","args":{"path":"."}},
+        })),
+    )
+    .await;
+    assert_eq!(st, 201, "{disabled}");
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(45);
+    loop {
+        let (st, runs) = call(
+            M::GET,
+            format!("/api/jobs/{automatic_id}/runs"),
+            owner.clone(),
+            None,
+        )
+        .await;
+        assert_eq!(st, 200, "{runs}");
+        if let Some(run) = runs["items"].as_array().unwrap().first()
+            && run["status"] == "completed"
+        {
+            assert_eq!(run["triggered_by"], "schedule", "{run}");
+            assert!(run.to_string().contains("notes.txt"), "{run}");
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "cron never completed the job: {runs}"
+        );
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    let (st, disabled_runs) = call(
+        M::GET,
+        format!("/api/jobs/{}/runs", disabled["id"].as_str().unwrap()),
+        owner.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(st, 200);
+    assert_eq!(disabled_runs["total"], 0, "{disabled_runs}");
+    let (st, _) = call(
+        M::GET,
+        format!("/api/jobs/{automatic_id}/runs"),
+        other.clone(),
+        None,
+    )
+    .await;
+    assert_eq!(st, 404);
+
     // Delete.
     let (st, _) = call(M::DELETE, format!("/api/jobs/{id}"), owner.clone(), None).await;
     assert_eq!(st, 204);

@@ -350,6 +350,14 @@ impl ConsentAwareExecutor {
         let effect = ProcessCancellation::default();
         let mut effect_context = context.clone();
         effect_context.cancellation = effect.clone();
+        // A caller abort must also stop effects retained by another executor task.
+        struct CancelEffectOnDrop(ProcessCancellation);
+        impl Drop for CancelEffectOnDrop {
+            fn drop(&mut self) {
+                self.0.cancel();
+            }
+        }
+        let _effect_guard = CancelEffectOnDrop(effect.clone());
         let mut running = (self.delegate)(name, input, &effect_context, permit);
         let revoked = tokio::select! {
             biased;

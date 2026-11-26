@@ -32,8 +32,11 @@ async fn start_seeded(
     tokio::task::JoinHandle<()>,
     std::path::PathBuf,
 ) {
-    let dir = std::env::temp_dir().join(format!("jait-mounts-{}", uuid::Uuid::new_v4()));
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.jait/artifacts/mounts")
+        .join(uuid::Uuid::new_v4().to_string());
     std::fs::create_dir_all(&dir).unwrap();
+    let dir = dir.canonicalize().unwrap();
     seed(&dir);
     let web_root = web.then(|| {
         let root = dir.join("web");
@@ -92,6 +95,223 @@ async fn token(client: &reqwest::Client, base: &str) -> String {
         .as_str()
         .unwrap_or_else(|| panic!("no token: {r}"))
         .to_owned()
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn scheduler_shutdown_cancels_running_command_and_stops_descendant_effects() {
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    let job = client.post(format!("{base}/api/jobs"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "name":"shutdown fixture","cron_expression":"* * * * *","enabled":false,
+            "payload":{"command":"terminal.run","args":{"command":
+                "sh -c 'printf started > scheduler-started; while [ ! -f scheduler-release ]; do sleep 0.05; done; printf orphan > scheduler-orphan' & wait"
+            }},
+        }))
+        .send().await.unwrap();
+    assert_eq!(job.status(), 201);
+    let job: serde_json::Value = job.json().await.unwrap();
+    let job_id = job["id"].as_str().unwrap().to_owned();
+    let trigger = {
+        let (client, base, token, id) =
+            (client.clone(), base.clone(), token.clone(), job_id.clone());
+        tokio::spawn(async move {
+            let response = client
+                .post(format!("{base}/api/jobs/{id}/trigger"))
+                .bearer_auth(token)
+                .json(&serde_json::json!({}))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), 200);
+            response.json::<serde_json::Value>().await.unwrap()
+        })
+    };
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !dir.join("scheduler-started").is_file() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(5), task)
+        .await
+        .unwrap()
+        .unwrap();
+    let result = trigger.await.unwrap();
+    assert_eq!(result["status"], "failed", "{result}");
+    assert_eq!(result["error"], "Cancelled", "{result}");
+    let connection = rusqlite::Connection::open(dir.join("gateway.sqlite")).unwrap();
+    let status: String = connection
+        .query_row(
+            "SELECT status FROM scheduled_job_runs WHERE job_id=?1",
+            [&job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(status, "failed");
+    drop(connection);
+    std::fs::write(dir.join("scheduler-release"), "released").unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        !dir.join("scheduler-orphan").exists(),
+        "a descendant survived scheduler shutdown"
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn scheduler_startup_reconciles_interrupted_runs_without_rearming_one_offs() {
+    let mut jobs = Vec::new();
+    let (base, stop, task, dir) = start_seeded(false, |dir| {
+        let connection = jait_gateway::db::open_database(&dir.join("gateway.sqlite")).unwrap();
+        jait_gateway::db::migrate_database(&connection).unwrap();
+        let owner = jait_gateway::services::users::UserService::new(&connection)
+            .create_user("recovery-owner", "recovery-password-123").unwrap();
+        let root = dir.to_string_lossy();
+        let repository = jait_gateway::scheduler::service::SchedulerRepository {
+            db: &connection, now_ms: 0, project_root: &root,
+        };
+        for (name, once) in [("one-off", true), ("periodic", false)] {
+            let job = repository.create(jait_gateway::scheduler::service::CreateJob {
+                user_id: Some(owner.id.clone()), name: name.into(), cron: "* * * * *".into(),
+                tool_name: "file.list".into(),
+                input: Some(serde_json::json!({"path":".","__jaitJobMeta":{"once":once}})),
+                session_id: None, project_root: None, enabled: None,
+            }).unwrap();
+            connection.execute(
+                "INSERT INTO scheduled_job_runs(id,job_id,status,triggered_by,started_at) VALUES(?1,?2,'running','schedule','1970-01-01T00:00:00.000Z')",
+                rusqlite::params![format!("interrupted-{name}"), job.id],
+            ).unwrap();
+            jobs.push((job.id, once));
+        }
+    }).await;
+    let client = reqwest::Client::new();
+    let login = client
+        .post(format!("{base}/api/auth/login"))
+        .json(&serde_json::json!({"username":"recovery-owner","password":"recovery-password-123"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(login.status(), 200);
+    let login: serde_json::Value = login.json().await.unwrap();
+    let token = login["access_token"].as_str().unwrap();
+    for (id, once) in jobs {
+        let job = client
+            .get(format!("{base}/api/jobs/{id}"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(job.status(), 200);
+        let job: serde_json::Value = job.json().await.unwrap();
+        assert_eq!(job["enabled"], !once, "{job}");
+        let runs = client
+            .get(format!("{base}/api/jobs/{id}/runs"))
+            .bearer_auth(token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(runs.status(), 200);
+        let runs: serde_json::Value = runs.json().await.unwrap();
+        assert_eq!(runs["total"], 1);
+        assert_eq!(runs["items"][0]["status"], "failed");
+        assert!(
+            runs["items"][0]["error"]
+                .as_str()
+                .unwrap()
+                .contains("verify effects before retrying")
+        );
+    }
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(5), task)
+        .await
+        .unwrap()
+        .unwrap();
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+async fn scheduler_recovery_failure_rolls_back_and_releases_database_ownership() {
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.jait/artifacts/mounts")
+        .join(uuid::Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&dir).unwrap();
+    let dir = dir.canonicalize().unwrap();
+    let database = dir.join("gateway.sqlite");
+    let connection = jait_gateway::db::open_database(&database).unwrap();
+    jait_gateway::db::migrate_database(&connection).unwrap();
+    let root = dir.to_string_lossy();
+    let repository = jait_gateway::scheduler::service::SchedulerRepository {
+        db: &connection,
+        now_ms: 0,
+        project_root: &root,
+    };
+    let job = repository
+        .create(jait_gateway::scheduler::service::CreateJob {
+            user_id: None,
+            name: "rollback fixture".into(),
+            cron: "* * * * *".into(),
+            tool_name: "file.list".into(),
+            input: Some(serde_json::json!({"__jaitJobMeta":{"once":true}})),
+            session_id: None,
+            project_root: None,
+            enabled: None,
+        })
+        .unwrap();
+    connection.execute(
+        "INSERT INTO scheduled_job_runs(id,job_id,status,triggered_by,started_at) VALUES('unfinished',?1,'running','schedule','1970-01-01T00:00:00.000Z')",
+        [&job.id],
+    ).unwrap();
+    connection.execute_batch(
+        "CREATE TRIGGER reject_recovery BEFORE UPDATE ON scheduled_job_runs BEGIN SELECT RAISE(FAIL,'recovery rejected'); END;",
+    ).unwrap();
+    drop(connection);
+    let configuration = || ApplicationConfig {
+        database_path: database.clone(),
+        project_root: dir.clone(),
+        jwt_secret: "mount-secret".into(),
+        cors_origin: String::new(),
+        web_root: None,
+        health: None,
+    };
+    let listener = || GatewayConfig {
+        address: "127.0.0.1:0".parse().unwrap(),
+        allow_non_loopback: false,
+    };
+    let failed = Application::bind_with_settings_chat(listener(), configuration()).await;
+    assert!(
+        failed
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("recovery rejected")
+    );
+    let connection = rusqlite::Connection::open(&database).unwrap();
+    let enabled: bool = connection
+        .query_row(
+            "SELECT enabled FROM scheduled_jobs WHERE id=?1",
+            [&job.id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(enabled, "failed recovery must roll back disabling the job");
+    connection
+        .execute_batch("DROP TRIGGER reject_recovery")
+        .unwrap();
+    drop(connection);
+    let app = Application::bind_with_settings_chat(listener(), configuration())
+        .await
+        .unwrap();
+    app.serve(async {}).await.unwrap();
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[tokio::test]
