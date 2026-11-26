@@ -238,6 +238,20 @@ async fn provider_routes_through_the_binary() {
     )
     .await;
     assert_eq!(st, 404, "{b}");
+    // Private provider launch is not wired yet: creation must fail closed
+    // and leave both users' account lists empty.
+    let (st, body) = call(
+        M::POST,
+        "/api/provider-accounts".into(),
+        o.clone(),
+        Some(json!({"providerType":"codex", "label":"Original"})),
+    )
+    .await;
+    assert_eq!(st, 400, "{body}");
+    assert!(body["error"].as_str().unwrap().contains("not supported"));
+    let (st, body) = call(M::GET, "/api/provider-accounts".into(), o.clone(), None).await;
+    assert_eq!(st, 200, "{body}");
+    assert_eq!(body["accounts"], json!([]));
     // Another user sees an empty account list and cannot touch accounts.
     let (st, b) = call(M::GET, "/api/provider-accounts".into(), x.clone(), None).await;
     assert!(st == 200 && b["accounts"] == json!([]), "{b}");

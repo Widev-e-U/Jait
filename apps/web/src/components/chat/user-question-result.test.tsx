@@ -16,9 +16,23 @@ describe('question results in chat', () => {
     expect(html).not.toContain('<script>')
     expect(questionAnswerData({ structuredContent: { answers } })?.answers).toEqual(answers)
   })
+  it.each([
+    { data: [{ type: 'text', text: JSON.stringify({ ok: true, data: { answers } }) }], message: 'Answered' },
+    { data: undefined, message: JSON.stringify({ ok: true, data: { answers } }) },
+  ])('renders an answer from provider output or a replayed message', (result) => {
+    const html = renderToStaticMarkup(createElement(UserQuestionResult, {
+      args: { requestId: 'question-1' },
+      status: 'success',
+      ...result,
+    }))
+    expect(html).toContain('Homelab')
+    expect(html).toContain('&lt;script&gt;text&lt;/script&gt;')
+    expect(html).not.toContain('Waiting for your answers')
+  })
   it('renders explicit pending and cancellation states without inventing an answer', () => {
     const render = (status: string, message?: string) => renderToStaticMarkup(createElement(UserQuestionResult, { args: {}, data: {}, status, message }))
-    expect(render('success')).toContain('Waiting for your answers')
+    expect(render('running')).toContain('Waiting for your answers')
+    expect(render('success')).toContain('Answer unavailable')
     expect(render('error', 'The user cancelled')).toContain('The user cancelled')
     expect(questionAnswerData('invalid')).toBeUndefined()
     expect(getToolCallBodyKind({ tool: 'user.ask', args: {}, status: 'success', displayOutput: '', snapshotText: null, screenshotPath: null })).toBe('questionAnswers')

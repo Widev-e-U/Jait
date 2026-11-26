@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCatalogueGraph, getCataloguePath, type CatalogueSkill, type CatalogueTool } from './catalogue-graph'
+import { buildCatalogueGraph, getCatalogueBranch, getCataloguePath, type CatalogueSkill, type CatalogueTool } from './catalogue-graph'
 
 const tools: CatalogueTool[] = [
   { name: 'agent.profiles', description: 'Manage saved people and teams', page: 'agents' },
@@ -74,6 +74,20 @@ describe('catalogue selection paths', () => {
       'jait', 'page:settings', 'feature:settings:installed-skills', 'skill:my-review',
     ])
     expect(buildCatalogueGraph([], 'agents', '', skills).nodes.some((node) => node.kind === 'skill')).toBe(false)
+  })
+
+  it('keeps only the focused branch, including its path and shared descendants', () => {
+    const graph = buildCatalogueGraph(tools)
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+    graph.links = graph.links.map(({ source, target }) => ({ source: byId.get(String(source))!, target: byId.get(String(target))! }))
+    const branch = getCatalogueBranch(graph, 'feature:agents:work')
+    expect(new Set(branch.nodes.map(({ id }) => id))).toEqual(new Set([
+      'jait', 'page:agents', 'feature:agents:work', 'tool:thread.control', 'tool:cron.add', 'tool:cron.update',
+    ]))
+    expect(branch.links).toHaveLength(5)
+    expect(getCataloguePath(branch, 'tool:thread.control').map(({ id }) => id)).toEqual([
+      'jait', 'page:agents', 'feature:agents:work', 'tool:thread.control',
+    ])
   })
 
   it('preserves the chosen parent for a shared tool after the canvas resolves endpoints', () => {

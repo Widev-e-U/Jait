@@ -11,14 +11,16 @@ export function questionResultData(value: unknown, depth = 0): Record<string, un
     try { return questionResultData(JSON.parse(value), depth + 1) } catch { return undefined }
   }
   const data = record(value)
-  if (!data) return undefined
-  if (record(data.answers) || (data.status === 'pending' && typeof data.requestId === 'string') || (data.ok === false && typeof data.message === 'string')) return data
-  for (const key of ['data', 'result', 'structuredContent']) {
-    const found = questionResultData(data[key], depth + 1)
-    if (found) return found
+  if (data) {
+    if (record(data.answers) || (data.status === 'pending' && typeof data.requestId === 'string') || (data.ok === false && typeof data.message === 'string')) return data
+    for (const key of ['data', 'result', 'structuredContent']) {
+      const found = questionResultData(data[key], depth + 1)
+      if (found) return found
+    }
   }
-  if (Array.isArray(data.content)) {
-    for (const item of data.content) {
+  const content = Array.isArray(value) ? value : data?.content
+  if (Array.isArray(content)) {
+    for (const item of content) {
       const found = questionResultData(record(item)?.text, depth + 1)
       if (found) return found
     }
@@ -37,7 +39,7 @@ export function UserQuestionResult({ args, data, status, message }: {
   status: string
   message?: string
 }) {
-  const result = questionAnswerData(data)
+  const result = questionAnswerData(data) ?? questionAnswerData(message)
   const answers = record(result?.answers)
   const questions = Array.isArray(args.questions) ? args.questions : []
   const labels = new Map(questions.flatMap(question => {
@@ -46,7 +48,8 @@ export function UserQuestionResult({ args, data, status, message }: {
   }))
   if (!answers) {
     return <p className="px-3 py-2 text-xs text-muted-foreground" role="status">
-      {status === 'error' ? message || 'Question cancelled' : 'Waiting for your answers'}
+      {status === 'error' ? message || 'Question cancelled'
+        : status === 'success' ? 'Answer unavailable' : 'Waiting for your answers'}
     </p>
   }
   return <dl className="space-y-3 px-3 py-2 text-sm" aria-label="Your answers">

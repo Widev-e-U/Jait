@@ -231,6 +231,19 @@ describe("persistent chat goal loops", () => {
     } };
   }
 
+  it("reports the reason for each rejected criterion", async () => {
+    vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue({ model: "test", answers: {
+      progress: { type: "choice", choice: "progress", confidence: 0.95 },
+      criterion_0: { type: "choice", choice: "mismatch", confidence: 0.95 },
+      criterion_1: { type: "choice", choice: "passed", confidence: 0.5 },
+    } });
+    const goal = loops.goal(sessionId, "Fix", ["First", "Second"]);
+    const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Checked", evidence: ["Evidence one", "Evidence two"] }, undefined, keys);
+    expect(result.monitor?.reason).toContain("Criterion 1: Evidence does not demonstrate this criterion");
+    expect(result.monitor?.reason).toContain("Criterion 2: Passing assessment had low confidence");
+    expect(result.nextMessage).toContain(result.monitor?.reason);
+  });
+
   it("requires configured System One to accept completion and records its review", async () => {
     const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict(false));
     const goal = loops.goal(sessionId, "Fix", ["Regression passes"]);

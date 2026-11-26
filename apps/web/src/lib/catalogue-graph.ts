@@ -132,3 +132,38 @@ export function getCataloguePath(graph: CatalogueGraphData, selectedId: string, 
   }
   return path
 }
+
+/** Keep the branch's descendants and its breadcrumb path back to Jait. */
+export function getCatalogueBranch(graph: CatalogueGraphData, branchId: string): CatalogueGraphData {
+  if (branchId === 'jait') return graph
+
+  const path = getCataloguePath(graph, branchId)
+  const nodeIds = new Set(path.map((node) => node.id))
+  const childLinks = new Map<string, CatalogueLink[]>()
+  for (const link of graph.links) {
+    const source = catalogueEndpointId(link.source)
+    const outgoing = childLinks.get(source) ?? []
+    outgoing.push(link)
+    childLinks.set(source, outgoing)
+  }
+
+  const links: CatalogueLink[] = []
+  for (let index = 1; index < path.length; index++) {
+    const parent = path[index - 1].id
+    const child = path[index].id
+    const link = childLinks.get(parent)?.find(({ target }) => catalogueEndpointId(target) === child)
+    if (link) links.push(link)
+  }
+
+  const pending = [branchId]
+  while (pending.length) {
+    for (const link of childLinks.get(pending.pop()!) ?? []) {
+      links.push(link)
+      const target = catalogueEndpointId(link.target)
+      if (nodeIds.has(target)) continue
+      nodeIds.add(target)
+      pending.push(target)
+    }
+  }
+  return { nodes: graph.nodes.filter(({ id }) => nodeIds.has(id)), links }
+}

@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../config.js";
 import { migrateDatabase, openDatabase } from "../db/index.js";
-import type { ProviderEvent, CliProviderAdapter, ProviderId, ProviderInfo, ProviderSession, RuntimeMode, StartSessionOptions } from "../providers/contracts.js";
+import type { ProviderEvent, CliProviderAdapter, ProviderId, ProviderInfo, ProviderSession, StartSessionOptions } from "../providers/contracts.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { registerPlanRoutes } from "./plans.js";

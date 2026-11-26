@@ -72,6 +72,7 @@ final class MessengerNotification {
     }
 
     void setAvatar(String eventId, Bitmap bitmap) {
+        bitmap = NotificationAvatar.circle(bitmap);
         int largest = Math.max(bitmap.getWidth(), bitmap.getHeight());
         if (largest > 128) {
             bitmap = Bitmap.createScaledBitmap(bitmap, Math.max(1, bitmap.getWidth() * 128 / largest),

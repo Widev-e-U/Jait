@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import { JAIT_PAGES, JAIT_PAGE_IDS, type JaitPageId } from '@jait/shared'
-import { BookOpen, RefreshCw, Search, Scan, ZoomIn, ZoomOut } from 'lucide-react'
+import { RefreshCw, RotateCcw, Search, Scan, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getApiUrl } from '@/lib/gateway-url'
 import { getAuthToken } from '@/lib/auth-token'
 import { openNotification } from '@/lib/notification-navigation'
-import { buildCatalogueGraph, catalogueEndpointId, getCataloguePath, type CatalogueTool, type CatalogueSkill, type CatalogueNode, type CatalogueLink } from '@/lib/catalogue-graph'
+import { buildCatalogueGraph, catalogueEndpointId, getCatalogueBranch, getCataloguePath, type CatalogueGraphData, type CatalogueTool, type CatalogueSkill, type CatalogueNode, type CatalogueLink } from '@/lib/catalogue-graph'
 import { CatalogueDetails } from './catalogue-details'
 
 const COLORS = { root: '#f472b6', page: '#38bdf8', feature: '#a78bfa', tool: '#34d399', skill: '#fb7185' }
@@ -54,7 +54,7 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState<string[]>([])
   const [refresh, setRefresh] = useState(0)
-  const [pageFilter, setPageFilter] = useState<JaitPageId | 'all'>('all')
+  const [branch, setBranch] = useState<{ id: string; page: JaitPageId | 'all' }>({ id: 'jait', page: 'all' })
   const [query, setQuery] = useState('')
   const [selection, setSelection] = useState<{ id: string; parent?: string }>({ id: 'jait' })
   const [collapsed, setCollapsed] = useState(false)
@@ -63,12 +63,15 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraphMethods<CatalogueNode, CatalogueLink> | undefined>(undefined)
   const hasFitRef = useRef(false)
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
+  const lastFittedGraph = useRef<CatalogueGraphData>(undefined)
   const [size, setSize] = useState({ width: 0, height: 0 })
+  const pageFilter = branch.page
   const focusedPage = pageFilter !== 'all'
   const searching = Boolean(query.trim())
+  const branchIds = useMemo(() => new Set(buildCatalogueGraph(tools, 'all', '', skills ?? []).links
+    .map(({ source }) => catalogueEndpointId(source))), [tools, skills])
   const graph = useMemo(() => {
-    const data = buildCatalogueGraph(tools, pageFilter, query, skills ?? [])
+    const data = getCatalogueBranch(buildCatalogueGraph(tools, branch.page, query, skills ?? []), branch.id)
     if (!focusedPage) return data
     const leaves = data.nodes.filter((node) => node.kind === 'tool' || node.kind === 'skill')
     const positions = new Map(leaves.map((node, index) => [node.id, (index - (leaves.length - 1) / 2) * 54]))
@@ -81,8 +84,11 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
         ? children.reduce((sum, value) => sum + value, 0) / children.length : 0)
     }
     return data
-  }, [tools, skills, focusedPage, pageFilter, query])
-  const path = useMemo(() => getCataloguePath(graph, selection.id, selection.parent), [graph, selection])
+  }, [tools, skills, focusedPage, branch, query])
+  const path = useMemo(() => {
+    const selectedId = graph.nodes.some(({ id }) => id === selection.id) ? selection.id : branch.id
+    return getCataloguePath(graph, selectedId, selection.parent)
+  }, [graph, selection, branch.id])
   const selected = path[path.length - 1] ?? graph.nodes[0]
   const pathEdges = useMemo(() => new Map(path.slice(1).map((node, index) => [node.id, path[index].id])), [path])
   const onPath = useCallback(({ source, target }: CatalogueLink) => pathEdges.get(catalogueEndpointId(target)) === catalogueEndpointId(source), [pathEdges])
@@ -98,27 +104,29 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
     hasFitRef.current = true
   }, [focusedPage])
 
-  const focusPage = useCallback((id: JaitPageId | 'all') => {
-    if (pageFilter === id) fitGraph()
-    setPageFilter(id)
-    setSelection({ id: id === 'all' ? 'jait' : `page:${id}` })
-  }, [fitGraph, pageFilter])
+  const fitNewGraph = useCallback(() => {
+    if (lastFittedGraph.current === graph) return
+    lastFittedGraph.current = graph
+    fitGraph()
+  }, [fitGraph, graph])
 
-  const choose = useCallback((node: CatalogueNode) => {
-    const connected = graph.links.some(({ source, target }) => catalogueEndpointId(source) === selected.id && catalogueEndpointId(target) === node.id)
-    setSelection({ id: node.id, parent: connected ? selected.id : node.id === selection.id ? selection.parent : undefined })
-  }, [graph.links, selected.id, selection])
-
-  const chooseFromGraph = (node: CatalogueNode, event: MouseEvent) => {
-    const start = pointerStartRef.current
-    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return
-    choose(node)
+  const focusPage = (page: JaitPageId | 'all') => {
+    const id = page === 'all' ? 'jait' : `page:${page}`
+    setBranch({ id, page })
+    setSelection({ id })
   }
 
-  const chooseFromDetails = (node: CatalogueNode) => {
-    choose(node)
-    if (node.x !== undefined && node.y !== undefined) {
-      graphRef.current?.centerAt(node.x, node.y, cameraDuration(280))
+  const reset = () => {
+    setQuery('')
+    setCollapsed(false)
+    focusPage('all')
+  }
+
+  const choose = (node: CatalogueNode) => {
+    const connected = graph.links.some(({ source, target }) => catalogueEndpointId(source) === selected.id && catalogueEndpointId(target) === node.id)
+    setSelection({ id: node.id, parent: connected ? selected.id : node.id === selection.id ? selection.parent : undefined })
+    if (node.id !== branch.id && branchIds.has(node.id)) {
+      setBranch({ id: node.id, page: node.pageId ?? 'all' })
     }
   }
 
@@ -219,7 +227,7 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
     const camera = graphRef.current
     if (camera) camera.zoom(camera.zoom() * factor, cameraDuration(200))
   }
-  const skillsMessage = !searching && (pageFilter === 'all' || pageFilter === 'settings')
+  const skillsMessage = !searching && ['jait', 'page:settings', 'feature:settings:installed-skills'].includes(branch.id)
     ? skills ? 'No installed skills.' : loading ? 'Loading installed skills…' : 'Installed skills unavailable.'
     : undefined
   const controls = [
@@ -242,13 +250,8 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
           {JAIT_PAGE_IDS.map((id) => <SelectItem key={id} value={id}>{JAIT_PAGES[id].title}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Button type="button" variant="outline" className="h-10" onClick={() => {
-        setQuery('')
-        focusPage('settings')
-        setSelection({ id: 'feature:settings:installed-skills' })
-        setCollapsed(false)
-      }}>
-        <BookOpen aria-hidden="true" /> Skills
+      <Button type="button" variant="outline" className="h-10" onClick={reset}>
+        <RotateCcw aria-hidden="true" /> Reset
       </Button>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -263,9 +266,7 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
       {errors.join(' · ')} <button type="button" className="ml-2 rounded underline focus-visible:ring-2 focus-visible:ring-ring" onClick={update}>Retry</button>
     </div>}
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto md:flex-row md:overflow-hidden">
-      <div ref={containerRef} onPointerDownCapture={(event) => {
-        pointerStartRef.current = { x: event.clientX, y: event.clientY }
-      }} className="relative min-h-[7rem] min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted/20 md:min-h-0" data-testid="catalogue-graph" aria-label="Interactive catalogue graph" role="region">
+      <div ref={containerRef} className="relative min-h-[7rem] min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted/20 md:min-h-0" data-testid="catalogue-graph" aria-label="Interactive catalogue graph" role="region">
         {size.width > 0 && size.height > 0 && <ForceGraph2D
           ref={graphRef} width={size.width} height={size.height} graphData={graph} nodeId="id"
           dagMode={focusedPage ? undefined : 'radialout'} dagLevelDistance={90}
@@ -279,8 +280,9 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
           linkColor={(link: CatalogueLink) => onPath(link) ? primaryColorRef.current : '#94a3b866'}
           linkWidth={(link: CatalogueLink) => onPath(link) ? 2.5 : 1}
           linkDirectionalArrowLength={(link: CatalogueLink) => onPath(link) ? 5 : 0}
-          enableNodeDrag={false} enablePanInteraction={canPan}
-          onNodeClick={chooseFromGraph} onEngineStop={fitGraph} warmupTicks={50} cooldownTicks={1}
+          enableNodeDrag enablePanInteraction={canPan}
+          onNodeDragEnd={(node) => { node.fx = node.x; node.fy = node.y }}
+          onNodeClick={choose} onEngineStop={fitNewGraph} warmupTicks={50} cooldownTicks={1}
           d3VelocityDecay={0.4} minZoom={0.2} maxZoom={8} backgroundColor="transparent"
         />}
         {searching && graph.nodes.length === 1 && <p role="status" className="pointer-events-none absolute inset-x-3 top-3 rounded bg-background/95 px-3 py-2 text-sm text-muted-foreground">No matching catalogue entries.</p>}
@@ -295,7 +297,7 @@ export default function CatalogueGraph({ onNavigate }: { onNavigate: () => void 
       </div>
       <CatalogueDetails nodes={graph.nodes} path={path} selected={selected} collapsed={collapsed} focusedPage={focusedPage}
         searching={searching} showInstalledSkills={pageFilter === 'settings'} skillsMessage={skillsMessage} destinationLabel={skillDestination ? 'Open Skills settings' : page && `Open ${page.title}`}
-        onToggle={() => setCollapsed((value) => !value)} onChoose={chooseFromDetails} onNavigate={() => {
+        onToggle={() => setCollapsed((value) => !value)} onChoose={choose} onNavigate={() => {
           if (destination) {
             onNavigate()
             openNotification({ id: 'catalogue:' + selected.id, link: destination })
