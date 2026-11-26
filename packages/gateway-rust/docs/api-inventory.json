@@ -8350,7 +8350,7 @@
       "name": "messengerConnection",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:875 setTimeout"
+        "services/messenger-service.ts:880 setTimeout"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8359,7 +8359,7 @@
       "name": "messengerPresence",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:1481 setInterval"
+        "services/messenger-service.ts:1486 setInterval"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"

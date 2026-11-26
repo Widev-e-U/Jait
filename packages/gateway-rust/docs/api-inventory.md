@@ -524,8 +524,8 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `browserDevtoolsGrantCleanup` (service) — missing; Rust keyword hint present; Node: routes/browser-devtools.ts:36 setInterval
 - `threadRecoverySweep` (service) — missing; Rust keyword hint absent; Node: routes/threads.ts:297 setInterval
 - `teamsReauthFlowPoll` (flow-poll) — missing; Rust keyword hint present; Node: services/bridge-reauth.ts:104 setInterval
-- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:875 setTimeout
-- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1481 setInterval
+- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:880 setTimeout
+- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1486 setInterval
 - `orchestratorStandby` (service) — missing; Rust keyword hint absent; Node: services/orchestration/orchestrator.ts:624 setInterval
 - `providerUpdateChecks` (service) — missing; Rust keyword hint present; Node: services/provider-updates.ts:93 setInterval
 
