@@ -75,7 +75,7 @@ export function EmojiPickerPanel({
             <Button
               key={emoji} type="button" variant="ghost" size="icon"
               aria-label={actionLabel + ' ' + emoji} data-tooltip={actionLabel + ' ' + emoji}
-              className="h-8 w-8 rounded-full text-lg leading-none"
+              className="h-8 w-8 rounded-full text-xl leading-none"
               onClick={() => onSelect(emoji)}
             >
               <span aria-hidden>{emoji}</span>
@@ -107,7 +107,7 @@ export function EmojiPickerPanel({
                     <Button
                       key={`${row[0]}-${row[1]}`} type="button" variant="ghost" size="icon"
                       aria-label={row[1]} data-tooltip={row[1]}
-                      className="h-8 w-8 text-lg leading-none"
+                      className="h-8 w-8 text-xl leading-none"
                       onClick={() => onSelect(row[0])}
                     >
                       <span aria-hidden>{row[0]}</span>

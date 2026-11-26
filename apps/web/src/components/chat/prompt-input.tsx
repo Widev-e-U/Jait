@@ -2451,12 +2451,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         type="button"
         size="icon"
         variant="ghost"
-        className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full text-muted-foreground hover:text-foreground')}
+        className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full text-muted-foreground hover:text-foreground [&_svg]:size-[22px]')}
         disabled={composerDisabled}
         onClick={() => fileInputRef.current?.click()}
         aria-label="Attach files"
       >
-        <Paperclip className={cn(isMessenger ? 'h-[18px] w-[18px]' : 'h-4 w-4')} />
+        <Paperclip aria-hidden="true" />
       </Button>
     </TooltipHint>
   )
@@ -2509,12 +2509,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         type="button"
         size="icon"
         variant="ghost"
-        className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full text-muted-foreground hover:text-foreground')}
+        className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full text-muted-foreground hover:text-foreground [&_svg]:size-[22px]')}
         disabled={composerDisabled}
         onClick={onVoiceInput}
         aria-label={isMessenger ? 'Dictate' : 'Voice input'}
       >
-        <Mic className={cn(isMessenger ? 'h-[18px] w-[18px]' : 'h-4 w-4')} />
+        <Mic aria-hidden="true" />
       </Button>
     </TooltipHint>
   ) : null
