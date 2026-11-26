@@ -4,6 +4,17 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.983](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.983) — 2026-11-26
+
+- fix(android): retain sender avatars across messenger notifications — 70dbb0a1
+- chore: capture pending application changes — a1cb94c2
+- docs(gateway-rust): refresh inventory source locations — 21dfede1
+- test(gateway-rust): align session fixtures with schema — edf57f15
+- fix(gateway-rust): keep first-entry queue ID reservation semantics — 939d35e7
+- fix(gateway-rust): preserve persona identity when claiming queued chat — de7853f3
+- fix(gateway-rust): restore project projection differential contracts — 0a7d7f4d
+- fix(gateway-rust): count terminal output diagnostics in UTF-16 units — 9afaf2e5
+
 ## [v0.1.982](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.982) — 2026-11-26
 
 - chore: capture pending application changes — a1cb94c2
