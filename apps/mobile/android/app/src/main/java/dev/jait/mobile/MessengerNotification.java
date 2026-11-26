@@ -63,12 +63,10 @@ final class MessengerNotification {
         }
         event.putLong("time", timestamp > 0 ? timestamp : System.currentTimeMillis());
         events.putBundle(id, event);
-        if (state.getBoolean("group")) state.remove("avatar");
     }
 
     void remove(String id) {
         events.remove(id);
-        if (state.getBoolean("group") && id.equals(state.getString("avatarEvent"))) state.remove("avatar");
     }
 
     void setAvatar(String eventId, Bitmap bitmap) {
@@ -78,8 +76,9 @@ final class MessengerNotification {
             bitmap = Bitmap.createScaledBitmap(bitmap, Math.max(1, bitmap.getWidth() * 128 / largest),
                 Math.max(1, bitmap.getHeight() * 128 / largest), true);
         }
-        state.putParcelable("avatar", bitmap);
-        state.putString("avatarEvent", eventId);
+        Bundle event = events.getBundle(eventId);
+        if (event != null) event.putParcelable("avatar", bitmap);
+        if (!state.getBoolean("group")) state.putParcelable("avatar", bitmap);
     }
 
     boolean hasImage(String eventId) {
@@ -116,9 +115,8 @@ final class MessengerNotification {
             String text = lines.get(i);
             if (group && sender != null) {
                 Person.Builder personBuilder = new Person.Builder().setName(sender);
-                if (avatar != null && id.equals(state.getString("avatarEvent"))) {
-                    personBuilder.setIcon(IconCompat.createWithBitmap(avatar));
-                }
+                Bitmap senderAvatar = event == null ? null : event.getParcelable("avatar");
+                if (senderAvatar != null) personBuilder.setIcon(IconCompat.createWithBitmap(senderAvatar));
                 person = personBuilder.build();
                 String prefix = sender + ": ";
                 if (text.startsWith(prefix)) text = text.substring(prefix.length());

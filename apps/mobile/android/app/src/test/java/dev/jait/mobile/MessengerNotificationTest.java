@@ -89,6 +89,19 @@ public class MessengerNotificationTest {
         assertNull(messages().get(0).getDataUri());
     }
 
+    @Test public void lateSenderAvatarsRemainOnTheirMessages() {
+        show("first", "Alice", "Hi", 1000);
+        show("second", "Bob", "Hello", 2000);
+        ChatNotifications.attachAvatar(context, ROOM, "first", bitmap());
+        ChatNotifications.attachAvatar(context, ROOM, "second", bitmap());
+        assertNotNull(messages().get(0).getPerson().getIcon());
+        assertNotNull(messages().get(1).getPerson().getIcon());
+        show("third", "Carol", "Hey", 3000);
+        assertNotNull(messages().get(0).getPerson().getIcon());
+        assertNotNull(messages().get(1).getPerson().getIcon());
+        assertNull(messages().get(2).getPerson().getIcon());
+    }
+
     private void show(String id, String sender, String text, long timestamp) {
         ChatNotifications.show(context, id, "Family", sender + ": " + text, ROOM, LINK, SCOPE, "", false,
             null, sender, timestamp);

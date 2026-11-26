@@ -111,9 +111,10 @@ final class ChatNotifications {
         if (posted == null) return;
         ArrayList<String> ids = values(posted.getNotification().extras, IDS);
         ArrayList<String> lines = values(posted.getNotification().extras, LINES);
-        if (ids.isEmpty() || ids.size() != lines.size() || !eventId.equals(ids.get(ids.size() - 1))) return;
+        if (ids.isEmpty() || ids.size() != lines.size() || !ids.contains(eventId)) return;
         NotificationCompat.Builder builder = rebuild(context, posted.getNotification());
         MessengerNotification conversation = MessengerNotification.restore(posted.getNotification());
+        if (conversation == null && !eventId.equals(ids.get(ids.size() - 1))) return;
         if (conversation != null) conversation.setAvatar(eventId, avatar);
         applyContent(context, builder, ids, lines, conversation, true);
         if (conversation == null) {
