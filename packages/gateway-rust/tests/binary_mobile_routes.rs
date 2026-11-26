@@ -94,6 +94,15 @@ async fn mobile_routes_through_the_binary() {
                 .to_owned()
         }
     };
+    // Update checks must reject anonymous requests before reaching their backend.
+    for path in [
+        "/api/update/check",
+        "/api/update/changelog",
+        "/api/mobile-update/check",
+    ] {
+        let response = client.get(url(path)).send().await.unwrap();
+        assert_eq!(response.status(), 401, "anonymous access to {path}");
+    }
     let owner = register("owner", None).await;
     let invite = client
         .post(url("/api/auth/invitations"))
