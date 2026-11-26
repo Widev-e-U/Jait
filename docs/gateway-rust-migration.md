@@ -83,6 +83,23 @@ thresholds. The tool fixture supplies captured output without executing a shell.
 Unicode truncation parity remains separate and open; this slice changes neither
 truncation nor shared runtime wiring, dependencies, or coverage manifests.
 
+## Chat queue persona identity — 2026-11-26
+
+A native plain chat send no longer joins or consumes a same-text queue entry
+whose `personaAgentId` is a string. Named and empty-string persona IDs remain
+distinct from the plain send; null and invalid non-string values match the
+TypeScript queue parser's plain-message identity. Attachment exclusion and
+trimmed-text matching are unchanged.
+
+`direct_chat_claim_keeps_same_text_queued_for_another_persona` in
+`tests/contract/tests/gateway_rust_application.rs` compares an authenticated
+TypeScript `/api/chat` request with the composed native application, using local
+scripted model peers. It checks both surviving entries and persisted consumed
+IDs. Native queue tests also cover the matching rule used by busy-session sends.
+This preserves queue identity but does not implement persona execution or full
+queue parsing parity; dependencies, shared wiring, and coverage manifests remain
+unchanged.
+
 ## Native compatibility checks for ownership and failed writes
 
 The Rust session tool endpoints return only the authenticated caller's sessions

@@ -49,9 +49,13 @@ pub(crate) fn id_of(entry: &Value) -> Option<&str> {
         .filter(|id| !id.is_empty())
 }
 
-/// Node's dedupe rule for a send: the same text after trimming, and no uploads on the entry.
+/// A plain send matches trimmed text only when the entry has no uploads or persona.
 pub(crate) fn same_text(entry: &Value, content: &str) -> bool {
     !has_attachments(entry)
+        && entry
+            .get("personaAgentId")
+            .and_then(Value::as_str)
+            .is_none()
         && entry
             .get("content")
             .and_then(Value::as_str)
@@ -200,6 +204,14 @@ mod tests {
         let upload = json!({"id": "b", "content": "follow up", "attachments": [{"name": "x"}]});
         assert!(same_text(&plain, "follow up"));
         assert!(!same_text(&upload, "follow up"));
+        for persona in [json!("saved-agent"), json!("")] {
+            let entry = json!({"content":"follow up","personaAgentId":persona});
+            assert!(!same_text(&entry, "follow up"));
+        }
+        for persona in [Value::Null, json!(42)] {
+            let entry = json!({"content":"follow up","personaAgentId":persona});
+            assert!(same_text(&entry, "follow up"));
+        }
     }
 
     #[test]

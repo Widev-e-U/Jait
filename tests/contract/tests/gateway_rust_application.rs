@@ -60,6 +60,149 @@ async fn start(path: &Path) -> (String, oneshot::Sender<()>, tokio::task::JoinHa
     });
     (base, send, task)
 }
+
+#[tokio::test]
+async fn direct_chat_claim_keeps_same_text_queued_for_another_persona() {
+    let queue = json!([
+        {"id":"plain","content":" same text ","held":true},
+        {"id":"persona","content":"same text","held":true,"personaAgentId":"saved-agent"},
+        {"id":"null-persona","content":"same text","held":true,"personaAgentId":null},
+        {"id":"empty-persona","content":"same text","held":true,"personaAgentId":""},
+        {"id":"invalid-persona","content":"same text","held":true,"personaAgentId":42},
+        {"id":"other-text","content":"different text","held":true},
+    ]);
+    let driver_queue = queue.clone();
+    let driver_work = work();
+    let expected = tokio::task::spawn_blocking(move || {
+        internal_driver::call(
+            &root(),
+            &driver_work,
+            json!({"version":1,"calls":[{"op":"nativechatqueue.claim","queue":driver_queue,"content":"same text"}]}),
+            &|| false,
+        )
+        .unwrap()[0]
+            .clone()
+    })
+    .await
+    .unwrap();
+
+    let model_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let model_base = format!("http://{}/v1", model_listener.local_addr().unwrap());
+    let model = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post(|| async {
+            (
+                [("content-type", "text/event-stream")],
+                format!(
+                    "data: {}\n\ndata: [DONE]\n\n",
+                    json!({"choices":[{"delta":{"content":"Queue fixture answered."},"finish_reason":"stop"}]})
+                ),
+            )
+        }),
+    );
+    let (model_stop, model_stopped) = oneshot::channel();
+    let model_task = tokio::spawn(async move {
+        axum::serve(model_listener, model)
+            .with_graceful_shutdown(async {
+                let _ = model_stopped.await;
+            })
+            .await
+            .unwrap();
+    });
+    let native_work = work();
+    let app = Application::bind_with_settings_chat(
+        GatewayConfig {
+            address: "127.0.0.1:0".parse().unwrap(),
+            allow_non_loopback: false,
+        },
+        config(&native_work),
+    )
+    .await
+    .unwrap();
+    let base = format!("http://{}", app.local_addr().unwrap());
+    let (shutdown, stopped) = oneshot::channel();
+    let task = tokio::spawn(async move {
+        app.serve(async {
+            let _ = stopped.await;
+        })
+        .await
+        .unwrap();
+    });
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap();
+    let registration = client
+        .post(format!("{base}/api/auth/register"))
+        .json(&json!({"username":"queue-owner","password":"queue-fixture-password"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(registration.status(), 200);
+    let registration: Value = registration.json().await.unwrap();
+    let token = registration["access_token"].as_str().unwrap();
+    let settings = client.patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(token)
+        .json(&json!({"api_keys":{"OPENAI_BASE_URL":model_base,"OPENAI_API_KEY":"queue-fixture-key"},"selected_model":"queue-fixture-model"}))
+        .send().await.unwrap();
+    assert_eq!(settings.status(), 200);
+    let session = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(token)
+        .json(&json!({"name":"Queue identity"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(session.status(), 201);
+    let session: Value = session.json().await.unwrap();
+    let id = session["id"].as_str().unwrap();
+    let state = client
+        .patch(format!("{base}/api/sessions/{id}/state"))
+        .bearer_auth(token)
+        .json(&json!({"queued_messages":queue}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(state.status(), 200);
+    let sent = client.post(format!("{base}/api/chat"))
+        .bearer_auth(token)
+        .json(&json!({"sessionId":id,"content":"same text","provider":"jait","model":"queue-fixture-model"}))
+        .send().await.unwrap();
+    let status = sent.status().as_u16();
+    let body = sent.text().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert!(body.contains("Queue fixture answered."), "{body}");
+    let state = client
+        .get(format!("{base}/api/sessions/{id}/state"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(state.status(), 200);
+    let state: Value = state.json().await.unwrap();
+    let queue: Vec<Value> = state["queued_messages"]
+        .as_array()
+        .map(|entries| {
+            entries
+                .iter()
+                .map(|entry| {
+                    json!({
+                        "id":entry["id"],"content":entry["content"],
+                        "personaAgentId":entry.get("personaAgentId").unwrap_or(&Value::Null),
+                        "held":entry["held"]==true,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let actual = json!({"status":status,"queue":queue,"consumed":state["chat.consumedQueueIds"]});
+    shutdown.send(()).unwrap();
+    task.await.unwrap();
+    model_stop.send(()).unwrap();
+    model_task.await.unwrap();
+    assert_eq!(actual, expected);
+}
+
 fn normalize(value: &mut Value, ids: &mut HashMap<String, String>) {
     match value {
         Value::Object(fields) => {
