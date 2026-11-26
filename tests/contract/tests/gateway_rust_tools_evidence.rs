@@ -5,6 +5,9 @@
 //! defaults, limits and refusal cases), not from the Rust implementation's
 //! output.
 
+#[path = "../src/internal_driver.rs"]
+mod internal_driver;
+
 use serde_json::json;
 
 // ---------------------------------------------------------------------------
@@ -13,6 +16,8 @@ use serde_json::json;
 mod terminal_tools {
     use super::json;
     use jait_gateway::tools::terminal_tools::*;
+    use serde_json::Value;
+    use std::{path::PathBuf, sync::Arc};
 
     /// TS `TRUNCATION_MARKER` text, 22 chars.
     const MARKER: &str = "\n…(middle truncated)…\n";
@@ -121,6 +126,117 @@ mod terminal_tools {
         assert_eq!(measure_terminal_output(""), (0, 1, 0));
         // trailing newline opens a final empty line, as in the TS reducer.
         assert_eq!(measure_terminal_output("abc\n"), (4, 2, 3));
+    }
+
+    fn output_cases() -> Vec<Vec<Value>> {
+        vec![
+            vec![json!({"text":""})],
+            vec![json!({"text":"🙂\r\né\u{0301}"})],
+            vec![json!({"text":"a","repeat":7999})],
+            vec![json!({"text":"a","repeat":8000})],
+            vec![json!({"text":"🙂","repeat":3999}), json!({"text":"a"})],
+            vec![json!({"text":"🙂","repeat":4000})],
+            vec![
+                json!({"text":"🙂","repeat":2500}),
+                json!({"text":"\n"}),
+                json!({"text":"a","repeat":3000}),
+            ],
+            vec![
+                json!({"text":"🙂","repeat":2501}),
+                json!({"text":"\n"}),
+                json!({"text":"a","repeat":3000}),
+            ],
+            vec![json!({"text":"🙂\n","repeat":20000})],
+            vec![json!({"text":"🙂\n","repeat":20000}), json!({"text":"a"})],
+        ]
+    }
+
+    fn output_text(parts: &[Value]) -> String {
+        parts
+            .iter()
+            .map(|part| {
+                part["text"]
+                    .as_str()
+                    .unwrap()
+                    .repeat(part["repeat"].as_u64().unwrap_or(1) as usize)
+            })
+            .collect()
+    }
+
+    fn reference_output_stats(cases: &[Vec<Value>]) -> Value {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .unwrap();
+        let directory = root
+            .join(".jait/artifacts/gateway-rust/terminal-output-stats")
+            .join(uuid::Uuid::new_v4().to_string());
+        let calls: Vec<Value> = cases
+            .iter()
+            .map(|parts| json!({"op":"nativeterminaloutput.measure","parts":parts}))
+            .collect();
+        super::internal_driver::call(
+            &root,
+            &directory,
+            json!({"version":1,"calls":calls}),
+            &|| false,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn terminal_stats_and_flood_thresholds_match_live_typescript_utf16_counts() {
+        let cases = output_cases();
+        let expected = reference_output_stats(&cases);
+        for (index, parts) in cases.iter().enumerate() {
+            let (total, lines, longest) = measure_terminal_output(&output_text(parts));
+            assert_eq!(
+                json!({"totalChars":total,"lineCount":lines,"longestLineChars":longest}),
+                expected[index]["stats"],
+                "measurement case {index}"
+            );
+            assert_eq!(
+                json!(describe_terminal_output_flood(total, lines, longest)),
+                expected[index]["flood"],
+                "flood case {index}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn terminal_tool_admits_utf16_stats_and_preserves_reference_flood_text() {
+        let cases = output_cases();
+        let expected = reference_output_stats(&cases);
+        for (index, parts) in cases.iter().enumerate() {
+            let output = output_text(parts);
+            let tool = TerminalTools::<()>::new(Arc::new(move |method, _, _| {
+                assert_eq!(method, "terminalRun");
+                let output = output.clone();
+                Box::pin(async move {
+                    Ok(Some(
+                        json!({"output":output,"exitCode":0,"terminalId":"fixture"}),
+                    ))
+                })
+            }));
+            let result = tool
+                .run(&json!({"command":"fixture command"}), &json!({}), &())
+                .await;
+            assert_eq!(result["ok"], true, "tool case {index}");
+            assert_eq!(
+                result["data"]["outputStats"], expected[index]["admitted"],
+                "statistics admission case {index}"
+            );
+            assert_eq!(
+                result["data"]["outputFlood"], expected[index]["admittedFlood"],
+                "tool flood case {index}"
+            );
+            if let Some(flood) = expected[index]["admittedFlood"].as_str() {
+                assert!(
+                    result["message"].as_str().unwrap().ends_with(flood),
+                    "message case {index}"
+                );
+            }
+        }
     }
 
     #[test]

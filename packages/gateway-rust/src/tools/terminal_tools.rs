@@ -147,11 +147,13 @@ pub fn truncate_terminal_tool_output(output: &str, max_chars: usize) -> String {
 
 /// `measureTerminalOutput(output)`.
 pub fn measure_terminal_output(output: &str) -> (usize, usize, usize) {
+    let mut total_chars = 0usize;
     let mut line_count = 1usize;
     let mut longest = 0usize;
     let mut current = 0usize;
-    for ch in output.chars() {
-        if ch == '\n' {
+    for unit in output.encode_utf16() {
+        total_chars += 1;
+        if unit == u16::from(b'\n') {
             longest = longest.max(current);
             line_count += 1;
             current = 0;
@@ -160,7 +162,7 @@ pub fn measure_terminal_output(output: &str) -> (usize, usize, usize) {
         }
     }
     longest = longest.max(current);
-    (output.chars().count(), line_count, longest)
+    (total_chars, line_count, longest)
 }
 
 /// `describeTerminalOutputFlood(stats)` — `None` when the output is modest.
@@ -338,7 +340,7 @@ impl<C: Send + Sync> TerminalTools<C> {
         let needs_interaction = result.get("needsInteraction").map(truthy).unwrap_or(false);
         let pager_escaped = result.get("pagerEscaped").map(truthy).unwrap_or(false);
 
-        let stats = if raw_output.chars().count() >= TERMINAL_OUTPUT_STATS_MIN_CHARS {
+        let stats = if raw_output.encode_utf16().count() >= TERMINAL_OUTPUT_STATS_MIN_CHARS {
             let (total, lines, longest) = measure_terminal_output(&raw_output);
             Some((total, lines, longest))
         } else {

@@ -51,6 +51,21 @@ native, auto, and fallback backend results with the live ranking exports.
 Operator-selected locales and differences across ICU versions remain unverified;
 this is not full project-search parity or a coverage-ledger update.
 
+## Terminal output statistics compatibility — 2026-11-26
+
+Native terminal output diagnostics now count UTF-16 code units, matching
+TypeScript `measureTerminalOutput` and `terminalOutputStatsFor`. The 8,000-unit
+statistics admission threshold and the 5,000-unit line / 60,000-unit total flood
+thresholds are unchanged. Emoji therefore count as two units in the raw-output
+statistics, without changing the tool's execution or cancellation policy.
+
+Two live differential checks in
+`tests/contract/tests/gateway_rust_tools_evidence.rs` compare measurement, warning
+text, and the native terminal tool's returned diagnostics at and across these
+thresholds. The tool fixture supplies captured output without executing a shell.
+Unicode truncation parity remains separate and open; this slice changes neither
+truncation nor shared runtime wiring, dependencies, or coverage manifests.
+
 ## Native compatibility checks for ownership and failed writes
 
 The Rust session tool endpoints return only the authenticated caller's sessions
