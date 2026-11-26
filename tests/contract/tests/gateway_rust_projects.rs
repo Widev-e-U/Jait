@@ -41,10 +41,12 @@ fn rows(db: &rusqlite::Connection, table: &str) -> Value {
                 for (i, key) in columns.iter().enumerate() {
                     let value = match r.get_ref(i)? {
                         rusqlite::types::ValueRef::Null => Value::Null,
+                        rusqlite::types::ValueRef::Integer(v) => json!(v),
+                        rusqlite::types::ValueRef::Real(v) => json!(v),
                         rusqlite::types::ValueRef::Text(v) => {
                             json!(std::str::from_utf8(v).unwrap())
                         }
-                        _ => panic!("unexpected non-text field"),
+                        rusqlite::types::ValueRef::Blob(_) => panic!("unexpected blob field"),
                     };
                     row.insert(key.clone(), value);
                 }
@@ -132,6 +134,11 @@ fn scenario(seed: &str, steps: Vec<Value>) {
                 "list" => {
                     json!(service.list(step["status"].as_str(), user, step["limit"].as_f64())?)
                 }
+                "listAccessible" => json!(service.list_accessible(
+                    step["status"].as_str().unwrap_or("active"),
+                    user.unwrap(),
+                    step["limit"].as_f64(),
+                )?),
                 "withSessions" => service.list_with_sessions(
                     user,
                     step["status"].as_str().unwrap_or("active"),
@@ -295,6 +302,55 @@ fn projects_tree_paging_search_counts_and_personal_sessions_match_reference() {
     ]);
     scenario(SEED, steps);
 }
+
+#[test]
+fn accessible_project_paging_preserves_sqlite_limit_errors_and_unlimited_zero() {
+    let mut steps = Vec::new();
+    for limit in [
+        Value::Null,
+        json!(0),
+        json!(1),
+        json!(2),
+        json!(-1),
+        json!(0.5),
+        json!(1.8),
+        json!(-0.5),
+    ] {
+        steps.push(json!({"op":"listAccessible","user":"owner","limit":limit}));
+        steps.push(json!({"op":"withSessions","user":"owner","limit":limit}));
+    }
+    scenario(SEED, steps);
+}
+
+#[test]
+fn member_project_projections_keep_private_chats_hidden_and_recheck_revocation() {
+    let seed = format!(
+        "{SEED}
+        INSERT INTO project_members(project_id,user_id,created_at) VALUES
+        ('p','member','2026-01-01'),('child','member','2026-01-01'),('leaf','member','2026-01-01');
+        UPDATE sessions SET shared_with_project=1 WHERE id='s1';
+        INSERT INTO sessions(id,user_id,project_id,name,created_at,last_active_at,status) VALUES
+        ('s6','member','leaf','Member needle','2026-01-01','2026-10-18T11:35:00.000Z','active');"
+    );
+    scenario(
+        &seed,
+        vec![
+            json!({"op":"withSessions","user":"member"}),
+            json!({"op":"withSessions","user":"member","limit":1}),
+            json!({"op":"search","user":"member","query":"needle"}),
+            json!({"op":"search","user":"member","query":"foreign needle"}),
+            json!({"op":"withSessions","user":"outsider"}),
+            json!({"op":"search","user":"outsider","query":"needle"}),
+            json!({"op":"sql","sql":"UPDATE sessions SET shared_with_project=0 WHERE id='s1'"}),
+            json!({"op":"withSessions","user":"member"}),
+            json!({"op":"search","user":"member","query":"needle"}),
+            json!({"op":"sql","sql":"DELETE FROM project_members WHERE user_id='member'"}),
+            json!({"op":"withSessions","user":"member"}),
+            json!({"op":"search","user":"member","query":"needle"}),
+        ],
+    );
+}
+
 #[test]
 fn project_moves_reject_foreign_targets_cycles_and_excessive_subtree_depth() {
     scenario(

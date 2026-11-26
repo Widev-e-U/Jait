@@ -20,6 +20,23 @@ differential targets and the existing binary membership/session route tests cove
 the affected paths. This focused slice does not establish full sharing parity or
 replacement readiness; coverage manifests remain unchanged.
 
+### Project listing and search contracts — 2026-11-26
+
+The native membership-aware project query now passes positive limits to SQLite
+without rounding, matching the TypeScript query builder. Positive fractions
+therefore fail instead of returning a success-shaped truncated page; zero and
+negative direct limits remain unlimited. The HTTP route's existing decimal-prefix
+parsing and 100-project cap are unchanged.
+
+The project differential recorder now captures numeric SQLite columns, including
+session sharing flags, rather than failing before comparing persisted effects.
+`gateway_rust_projects` covers paged ancestors, owned/shared/private sessions,
+revoked membership, search, and query errors. Project route checks use the current
+boolean `exclusiveRoot` request and the implemented repository adapter's
+`PROJECT_HAS_NO_ROOT` rejection. Binary project, membership, and repository tests
+exercise the composed paths. Archived-member access remains the documented native
+tightening; these checks do not establish full sharing parity or ledger credit.
+
 ## Codex tool-result compatibility — 2026-11-25
 
 The native Codex notification mapper now reports interrupted tool calls as

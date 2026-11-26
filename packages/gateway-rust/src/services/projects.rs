@@ -316,10 +316,11 @@ impl<'a> ProjectService<'a> {
         user: &str,
         limit: Option<f64>,
     ) -> rusqlite::Result<Vec<ProjectRecord>> {
-        let limit = limit
-            .filter(|v| v.is_finite() && *v >= 1.0)
-            .map(|v| v.floor() as i64)
-            .unwrap_or(-1);
+        // The reference query passes positive limits verbatim; SQLite rejects fractions.
+        let limit = limit.filter(|v| *v > 0.0).map_or(
+            rusqlite::types::Value::Integer(-1),
+            rusqlite::types::Value::Real,
+        );
         let mut statement = self.db.prepare(&format!("SELECT {COLUMNS} FROM projects WHERE status=?1 AND (user_id=?2 OR (status='active' AND id IN (SELECT project_id FROM project_members WHERE user_id=?2))) ORDER BY last_active_at DESC LIMIT ?3"))?;
         statement
             .query_map(params![status, user, limit], row)?

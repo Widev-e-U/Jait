@@ -16,6 +16,7 @@ export async function dispatch(call:any) {
           case 'create':value=service.create(step.data);created=value.id;break;
           case 'get':value=service.getById(id,step.user)??null;break;
           case 'list':value=service.list(step.status,step.user,step.limit);break;
+          case 'listAccessible':value=service.listAccessible(step.status??'active',step.user,step.limit);break;
           case 'withSessions':value=service.listWithSessions(step.user,step.status??'active',step.limit);break;
           case 'search':value=service.searchWithSessions(step.user,step.query);break;
           case 'find':value=service.findByRoot(step.root,step.node??'gateway',step.user)??null;break;

@@ -519,7 +519,7 @@ mod projects {
             .with(
                 "POST",
                 "/api/projects",
-                json!({"title": "Beta", "exclusiveRoot": "/tmp/jait-shared-root"}),
+                json!({"title": "Beta", "rootPath": "/tmp/jait-shared-root", "exclusiveRoot": true}),
             )
             .await;
         assert_eq!(status, 409);
@@ -601,12 +601,12 @@ mod projects {
         assert_eq!(status, 200);
         assert_eq!(body["sessions"], json!([]));
 
-        // Repository management has no native implementation yet.
+        // The repository adapter rejects a folder that has no root to bind.
         let (status, body) = server
             .with("POST", &format!("/api/projects/{id}/repository"), json!({}))
             .await;
-        assert_eq!(status, 503);
-        assert_eq!(body["error"], json!("SURFACE_UNAVAILABLE"));
+        assert_eq!(status, 400);
+        assert_eq!(body["error"], json!("PROJECT_HAS_NO_ROOT"));
         server.stop().await;
     }
 }
