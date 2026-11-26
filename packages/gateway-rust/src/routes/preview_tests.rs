@@ -3,8 +3,8 @@ use axum::body::to_bytes;
 use std::sync::atomic::{AtomicUsize, Ordering};
 fn state() -> PreviewRoutes {
     let db = rusqlite::Connection::open_in_memory().unwrap();
-    db.execute_batch("CREATE TABLE sessions(id TEXT,user_id TEXT,project_id TEXT,name TEXT,project_path TEXT,created_at TEXT,last_active_at TEXT,viewed_at TEXT,status TEXT,metadata TEXT);
-    INSERT INTO sessions VALUES ('session','owner',NULL,NULL,NULL,'now','now','now','active',NULL);").unwrap();
+    db.execute_batch("CREATE TABLE sessions(id TEXT,user_id TEXT,project_id TEXT,name TEXT,project_path TEXT,created_at TEXT,last_active_at TEXT,viewed_at TEXT,status TEXT,metadata TEXT,shared_with_project INTEGER DEFAULT 0);
+    INSERT INTO sessions VALUES ('session','owner',NULL,NULL,NULL,'now','now','now','active',NULL,0);").unwrap();
     PreviewRoutes::new(AuthState::new(db, "a-secret-with-32-characters-minimum".into()).unwrap())
 }
 fn call(owner: &str, operation: PreviewOperation) -> PreviewCall {

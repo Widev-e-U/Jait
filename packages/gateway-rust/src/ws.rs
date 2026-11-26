@@ -3437,7 +3437,7 @@ mod tests {
         use std::time::Duration;
 
         let db = rusqlite::Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT); INSERT INTO sessions VALUES ('allowed', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL); INSERT INTO sessions VALUES ('denied', 'bob', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL);").unwrap();
+        db.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT, shared_with_project INTEGER DEFAULT 0); INSERT INTO sessions VALUES ('allowed', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL, 0); INSERT INTO sessions VALUES ('denied', 'bob', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL, 0);").unwrap();
         let db = DatabaseWorker::new(db, NonZeroU16::new(4).unwrap()).unwrap();
         let questions = UserQuestionService::default();
         for session in ["allowed", "denied"] {
@@ -3511,7 +3511,7 @@ mod tests {
         use std::time::Duration;
 
         let connection = rusqlite::Connection::open_in_memory().unwrap();
-        connection.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT); INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL);").unwrap();
+        connection.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT, shared_with_project INTEGER DEFAULT 0); INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL, 0);").unwrap();
         let db = DatabaseWorker::new(connection, NonZeroU16::new(4).unwrap()).unwrap();
         let hub = Arc::new(WsHub::new(WsHubConfig {
             session_authority: Some(Arc::new(WsUserAuthority::new(
@@ -3545,7 +3545,7 @@ mod tests {
             !hub.may_deliver_with_session_authority("client", &event.scope)
                 .await
         );
-        db.run(|db| { db.execute("INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL)", [])?; Ok(()) }).await.unwrap();
+        db.run(|db| { db.execute("INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL, 0)", [])?; Ok(()) }).await.unwrap();
 
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();

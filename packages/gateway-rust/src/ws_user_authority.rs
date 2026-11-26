@@ -222,7 +222,7 @@ mod tests {
     async fn session_ownership_is_current_and_fails_closed() {
         let db = worker(true);
         db.run(|db| {
-            db.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT); INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL);")?;
+            db.execute_batch("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, name TEXT, project_path TEXT, created_at TEXT, last_active_at TEXT, viewed_at TEXT, status TEXT, metadata TEXT, shared_with_project INTEGER DEFAULT 0); INSERT INTO sessions VALUES ('s', 'alice', NULL, 'chat', NULL, 'now', 'now', NULL, 'active', NULL, 0);")?;
             Ok(())
         }).await.unwrap();
         let authority = WsUserAuthority::new(db.clone(), Duration::from_secs(2));
