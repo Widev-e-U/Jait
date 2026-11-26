@@ -71,6 +71,26 @@ async fn direct_chat_claim_keeps_same_text_queued_for_another_persona() {
         {"id":"invalid-persona","content":"same text","held":true,"personaAgentId":42},
         {"id":"other-text","content":"different text","held":true},
     ]);
+    compare_direct_chat_claim(queue).await;
+}
+
+#[tokio::test]
+async fn chat_queue_reserves_the_first_string_content_entry_for_each_nonempty_id() {
+    let queue = json!([
+        {"id":"blank-first","content":" \t ","held":true},
+        {"id":"blank-first","content":"later duplicate must not survive","held":true},
+        {"id":"invalid-first","content":42,"held":true},
+        {"id":"invalid-first","content":"first string content survives","held":true},
+        {"id":"valid-first","content":"original","held":true},
+        {"id":"valid-first","content":"replacement","held":true},
+        {"id":"","content":"empty id one","held":true},
+        {"id":"","content":"empty id two","held":true},
+        {"id":"plain","content":"same text","held":true},
+    ]);
+    compare_direct_chat_claim(queue).await;
+}
+
+async fn compare_direct_chat_claim(queue: Value) {
     let driver_queue = queue.clone();
     let driver_work = work();
     let expected = tokio::task::spawn_blocking(move || {

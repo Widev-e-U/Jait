@@ -14,7 +14,8 @@ const CONSUMED_KEY: &str = "chat.consumedQueueIds";
 const MAX_CONSUMED_IDS: usize = 100;
 
 /// The entries Node keeps: objects whose `content` is a string that is not blank, unless the entry
-/// carries attachments. A repeated id keeps only its first entry. Entries are kept as written.
+/// carries attachments. The first string-content entry reserves its nonempty id, even if blank.
+/// Entries are kept as written.
 pub(crate) fn parse(raw: Option<&Value>) -> Vec<Value> {
     let Some(entries) = raw.and_then(Value::as_array) else {
         return Vec::new();
@@ -26,10 +27,10 @@ pub(crate) fn parse(raw: Option<&Value>) -> Vec<Value> {
             let Some(content) = entry.get("content").and_then(Value::as_str) else {
                 return false;
             };
-            if js_trim(content).is_empty() && !has_attachments(entry) {
+            if id_of(entry).is_some_and(|id| !seen.insert(id.to_owned())) {
                 return false;
             }
-            id_of(entry).is_none_or(|id| seen.insert(id.to_owned()))
+            !js_trim(content).is_empty() || has_attachments(entry)
         })
         .cloned()
         .collect()
@@ -196,6 +197,26 @@ mod tests {
             .filter_map(|entry| entry["content"].as_str())
             .collect();
         assert_eq!(contents, ["first", "with upload", "no id"]);
+    }
+
+    #[test]
+    fn parse_reserves_nonempty_ids_before_dropping_blank_content() {
+        let raw = json!([
+            {"id":"blank-first","content":"  "},
+            {"id":"blank-first","content":"replacement"},
+            {"id":"invalid-first","content":42},
+            {"id":"invalid-first","content":"first string"},
+            {"id":"","content":"empty id one"},
+            {"id":"","content":"empty id two"},
+        ]);
+        assert_eq!(
+            parse(Some(&raw)),
+            vec![
+                json!({"id":"invalid-first","content":"first string"}),
+                json!({"id":"","content":"empty id one"}),
+                json!({"id":"","content":"empty id two"}),
+            ]
+        );
     }
 
     #[test]

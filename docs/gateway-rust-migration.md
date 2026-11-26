@@ -100,6 +100,16 @@ This preserves queue identity but does not implement persona execution or full
 queue parsing parity; dependencies, shared wiring, and coverage manifests remain
 unchanged.
 
+### Queue duplicate-ID compatibility
+
+Native parsing now reserves a nonempty ID at its first string-content record,
+before excluding blank content, matching TypeScript `parseQueuedChatMessages`.
+A later duplicate cannot replace that excluded record. Non-string content is
+still rejected before reserving an ID, and empty IDs do not deduplicate entries.
+`chat_queue_reserves_the_first_string_content_entry_for_each_nonempty_id` reuses
+the live application differential to compare remaining queue entries and consumed
+IDs after a direct send. Full queue normalization parity remains open.
+
 ## Native compatibility checks for ownership and failed writes
 
 The Rust session tool endpoints return only the authenticated caller's sessions
