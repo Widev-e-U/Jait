@@ -98,6 +98,7 @@ export interface IncomingMessengerMessage {
   timestamp: number;
   service: string;
   groupSender?: string;
+  groupSenderId?: string;
   /** Whether a preview can be fetched through the authenticated gateway. */
   image?: boolean;
 }
@@ -358,7 +359,7 @@ class Connection {
       eventId,
       title: String(direct && sender ? sender : room.summary.name).slice(0, 120),
       body: messengerNotificationPreview(groupSender ? `${groupSender}: ${body}` : body),
-      ...(groupSender ? { groupSender } : {}),
+      ...(groupSender ? { groupSender, groupSenderId: event.sender } : {}),
       timestamp,
       service: room.summary.service,
       ...(image ? { image } : {}),
@@ -1139,6 +1140,7 @@ class Connection {
         const latest = this.messages(id).at(-1);
         room.summary.timestamp = latest?.timestamp ?? 0;
         room.summary.latestSender = latest?.sender;
+        room.summary.latestSenderId = latest?.senderId;
         room.summary.latestSenderAvatarUrl = latest?.senderAvatarUrl;
         room.summary.latestEventId = latest?.id;
         const attachment = latest?.attachment;
@@ -1800,12 +1802,20 @@ export class MessengerService {
     await this.resume(owner);
     return this.readMedia(this.connection(owner), url, file);
   }
-  /** Resolve only the sender avatar for an event in the owner's visible joined room. */
-  async notificationAvatar(owner: string, roomId: string, eventId: string): Promise<Buffer> {
+  /** Resolve notification artwork from a known event in the owner's visible joined room. */
+  async notificationAvatar(owner: string, roomId: string, eventId: string, kind: 'sender' | 'room' = 'sender'): Promise<Buffer> {
     await this.resume(owner);
     const c = this.connection(owner);
     const room = c.snapshot().rooms.find((entry) => entry.id === roomId && entry.membership === 'join' && !entry.hidden);
-    const avatar = room && c.messages(roomId).find((message) => message.id === eventId)?.senderAvatarUrl;
+    const message = room && c.messages(roomId).find((entry) => entry.id === eventId);
+    if (!room || !message) throw new Error('Avatar unavailable.');
+    let avatar = kind === 'room' ? room.avatarUrl : message.senderAvatarUrl;
+    if (kind === 'sender' && !avatar && message.senderId) {
+      const profile = await c.connected().doRequest(
+        'GET', `/_matrix/client/v3/profile/${enc(message.senderId)}/avatar_url`, null, null, 3000,
+      );
+      if (typeof profile?.avatar_url === 'string') avatar = profile.avatar_url;
+    }
     if (!avatar) throw new Error('Avatar unavailable.');
     const input = await this.readMedia(c, avatar);
     const sharp = (await import('sharp')).default;

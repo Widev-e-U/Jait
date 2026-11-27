@@ -67,6 +67,27 @@ describe('Notification image retrieval', () => {
     room.summary.membership = 'leave';
     await expect(service.notificationAvatar('test', '!room:test', '$avatar')).rejects.toThrow();
   });
+  it('resolves room artwork and falls back to the verified sender’s Matrix profile', async () => {
+    const { service, c, room, message } = setup();
+    const sharp = (await import('sharp')).default;
+    const roomPhoto = await sharp({ create: { width: 30, height: 30, channels: 3, background: 'blue' } }).png().toBuffer();
+    const senderPhoto = await sharp({ create: { width: 40, height: 40, channels: 3, background: 'green' } }).png().toBuffer();
+    c.client.doRequest.mockImplementation(async (_method, url) => {
+      if (url === '/_matrix/client/v3/profile/%40bob%3Atest/avatar_url') return { avatar_url: 'mxc://test/bob' };
+      if (url === '/_matrix/client/v1/media/download/test/bob') return senderPhoto;
+      if (url === '/_matrix/client/v1/media/download/test/group') return roomPhoto;
+      throw new Error('Unexpected Matrix request');
+    });
+    room.summary.avatarUrl = 'mxc://test/group';
+    room.events.push(message('$message', '@bob:test'));
+
+    await expect(service.notificationAvatar('test', '!room:test', '$missing', 'room')).rejects.toThrow();
+    expect(c.client.doRequest).not.toHaveBeenCalled();
+    const group = await service.notificationAvatar('test', '!room:test', '$message', 'room');
+    expect(await sharp(group).metadata()).toMatchObject({ format: 'jpeg', width: 30 });
+    const sender = await service.notificationAvatar('test', '!room:test', '$message');
+    expect(await sharp(sender).metadata()).toMatchObject({ format: 'jpeg', width: 40 });
+  });
   it('returns a bounded JPEG only for an image in the owner’s visible joined room', async () => {
     const { service, c, room, message } = setup();
     const sharp = (await import('sharp')).default;

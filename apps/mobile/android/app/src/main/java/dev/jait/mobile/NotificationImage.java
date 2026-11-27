@@ -18,6 +18,8 @@ final class NotificationImage {
     private static final java.util.concurrent.ThreadPoolExecutor WORKERS =
         new java.util.concurrent.ThreadPoolExecutor(2, 2, 30, java.util.concurrent.TimeUnit.SECONDS,
             new java.util.concurrent.ArrayBlockingQueue<>(16), new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy());
+    private enum Media { IMAGE, SENDER_AVATAR, ROOM_AVATAR }
+
     private NotificationImage() {}
 
     static void fetch(Context context, String cardId, String notificationId, String roomId, String eventId) {
@@ -31,17 +33,26 @@ final class NotificationImage {
         WORKERS.execute(() -> fetchAvatarNow(app, cardId, notificationId, roomId, eventId));
     }
 
+    static void fetchRoomAvatar(Context context, String cardId, String notificationId, String roomId, String eventId) {
+        Context app = context.getApplicationContext();
+        WORKERS.execute(() -> fetchRoomAvatarNow(app, cardId, notificationId, roomId, eventId));
+    }
+
+    static void fetchRoomAvatarNow(Context context, String cardId, String notificationId, String roomId, String eventId) {
+        fetchNow(context, cardId, notificationId, roomId, eventId, Media.ROOM_AVATAR);
+    }
+
     // Firebase invokes its message callback on a worker thread. Completing the fetch before
     // returning keeps the service alive while Android is delivering a background push.
     static void fetchNow(Context context, String cardId, String notificationId, String roomId, String eventId) {
-        fetchNow(context, cardId, notificationId, roomId, eventId, false);
+        fetchNow(context, cardId, notificationId, roomId, eventId, Media.IMAGE);
     }
 
     static void fetchAvatarNow(Context context, String cardId, String notificationId, String roomId, String eventId) {
-        fetchNow(context, cardId, notificationId, roomId, eventId, true);
+        fetchNow(context, cardId, notificationId, roomId, eventId, Media.SENDER_AVATAR);
     }
 
-    private static void fetchNow(Context context, String cardId, String notificationId, String roomId, String eventId, boolean avatar) {
+    private static void fetchNow(Context context, String cardId, String notificationId, String roomId, String eventId, Media media) {
         if (roomId == null || roomId.isEmpty() || eventId == null || eventId.isEmpty()) return;
         Context app = context.getApplicationContext();
         HttpURLConnection connection = null;
@@ -50,7 +61,7 @@ final class NotificationImage {
             String gateway = prefs.getString("gatewayUrl", "");
             String token = prefs.getString("authToken", "");
             if (gateway.isEmpty() || token.isEmpty()) return;
-            URL endpoint = new URL(gateway.replaceAll("/+$", "") + (avatar ? "/api/messenger/notification-avatar" : "/api/messenger/notification-image"));
+            URL endpoint = new URL(gateway.replaceAll("/+$", "") + (media == Media.IMAGE ? "/api/messenger/notification-image" : "/api/messenger/notification-avatar"));
             if (!"http".equals(endpoint.getProtocol()) && !"https".equals(endpoint.getProtocol())) return;
             connection = (HttpURLConnection) endpoint.openConnection();
             connection.setInstanceFollowRedirects(false);
@@ -60,8 +71,9 @@ final class NotificationImage {
             connection.setRequestProperty("Authorization", "Bearer " + token);
             connection.setRequestProperty("Content-Type", "application/json");
             connection.setDoOutput(true);
-            byte[] request = new JSONObject().put("roomId", roomId).put("eventId", eventId)
-                .toString().getBytes(StandardCharsets.UTF_8);
+            JSONObject reference = new JSONObject().put("roomId", roomId).put("eventId", eventId);
+            if (media == Media.ROOM_AVATAR) reference.put("kind", "room");
+            byte[] request = reference.toString().getBytes(StandardCharsets.UTF_8);
             try (OutputStream out = connection.getOutputStream()) { out.write(request); }
             if (connection.getResponseCode() != 200 || connection.getContentLengthLong() > MAX_BYTES) return;
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -83,8 +95,8 @@ final class NotificationImage {
             options.inJustDecodeBounds = false;
             Bitmap image = BitmapFactory.decodeByteArray(data, 0, data.length, options);
             if (image != null) {
-                if (avatar) ChatNotifications.attachAvatar(app, cardId, notificationId, image);
-                else ChatNotifications.attachImage(app, cardId, notificationId, image);
+                if (media == Media.IMAGE) ChatNotifications.attachImage(app, cardId, notificationId, image);
+                else ChatNotifications.attachAvatar(app, cardId, notificationId, image, media == Media.ROOM_AVATAR);
             }
         } catch (Exception ignored) {
             // The notification remains useful if the gateway or image is unavailable.

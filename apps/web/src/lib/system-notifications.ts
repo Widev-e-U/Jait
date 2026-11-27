@@ -18,6 +18,7 @@ export interface SystemNotificationInput extends NotificationContext {
   eventId?: string
   imageAvailable?: boolean
   groupSender?: string
+  groupSenderId?: string
   timestamp?: number
   /** Bounded, locally resolved sender image. */
   iconUrl?: string
@@ -223,6 +224,7 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
       roomId: notif.roomId, eventId: notif.eventId,
       ...(notif.imageAvailable ? { imageAvailable: true } : {}),
       ...(notif.groupSender ? { groupSender: notif.groupSender } : {}),
+      ...(notif.groupSenderId ? { groupSenderId: notif.groupSenderId } : {}),
       ...(notif.timestamp ? { timestamp: notif.timestamp } : {}),
     } : {}),
   }

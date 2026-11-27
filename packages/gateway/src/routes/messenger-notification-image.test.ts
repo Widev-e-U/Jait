@@ -30,7 +30,12 @@ describe('messenger notification image route', () => {
       const avatarResponse = await app.inject({ method: 'POST', url: '/api/messenger/notification-avatar', headers, payload });
       expect(avatarResponse.statusCode).toBe(200);
       expect(avatarResponse.headers['cache-control']).toBe('no-store');
-      expect(avatar).toHaveBeenCalledWith('owner', '!room:test', '$photo');
+      expect(avatar).toHaveBeenCalledWith('owner', '!room:test', '$photo', undefined);
+      const roomAvatar = await app.inject({
+        method: 'POST', url: '/api/messenger/notification-avatar', headers, payload: { ...payload, kind: 'room' },
+      });
+      expect(roomAvatar.statusCode).toBe(200);
+      expect(avatar).toHaveBeenLastCalledWith('owner', '!room:test', '$photo', 'room');
     } finally {
       await app.close();
       restore.mockRestore();

@@ -13,7 +13,9 @@ import androidx.core.content.pm.ShortcutInfoCompat;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Messenger metadata for the unread events retained by ChatNotifications. */
@@ -55,10 +57,11 @@ final class MessengerNotification {
         return scope == null ? "" : scope.replaceAll("/+$", "");
     }
 
-    void append(String id, String groupSender, long timestamp) {
+    void append(String id, String groupSender, String groupSenderId, long timestamp) {
         Bundle event = new Bundle();
         if (groupSender != null && !groupSender.isEmpty()) {
             event.putString("sender", groupSender);
+            if (groupSenderId != null && !groupSenderId.isEmpty()) event.putString("senderId", groupSenderId);
             state.putBoolean("group", true);
         }
         event.putLong("time", timestamp > 0 ? timestamp : System.currentTimeMillis());
@@ -69,16 +72,27 @@ final class MessengerNotification {
         events.remove(id);
     }
 
+    boolean setRoomAvatar(Bitmap bitmap, boolean latest) {
+        if (!state.getBoolean("group") || (!latest && state.containsKey("roomAvatar"))) return false;
+        state.putParcelable("roomAvatar", prepareAvatar(bitmap));
+        return true;
+    }
+
     void setAvatar(String eventId, Bitmap bitmap) {
+        bitmap = prepareAvatar(bitmap);
+        Bundle event = events.getBundle(eventId);
+        if (event != null) event.putParcelable("avatar", bitmap);
+        if (!state.getBoolean("group")) state.putParcelable("avatar", bitmap);
+    }
+
+    private static Bitmap prepareAvatar(Bitmap bitmap) {
         bitmap = NotificationAvatar.circle(bitmap);
         int largest = Math.max(bitmap.getWidth(), bitmap.getHeight());
         if (largest > 128) {
             bitmap = Bitmap.createScaledBitmap(bitmap, Math.max(1, bitmap.getWidth() * 128 / largest),
                 Math.max(1, bitmap.getHeight() * 128 / largest), true);
         }
-        Bundle event = events.getBundle(eventId);
-        if (event != null) event.putParcelable("avatar", bitmap);
-        if (!state.getBoolean("group")) state.putParcelable("avatar", bitmap);
+        return bitmap;
     }
 
     boolean hasImage(String eventId) {
@@ -97,7 +111,7 @@ final class MessengerNotification {
                boolean updateShortcut) {
         String title = state.getString("title", "Messenger");
         boolean group = state.getBoolean("group");
-        Bitmap avatar = state.getParcelable("avatar");
+        Bitmap avatar = state.getParcelable(group ? "roomAvatar" : "avatar");
         IconCompat conversationIcon = IconCompat.createWithBitmap(
             avatar == null ? NotificationAvatar.fallback(title) : avatar);
         Person peer = new Person.Builder().setName(title).setIcon(conversationIcon).build();
@@ -107,6 +121,17 @@ final class MessengerNotification {
         style.setGroupConversation(group);
         String latestId = ids.get(ids.size() - 1);
         Person latestSender = peer;
+        Map<String, IconCompat> senderIcons = new HashMap<>();
+        if (group) {
+            // Android uses the first Person in each consecutive run of messages from a sender.
+            for (String id : ids) {
+                Bundle event = events.getBundle(id);
+                if (event == null) continue;
+                String senderId = event.getString("senderId");
+                Bitmap photo = event.getParcelable("avatar");
+                if (senderId != null && photo != null) senderIcons.put(senderId, IconCompat.createWithBitmap(photo));
+            }
+        }
         for (int i = 0; i < ids.size(); i++) {
             String id = ids.get(i);
             Bundle event = events.getBundle(id);
@@ -114,9 +139,12 @@ final class MessengerNotification {
             Person person = peer;
             String text = lines.get(i);
             if (group && sender != null) {
-                Person.Builder personBuilder = new Person.Builder().setName(sender);
-                Bitmap senderAvatar = event == null ? null : event.getParcelable("avatar");
-                if (senderAvatar != null) personBuilder.setIcon(IconCompat.createWithBitmap(senderAvatar));
+                String senderId = event.getString("senderId");
+                Person.Builder personBuilder = new Person.Builder().setName(sender).setKey(senderId);
+                Bitmap senderAvatar = event.getParcelable("avatar");
+                IconCompat senderIcon = senderId == null ? null : senderIcons.get(senderId);
+                if (senderIcon != null) personBuilder.setIcon(senderIcon);
+                else if (senderAvatar != null) personBuilder.setIcon(IconCompat.createWithBitmap(senderAvatar));
                 person = personBuilder.build();
                 String prefix = sender + ": ";
                 if (text.startsWith(prefix)) text = text.substring(prefix.length());
@@ -130,7 +158,7 @@ final class MessengerNotification {
             }
             if (image == null || (!text.isEmpty() && !"Photo".equals(text))) style.addMessage(text, timestamp, person);
         }
-        builder.setStyle(style).setLargeIcon((Bitmap) null)
+        builder.setStyle(style).setLargeIcon(group ? avatar : null)
             .setGroup(null).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_ALL);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             String cardId = state.getString("cardId");

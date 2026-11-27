@@ -339,12 +339,12 @@ describe('gateway Messenger notifications', () => {
     vi.stubGlobal('fetch', fetchMock)
     await start()
     remote = { ...remote, selectedRoomId: null, messages: [], rooms: [{
-      ...remote.rooms[0]!, timestamp: 2_000, unread: 1, latestEventId: '$photo', latestSender: 'Bob',
+      ...remote.rooms[0]!, timestamp: 2_000, unread: 1, latestEventId: '$photo', latestSender: 'Bob', latestSenderId: '@bob:test',
       preview: 'beach.jpg', latestAttachment: { name: 'beach.jpg', image: true },
     }] }
     await poll()
     expect(triggerSystemNotification).toHaveBeenLastCalledWith(expect.objectContaining({
-      body: 'Bob: Photo', groupSender: 'Bob', imageAvailable: true, roomId: ROOM_ID, eventId: '$photo',
+      body: 'Bob: Photo', groupSender: 'Bob', groupSenderId: '@bob:test', imageAvailable: true, roomId: ROOM_ID, eventId: '$photo',
       browserImageUrl: 'data:image/jpeg;base64,/9j/AQ==',
     }))
     expect(fetchMock).toHaveBeenCalledWith('http://gateway.test:8000/api/messenger/notification-image', expect.objectContaining({

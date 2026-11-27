@@ -126,10 +126,10 @@ describe('normalizeSystemNotification', () => {
     vi.stubGlobal('window', { Capacitor: { Plugins: { AgentOverlay: { notify } } } })
     await triggerSystemNotification({
       id: 'matrix-message:$photo', replaceId: 'matrix-room:!room', title: 'Family', body: 'Alice: Photo',
-      imageAvailable: true, roomId: '!room', eventId: '$photo', groupSender: 'Alice', timestamp: 1234,
+      imageAvailable: true, roomId: '!room', eventId: '$photo', groupSender: 'Alice', groupSenderId: '@alice:test', timestamp: 1234,
     })
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({
-      imageAvailable: true, roomId: '!room', eventId: '$photo', groupSender: 'Alice', timestamp: 1234,
+      imageAvailable: true, roomId: '!room', eventId: '$photo', groupSender: 'Alice', groupSenderId: '@alice:test', timestamp: 1234,
     }))
   })
 

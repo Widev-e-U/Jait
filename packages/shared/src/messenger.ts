@@ -160,6 +160,7 @@ export interface MessengerRoom {
   latestAttachment?: { name: string; image: boolean }
   /** Sender of the latest message, for notification display. */
   latestSender?: string
+  latestSenderId?: string
   /** Avatar of the latest message sender (`mxc://`). */
   latestSenderAvatarUrl?: string
   /** WhatsApp status broadcasts have no real timeline; they get a dedicated read-only view. */

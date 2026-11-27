@@ -105,7 +105,12 @@ final class ChatNotifications {
         manager.notify(cardId, 0, builder.build());
     }
 
-    static synchronized void attachAvatar(Context context, String cardId, String eventId, android.graphics.Bitmap avatar) {
+    static void attachAvatar(Context context, String cardId, String eventId, android.graphics.Bitmap avatar) {
+        attachAvatar(context, cardId, eventId, avatar, false);
+    }
+
+    static synchronized void attachAvatar(Context context, String cardId, String eventId, android.graphics.Bitmap avatar,
+                                          boolean roomAvatar) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         StatusBarNotification posted = card(manager, cardId);
         if (posted == null) return;
@@ -114,8 +119,12 @@ final class ChatNotifications {
         if (ids.isEmpty() || ids.size() != lines.size() || !ids.contains(eventId)) return;
         NotificationCompat.Builder builder = rebuild(context, posted.getNotification());
         MessengerNotification conversation = MessengerNotification.restore(posted.getNotification());
-        if (conversation == null && !eventId.equals(ids.get(ids.size() - 1))) return;
-        if (conversation != null) conversation.setAvatar(eventId, avatar);
+        boolean latest = eventId.equals(ids.get(ids.size() - 1));
+        if (roomAvatar) {
+            if (conversation == null || !conversation.setRoomAvatar(avatar, latest)) return;
+        } else if (conversation != null) {
+            conversation.setAvatar(eventId, avatar);
+        } else if (!latest) return;
         applyContent(context, builder, ids, lines, conversation, true);
         if (conversation == null) {
             android.os.Parcelable picture = posted.getNotification().extras.getParcelable(Notification.EXTRA_PICTURE);
@@ -198,12 +207,12 @@ final class ChatNotifications {
 
     static void show(Context context, String id, String title, String body, String replaceId,
                      String link, String scope, String sessionId, boolean completion, String markReadLink) {
-        show(context, id, title, body, replaceId, link, scope, sessionId, completion, markReadLink, null, 0);
+        show(context, id, title, body, replaceId, link, scope, sessionId, completion, markReadLink, null, null, 0);
     }
 
     static synchronized void show(Context context, String id, String title, String body, String replaceId,
                      String link, String scope, String sessionId, boolean completion, String markReadLink,
-                     String groupSender, long timestamp) {
+                     String groupSender, String groupSenderId, long timestamp) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         NotificationChannel channel = new NotificationChannel(CHANNEL, "Chat completions", NotificationManager.IMPORTANCE_HIGH);
         channel.enableVibration(true);
@@ -236,7 +245,7 @@ final class ChatNotifications {
         if (ids.size() != lines.size()) { ids.clear(); lines.clear(); }
         ids.add(id);
         lines.add(body == null ? "" : body);
-        if (conversation != null) conversation.append(id, groupSender, timestamp);
+        if (conversation != null) conversation.append(id, groupSender, groupSenderId, timestamp);
         while (ids.size() > MAX_LINES) {
             String expired = ids.remove(0);
             lines.remove(0);

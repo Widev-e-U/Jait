@@ -203,10 +203,11 @@ public class AgentOverlayPlugin extends Plugin {
         String cardId = replaceId == null || replaceId.isEmpty() ? id : replaceId;
         String link = call.getString("link", "/chat");
         String title = call.getString("title", "Jait");
+        String groupSender = call.getString("groupSender", "");
         ChatNotifications.show(getContext(), id, title, call.getString("body", ""), replaceId,
             link, call.getString("scope", NotificationNavigation.scope(getContext())),
             call.getString("sessionId", ""), "completion".equals(call.getString("kind", "")),
-            call.getString("markReadLink", null), call.getString("groupSender"), call.getLong("timestamp", 0L));
+            call.getString("markReadLink", null), groupSender, call.getString("groupSenderId"), call.getLong("timestamp", 0L));
         boolean messenger = MessengerNotification.isMessage(cardId, link);
         if (!messenger && link.startsWith("/messenger?")) {
             ChatNotifications.attachAvatar(getContext(), cardId, id, NotificationAvatar.fallback(title));
@@ -216,6 +217,9 @@ public class AgentOverlayPlugin extends Plugin {
         String eventId = call.getString("eventId", "");
         if (!iconUrl.isEmpty()) NotificationAvatar.attach(getContext(), cardId, id, iconUrl);
         else if (messenger) NotificationImage.fetchAvatar(getContext(), cardId, id, roomId, eventId);
+        if (messenger && !groupSender.isEmpty() && !roomId.isEmpty() && !eventId.isEmpty()) {
+            NotificationImage.fetchRoomAvatar(getContext(), cardId, id, roomId, eventId);
+        }
         if (Boolean.TRUE.equals(call.getBoolean("imageAvailable", false))) {
             NotificationImage.fetch(getContext(), cardId, id, roomId, eventId);
         }

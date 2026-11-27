@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.provider.OpenableColumns;
 import androidx.core.app.NotificationCompat;
@@ -102,9 +103,33 @@ public class MessengerNotificationTest {
         assertNull(messages().get(2).getPerson().getIcon());
     }
 
+    @Test public void roomPhotoAndSenderPhotosStaySeparateAcrossUpdates() {
+        show("first", "Alex", "Hi", 1000, "@alex:test");
+        show("second", "Alex", "Hello", 2000, "@alex:test");
+        show("third", "Alex", "Hey", 3000, "@other-alex:test");
+        ChatNotifications.attachAvatar(context, ROOM, "second", bitmap());
+        assertNull(card().getLargeIcon());
+        assertNotNull(messages().get(0).getPerson().getIcon());
+        assertNotNull(messages().get(1).getPerson().getIcon());
+        assertNotEquals(messages().get(1).getPerson().getKey(), messages().get(2).getPerson().getKey());
+        assertNull(messages().get(2).getPerson().getIcon());
+
+        Bitmap roomPhoto = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888);
+        ChatNotifications.attachAvatar(context, ROOM, "third", roomPhoto, true);
+        ChatNotifications.attachAvatar(context, ROOM, "second", bitmap(), true);
+        show("fourth", "Chris", "Hi", 4000, "@chris:test");
+        assertEquals(24, ((BitmapDrawable) card().getLargeIcon().loadDrawable(context)).getBitmap().getWidth());
+        assertEquals(8, ((BitmapDrawable) messages().get(0).getPerson().getIcon().loadDrawable(context)).getBitmap().getWidth());
+        assertNull(messages().get(2).getPerson().getIcon());
+    }
+
     private void show(String id, String sender, String text, long timestamp) {
+        show(id, sender, text, timestamp, null);
+    }
+
+    private void show(String id, String sender, String text, long timestamp, String senderId) {
         ChatNotifications.show(context, id, "Family", sender + ": " + text, ROOM, LINK, SCOPE, "", false,
-            null, sender, timestamp);
+            null, sender, senderId, timestamp);
     }
 
     private Notification card() {

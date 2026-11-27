@@ -300,7 +300,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
             body: messengerNotificationPreview(groupSender ? `${groupSender}: ${preview}` : preview),
             ...(room.latestEventId ? {
               roomId: room.id, eventId: room.latestEventId, imageAvailable: room.latestAttachment?.image,
-              groupSender, timestamp: room.timestamp,
+              groupSender, groupSenderId: groupSender ? room.latestSenderId : undefined, timestamp: room.timestamp,
             } : {}),
             independentOfAttention: true,
             link: '/messenger?roomId=' + encodeURIComponent(room.id),

@@ -46,9 +46,9 @@ describe("MobilePushService", () => {
       const service = new MobilePushService(db, { project_id: "test", client_email: "test@example.com", private_key: "unused" }, send as typeof fetch);
       Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
       service.register("phone", "user-a", "token-a");
-      await service.sendMessengerMessage("user-a", { roomId: "!room:test", eventId: "$photo", title: "Family", body: "Bob: Photo", timestamp: 1234, image: true, groupSender: "Bob" });
+      await service.sendMessengerMessage("user-a", { roomId: "!room:test", eventId: "$photo", title: "Family", body: "Bob: Photo", timestamp: 1234, image: true, groupSender: "Bob", groupSenderId: "@bob:test" });
       const data = JSON.parse(send.mock.calls[0]![1]!.body as string).message.data;
-      expect(data).toMatchObject({ id: "matrix-message:$photo", replaceId: "matrix-room:!room:test", roomId: "!room:test", eventId: "$photo", imageAvailable: "true", timestamp: "1234", groupSender: "Bob" });
+      expect(data).toMatchObject({ id: "matrix-message:$photo", replaceId: "matrix-room:!room:test", roomId: "!room:test", eventId: "$photo", imageAvailable: "true", timestamp: "1234", groupSender: "Bob", groupSenderId: "@bob:test" });
       expect(JSON.stringify(data)).not.toContain("secret");
       expect(JSON.stringify(data)).not.toContain("mxc://");
     } finally { sqlite.close(); }

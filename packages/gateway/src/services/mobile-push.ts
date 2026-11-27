@@ -130,7 +130,7 @@ export class MobilePushService {
    * one stale registration failing must not suppress the toast on healthy
    * devices, and devices owned by other users never receive it.
    */
-  async sendChatCompleted(userId: string, notification: { id: string; title: string; body: string; roomId?: string; eventId?: string; imageAvailable?: boolean; timestamp?: number; groupSender?: string } & NotificationContext): Promise<number> {
+  async sendChatCompleted(userId: string, notification: { id: string; title: string; body: string; roomId?: string; eventId?: string; imageAvailable?: boolean; timestamp?: number; groupSender?: string; groupSenderId?: string } & NotificationContext): Promise<number> {
     if (!this.serviceAccount) return 0;
     const targets = this.list(userId);
     await Promise.all(targets.map(async (registration) => {
@@ -154,6 +154,7 @@ export class MobilePushService {
           ...(notification.eventId ? { eventId: notification.eventId } : {}),
           ...(notification.imageAvailable ? { imageAvailable: "true" } : {}),
           ...(notification.groupSender ? { groupSender: notification.groupSender } : {}),
+          ...(notification.groupSenderId ? { groupSenderId: notification.groupSenderId } : {}),
           ...(notification.timestamp ? { timestamp: String(notification.timestamp) } : {}),
         }, "3600s");
       } catch (error) {
@@ -170,7 +171,7 @@ export class MobilePushService {
    */
   async sendMessengerMessage(
     userId: string,
-    message: { roomId: string; eventId: string; title: string; body: string; image?: boolean; timestamp?: number; groupSender?: string },
+    message: { roomId: string; eventId: string; title: string; body: string; image?: boolean; timestamp?: number; groupSender?: string; groupSenderId?: string },
   ): Promise<number> {
     return this.sendChatCompleted(userId, {
       id: `matrix-message:${message.eventId}`,
@@ -182,6 +183,7 @@ export class MobilePushService {
       imageAvailable: !!message.image,
       timestamp: message.timestamp,
       groupSender: message.groupSender,
+      groupSenderId: message.groupSenderId,
       link: `/messenger?roomId=${encodeURIComponent(message.roomId)}`,
     });
   }

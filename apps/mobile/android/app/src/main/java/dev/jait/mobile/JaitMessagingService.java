@@ -70,16 +70,21 @@ public class JaitMessagingService extends FirebaseMessagingService {
             String id = message.getData().get("id");
             if (id != null) {
                 String replaceId = message.getData().get("replaceId");
+                String cardId = replaceId == null || replaceId.isEmpty() ? id : replaceId;
+                String roomId = message.getData().get("roomId");
+                String eventId = message.getData().get("eventId");
+                String groupSender = message.getData().get("groupSender");
                 ChatNotifications.show(this, id,
                     message.getData().get("title"), message.getData().get("body"),
                     replaceId, message.getData().get("link"),
                     NotificationNavigation.scope(this), message.getData().getOrDefault("sessionId", ""), true, null,
-                    message.getData().get("groupSender"), notificationTimestamp(message.getData().get("timestamp")));
-                NotificationImage.fetchAvatarNow(this, replaceId == null || replaceId.isEmpty() ? id : replaceId,
-                    id, message.getData().get("roomId"), message.getData().get("eventId"));
+                    groupSender, message.getData().get("groupSenderId"), notificationTimestamp(message.getData().get("timestamp")));
+                NotificationImage.fetchAvatarNow(this, cardId, id, roomId, eventId);
+                if (groupSender != null && !groupSender.isEmpty()) {
+                    NotificationImage.fetchRoomAvatarNow(this, cardId, id, roomId, eventId);
+                }
                 if ("true".equals(message.getData().get("imageAvailable"))) {
-                    NotificationImage.fetchNow(this, replaceId == null || replaceId.isEmpty() ? id : replaceId,
-                        id, message.getData().get("roomId"), message.getData().get("eventId"));
+                    NotificationImage.fetchNow(this, cardId, id, roomId, eventId);
                 }
             }
             return;
