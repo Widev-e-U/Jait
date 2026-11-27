@@ -155,7 +155,7 @@ impl<C: FnMut() -> String> NodeStateManager<C> {
     pub fn upsert_node(&mut self, input: UpsertNodeInput) -> NodeState {
         let now = (self.clock)();
         let existing = self.records.get(&input.id);
-        let previous = existing.filter(|record| record.client_id == input.client_id);
+        let previous = existing.filter(|r| r.client_id == input.client_id);
         let state = NodeState {
             id: input.id.clone(),
             name: input.name,
@@ -285,6 +285,25 @@ mod tests {
         assert_eq!(registry.remove_nodes_by_client_id("client").len(), 1);
         assert!(registry.get_node("other").is_some());
     }
+    #[test]
+    fn capabilities_and_version_are_bound_to_connection_identity() {
+        let mut registry = NodeStateManager::default();
+        registry.upsert_node(input(
+            "id",
+            json!({"appVersion":"1.2.3", "capabilities":{"gatewayUpdate":true,"voice":true}}),
+        ));
+        let same = registry.upsert_node(input("id", json!({"capabilities":{"preview":true}})));
+        assert_eq!(same.app_version.as_deref(), Some("1.2.3"));
+        assert!(
+            same.capabilities.gateway_update
+                && same.capabilities.voice
+                && same.capabilities.preview
+        );
+        let replacement = registry.upsert_node(input("id", json!({"clientId":"replacement"})));
+        assert_eq!(replacement.app_version, None);
+        assert_eq!(replacement.capabilities, NodeCapabilities::default());
+    }
+
     #[test]
     fn unicode_sort_and_map_insertion_order_survive_reconnects() {
         let mut registry = NodeStateManager::with_clock(|| "now".into());
