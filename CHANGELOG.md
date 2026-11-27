@@ -4,6 +4,15 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.984](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.984) — 2026-11-27
+
+- feat: add chat forks for loops and first-run device naming — d0b69c0c
+- test(gateway-rust): check that unavailable providers stay hidden — 615b0040
+- fix(messenger): carry sender avatars through notifications — 70e49a26
+- fix(desktop): harden the guest IPC bridge — 140e0122
+- fix(android): retain sender avatars across messenger notifications — 4cf678b5
+- feat(gateway-rust): supervise automatic scheduled jobs — c4c3ac54
+
 ## [v0.1.983](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.983) — 2026-11-26
 
 - fix(android): retain sender avatars across messenger notifications — 70dbb0a1
