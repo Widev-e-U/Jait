@@ -217,6 +217,8 @@ The same service backs these tools. They are offered only when the HTTP controls
 | `plan.run.list`, `plan.run.status`, `plan.run.attempts` | Read runs, tasks, workers, errors and pending approvals. |
 | `plan.run.cancel` | Stop a run. Stopping is the safe direction. |
 
+`plan.create` (`tools/plan-tools.ts`) lets an agent draft a plan for a repository the caller owns. It defaults to the repository at the chat's project root. The tasks go through `validatePlanGraph` first. An invalid plan saves nothing and returns the issues. A valid one is saved as a draft with every task `proposed`. The input does not accept a task `status`, so the agent cannot approve its own plan. The owner approves the tasks in the plan dialog, and until then `plan.run.start` refuses the plan with `task_not_approved`. The tool is registered with the plan routes, independently of the run controls. It is not in the reviewed profiles either, so creating a plan also asks for consent.
+
 Consent: the tools are not in the reviewed permission profiles (`tool-profiles.ts`), so the security profile treats every call as dangerous and asks each time. That includes the read tools.
 
 Review of the read tools (`plan.run.list`, `plan.run.status`, `plan.run.attempts`): each one only reads runs the caller owns, so each is a candidate for consent `none` in all three profiles. The profiles are pinned by exact membership and order (`tests/contract/source-reviews.json`, cases `profile-minimal`, `profile-coding`, `profile-full`). Adding the reads therefore needs a reviewed contract update, together with the Rust side. `plan.run.start`, `plan.run.cancel` and `plan.run.resume` change state and should stay out of any read-only grant. Until that review lands, every call asks, which is the safe default.

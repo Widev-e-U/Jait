@@ -105,6 +105,7 @@ import { routeWorkers } from "./services/orchestration/worker-router.js";
 import { OrchestrationService } from "./services/orchestration/orchestrator.js";
 import { FileOrchestrationLease, leasePathForDatabase } from "./services/orchestration/process-lease.js";
 import { createPlanRunTools } from "./tools/plan-run-tools.js";
+import { createPlanTools } from "./tools/plan-tools.js";
 import { WorkflowWorkspaces } from "./services/orchestration/workspace.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { GitService } from "./services/git.js";
@@ -666,6 +667,17 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       userService: deps.userService,
       ws: deps.ws,
     });
+    // Chat agents may draft plans; every task is saved as proposed, so the owner still approves it.
+    for (const tool of createPlanTools({
+      planService: deps.planService,
+      repoService: deps.repoService,
+      onCreated: plan => deps.ws?.broadcastAll({
+        type: "plan.created",
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { plan } as unknown as Record<string, unknown>,
+      }),
+    })) deps.toolRegistry?.register(tool);
   }
 
   if (deps.repoService && deps.repoProposalService) {
