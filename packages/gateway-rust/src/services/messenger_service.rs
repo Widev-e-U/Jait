@@ -434,6 +434,10 @@ pub struct MessageReply {
 pub struct MessengerMessage {
     pub id: String,
     pub sender: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender_presence: Option<String>,
     pub body: String,
     pub timestamp: f64,
     pub own: bool,
@@ -797,6 +801,8 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
             MessengerMessage {
                 id: event_id,
                 sender: truncate_name(&sender_name),
+                sender_id: event.sender.clone().filter(|sender| !sender.is_empty()),
+                sender_presence: None,
                 body: if failed || !is_reply {
                     body
                 } else {
@@ -1053,6 +1059,15 @@ impl<C> Connection<C> {
         true
     }
 
+    fn display_presence(cached: Option<&PresenceEntry>, bridged: bool) -> Option<&str> {
+        let presence = cached?.presence.as_str();
+        match presence {
+            "online" | "unavailable" => Some(presence),
+            "offline" if !bridged => Some(presence),
+            _ => None,
+        }
+    }
+
     /// Merge cached presence into a room summary before it leaves the gateway.
     ///
     /// Pure projection of `(state, room)`; callers already holding the state
@@ -1072,9 +1087,9 @@ impl<C> Connection<C> {
             map.insert(
                 "presence".to_string(),
                 Value::String(
-                    cached
-                        .map(|entry| entry.presence.clone())
-                        .unwrap_or_else(|| "unknown".to_string()),
+                    Self::display_presence(cached, room.summary["service"] != "Matrix")
+                        .unwrap_or("unknown")
+                        .to_string(),
                 ),
             );
             if let Some(last_active_ago) = cached.and_then(|entry| entry.last_active_ago) {
@@ -1116,7 +1131,7 @@ impl<C> Connection<C> {
         });
         let selected = room_id.and_then(|id| state.rooms.iter().find(|(room, _)| room == id));
         let session_user = state.session.as_ref().map(|s| s.user_id.clone());
-        let messages = match room_id {
+        let mut messages = match room_id {
             Some(id) => {
                 let room = state
                     .rooms
@@ -1127,6 +1142,17 @@ impl<C> Connection<C> {
             }
             None => Vec::new(),
         };
+        let bridged = selected.is_none_or(|(_, room)| room.summary["service"] != "Matrix");
+        for message in &mut messages {
+            if !message.own {
+                let cached = message
+                    .sender_id
+                    .as_deref()
+                    .and_then(|sender| state.presence.get(sender));
+                message.sender_presence =
+                    Self::display_presence(cached, bridged).map(str::to_owned);
+            }
+        }
         let (has_earlier, history_limited) = match selected {
             Some((_, room)) => {
                 let has_previous = room.previous.is_some();
@@ -2028,7 +2054,10 @@ impl<C> Connection<C> {
     }
 
     pub async fn probe_presence(&self, room_id: &str, ctx: &C) -> bool {
-        let peer = self.with_room(room_id, |room| room.and_then(|room| room.peer.clone()));
+        let peer = self.with_room(room_id, |room| {
+            room.filter(|room| room.summary["service"] == "Matrix")
+                .and_then(|room| room.peer.clone())
+        });
         let peer = match peer {
             Some(peer) => peer,
             None => return false,

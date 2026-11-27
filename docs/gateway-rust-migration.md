@@ -1,5 +1,33 @@
 # Gateway migration to Rust
 
+## Messenger presence compatibility — 2026-11-27
+
+The existing native Messenger service now preserves nonempty `senderId` values
+and adds cached `senderPresence` to other people's snapshot messages. Own
+messages, missing sender IDs and unknown presence omit the presence field.
+Contacts with the same display name remain distinct by Matrix user ID.
+
+Only Matrix rooms display cached offline presence. For bridged rooms (including
+Teams and WhatsApp), synthetic offline becomes `peer.presence: "unknown"` and
+sender presence is omitted; online and unavailable signals remain visible.
+Cached `lastActiveAgo` retains the reference behavior, including when offline is
+hidden. Native presence probes now skip non-Matrix rooms and rooms without a
+direct peer; no automatic probe or transport wiring is added.
+
+`gateway_rust_messenger_presence` compares live TypeScript sync/snapshot behavior
+with native cached-state projections and records fake presence-transport calls.
+Five behavioral checks failed before the fix and all nine target checks pass
+afterward. The 70 existing native Messenger checks and 42 TypeScript reference
+tests pass, as do strict native/contract Clippy, driver typechecking and lint.
+Workspace typechecking remains blocked by the unchanged voice-assistant
+`IncomingMessage` type mismatch at `packages/gateway/src/voice-assistant/service.ts`.
+
+This is a bounded projection/probe slice, not complete Messenger parity. Other
+message metadata, automatic probe composition, live Matrix networking/crypto and
+probe lifecycle/recovery guarantees remain separate. Provider catalogue, shared
+runtime wiring, dependencies and coverage manifests are unchanged; production
+remains TypeScript.
+
 ## Connected-node state compatibility — 2026-11-27
 
 The native registry now carries `appVersion` and the advertised `gatewayUpdate`
