@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process';
+import { z } from 'zod';
 
 export type BridgeState = 'connected' | 'expired' | 'error' | 'unknown';
 
@@ -12,6 +13,7 @@ export interface BridgeTenant {
 export interface BridgeAccount {
   id: string;
   name: string;
+  signInEmail?: string;
   state: BridgeState;
   detail?: string;
   expiresAt?: string;
@@ -43,6 +45,8 @@ interface ProbeResult {
   accounts?: unknown;
 }
 
+export const teamsSignInEmail = z.email().max(254).refine(value => !value.toLowerCase().includes('#ext#'));
+
 export function normaliseAccounts(value: unknown): BridgeAccount[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const accounts: BridgeAccount[] = [];
@@ -53,6 +57,7 @@ export function normaliseAccounts(value: unknown): BridgeAccount[] | undefined {
     accounts.push({
       id: entry.id,
       name: typeof entry.name === 'string' && entry.name ? entry.name : entry.id,
+      signInEmail: teamsSignInEmail.safeParse(entry.signInEmail).data ?? teamsSignInEmail.safeParse(entry.name).data,
       state: normaliseState(entry.state),
       detail: typeof entry.detail === 'string' ? entry.detail : undefined,
       expiresAt: typeof entry.expiresAt === 'string' ? entry.expiresAt : undefined,

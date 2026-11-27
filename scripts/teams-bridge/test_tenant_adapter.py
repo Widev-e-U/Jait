@@ -30,6 +30,14 @@ class TenantApplyTest(unittest.TestCase):
         with patch.object(a, 'claims', side_effect=ValueError):
             self.assertEqual(a.guest_home({'tenant_id': self.tenant}), '')
 
+    def test_sign_in_address_prefers_a_home_account_email(self):
+        with patch.object(a, 'claims', return_value={
+            'preferred_username': 'guest_example.com#EXT#@tenant.onmicrosoft.com',
+            'upn': 'guest@example.com',
+        }):
+            self.assertEqual(a.account_sign_in_address({'auth_token': 'x'}), 'guest@example.com')
+        self.assertIsNone(a.account_sign_in_address({'auth_token': 'unreadable'}))
+
     def test_rejected_refresh_token_is_reported_as_expired(self):
         error = a.urllib.error.HTTPError('https://login.test', 400, 'invalid_grant', {}, None)
         with patch.object(a, 'exchange', side_effect=error):

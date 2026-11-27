@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { normaliseAccounts } from './bridge-status.js';
 
 describe('Teams tenant status', () => {
+  it('reads a valid sign-in email or an email used as the account name', () => {
+    const accounts = normaliseAccounts([
+      { id: 'first', name: 'Sam', signInEmail: 'sam@example.com' },
+      { id: 'second', name: 'legacy@example.com' },
+      { id: 'third', name: 'Guest', signInEmail: 'sam_example.com#EXT#@tenant.onmicrosoft.com' },
+    ]);
+    expect(accounts?.map(account => account.signInEmail)).toEqual(['sam@example.com', 'legacy@example.com', undefined]);
+  });
+
   it('preserves the per-tenant probe result and does not turn unknown into connected', () => {
     const tenants = normaliseAccounts([{ id: 'account', tenants: [
       { id: '11111111-1111-1111-1111-111111111111', name: 'Expired', state: 'expired', connected: true },

@@ -28,6 +28,22 @@ function roomNotificationId(roomId: string): string {
   return 'matrix-room:' + roomId;
 }
 
+/** Compare gateway JSON by value, including edits to nested message and room fields. */
+function sameGatewayData(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (left == null || right == null || typeof left !== 'object' || typeof right !== 'object') return false;
+  if (Array.isArray(left)) {
+    return Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => sameGatewayData(value, right[index]));
+  }
+  if (Array.isArray(right)) return false;
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const keys = Object.keys(leftRecord);
+  return keys.length === Object.keys(rightRecord).length &&
+    keys.every(key => Object.hasOwn(rightRecord, key) && sameGatewayData(leftRecord[key], rightRecord[key]));
+}
+
 /** Thin authenticated view of a gateway-owned Matrix device. Disposing a view never logs Matrix out. */
 export class GatewayMessengerStore implements MessengerStoreApi {
   private remoteSnapshot: MessengerSnapshot = {
@@ -75,7 +91,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     const result = await this.request(
       '/search?query=' + encodeURIComponent(query),
     );
-    if (query === this.activeSearch) {
+    if (query === this.activeSearch && !sameGatewayData(this.searchResults, result.results)) {
       this.searchResults = result.results;
       this.publish({});
     }
@@ -106,13 +122,16 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     };
   };
   getSnapshot = () => this.remoteSnapshot;
-  private publish(patch: Partial<MessengerSnapshot>) {
+  private publish(patch: Partial<MessengerSnapshot>, { skipUnchanged = false } = {}) {
     if (this.stopped) return;
-    this.remoteSnapshot = { ...this.remoteSnapshot, ...patch };
+    const next = { ...this.remoteSnapshot, ...patch };
+    if (skipUnchanged && sameGatewayData(this.remoteSnapshot, next)) return;
+    this.remoteSnapshot = next;
     this.remoteListeners.forEach((listener) => listener());
   }
   /** Server messages plus local echoes the gateway has not delivered yet. */
   private withOptimistic(roomId: string, messages: MessengerMessage[]) {
+    if (this.optimistic.size === 0) return messages;
     const known = new Set(messages.map((message) => message.id));
     const merged = [...messages];
     for (const [id, entry] of this.optimistic) {
@@ -338,7 +357,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
       selectedRoomId: roomId,
       notifications,
       loaded: true,
-    });
+    }, { skipUnchanged: true });
   }
   /**
    * Warm the message cache for the newest chats so opening one renders

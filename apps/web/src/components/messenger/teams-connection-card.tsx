@@ -13,8 +13,10 @@ interface BridgeStatus {
   expiresAt?: string
   detail?: string
   reauth?: { command?: string; hint?: string }
-  accounts?: { id: string; name: string; state: BridgeStatus['state']; detail?: string; expiresAt?: string; tenants?: { id: string; name: string; connected: boolean; state?: BridgeStatus['state'] | 'disconnected' }[]; tenantError?: string }[]
+  accounts?: { id: string; name: string; signInEmail?: string; state: BridgeStatus['state']; detail?: string; expiresAt?: string; tenants?: { id: string; name: string; connected: boolean; state?: BridgeStatus['state'] | 'disconnected' }[]; tenantError?: string }[]
 }
+
+type ReauthRequest = { accountId?: string; tenantId?: string; signInEmail?: string }
 
 interface ReauthState {
   phase: 'idle' | 'starting' | 'waiting_login' | 'applying' | 'done' | 'error'
@@ -111,13 +113,13 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
     return () => window.clearInterval(timer)
   }, [load])
 
-  const callReauth = useCallback(async (method: 'GET' | 'POST' | 'DELETE', tenant?: { accountId: string; tenantId: string }) => {
+  const callReauth = useCallback(async (method: 'GET' | 'POST' | 'DELETE', request?: ReauthRequest) => {
     try {
       const response = await fetch(REAUTH_URL, {
         method,
         credentials: 'include',
-        headers: { Accept: 'application/json', ...(tenant ? { 'Content-Type': 'application/json' } : {}) },
-        ...(method === 'POST' && tenant ? { body: JSON.stringify(tenant) } : {}),
+        headers: { Accept: 'application/json', ...(request ? { 'Content-Type': 'application/json' } : {}) },
+        ...(method === 'POST' && request ? { body: JSON.stringify(request) } : {}),
       })
       if (!response.ok) throw new Error(`Re-authentication request failed (${response.status})`)
       setReauth((await response.json()) as ReauthState)
@@ -130,11 +132,13 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
     }
   }, [])
 
-  const startReauth = (tenant: { accountId: string; tenantId: string; name: string } | null = null) => {
+  const startReauth = (tenant: { accountId: string; tenantId: string; name: string } | null = null, signInEmail?: string) => {
     setSelectedTenant(tenant)
     setReauthOpen(true)
     setReauth({ phase: 'starting', message: 'Starting browser…', liveViewUrl: null })
-    void callReauth('POST', tenant ? { accountId: tenant.accountId, tenantId: tenant.tenantId } : undefined)
+    const request = tenant ? { accountId: tenant.accountId, tenantId: tenant.tenantId, signInEmail }
+      : signInEmail ? { signInEmail } : undefined
+    void callReauth('POST', request)
   }
 
   const closeReauth = () => {
@@ -242,7 +246,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
                 <span className="min-w-0 flex-1 truncate font-medium" title={account.detail}>{account.name}</span>
                 <Badge variant={accountLook.variant}>{accountLook.text}</Badge>
                 {(account.state !== 'connected' || account.tenantError) && (
-                  <Button size="sm" variant="outline" onClick={() => startReauth()}>
+                  <Button size="sm" variant="outline" onClick={() => startReauth(null, account.signInEmail)}>
                     <LogIn className="mr-2 h-3.5 w-3.5" />
                     Sign in again
                   </Button>
@@ -271,7 +275,7 @@ export function TeamsConnectionCard({ className }: { className?: string }) {
                             {tenant.state === 'expired' && <Badge variant="destructive">Auth timed out</Badge>}
                             {tenant.state === 'error' && <Badge variant="destructive">Check failed</Badge>}
                             {tenant.state === 'unknown' && <Badge variant="outline">Unknown</Badge>}
-                            <Button size="sm" variant="outline" onClick={() => startReauth({ accountId: account.id, tenantId: tenant.id, name: tenant.name })}>
+                            <Button size="sm" variant="outline" onClick={() => startReauth({ accountId: account.id, tenantId: tenant.id, name: tenant.name }, account.signInEmail)}>
                               <LogIn className="mr-2 h-3.5 w-3.5" /> {tenant.state && tenant.state !== 'disconnected' ? 'Sign in again' : 'Sign in'}
                             </Button>
                           </>

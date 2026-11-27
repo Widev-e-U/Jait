@@ -82,6 +82,27 @@ for (const width of [390, 1280]) {
   })
 }
 
+test('resizes the conversation list by keyboard and pointer and keeps the final width', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await mount(page)
+  const resize = page.getByRole('separator', { name: 'Resize conversations list' })
+  await resize.press('ArrowRight')
+  await expect(resize).toHaveAttribute('aria-valuenow', '332')
+
+  const handle = (await resize.boundingBox())!
+  const x = handle.x + handle.width / 2
+  const y = handle.y + handle.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + 40, y, { steps: 5 })
+  await expect(resize).toHaveAttribute('aria-valuenow', '372')
+  await page.mouse.up()
+  await expect(page.locator('html')).not.toHaveClass(/is-dragging-col-resize/)
+
+  await page.reload()
+  await expect(resize).toHaveAttribute('aria-valuenow', '372')
+})
+
 test('avatar cache separates Matrix accounts and picks up new picture URLs', async ({ page }) => {
   const state = await mount(page)
   await expectAvatars(page)

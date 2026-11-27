@@ -86,6 +86,21 @@ def guest_home(meta):
     return home if home and home != str(meta.get('tenant_id', '')).lower() else ''
 
 
+def account_sign_in_address(meta):
+    try:
+        identity = claims(meta.get('auth_token') or '')
+    except (ValueError, IndexError, TypeError):
+        return None
+    if not isinstance(identity, dict):
+        return None
+    for key in ('preferred_username', 'upn', 'unique_name', 'email'):
+        value = identity.get(key)
+        if (isinstance(value, str) and len(value) <= 254 and '#ext#' not in value.lower()
+                and re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', value)):
+            return value
+    return None
+
+
 def tenant_status(entry, existing, metadata):
     login = '8:orgid:' + entry['oid']
     state = 'disconnected'
@@ -128,8 +143,12 @@ def status():
             child_of[lid] = by_home[home]
     accounts = [a for a in result.get('accounts', []) if a['id'] not in child_of]
     for account in accounts:
+        meta = metadata.get(account['id'], {})
+        address = account_sign_in_address(meta)
+        if address:
+            account['signInEmail'] = address
         try:
-            entries = tenants(metadata[account['id']])
+            entries = tenants(meta)
             account['tenants'] = [tenant_status(e, existing, metadata) for e in entries]
         except Exception as exc:
             # Log only the failure class and HTTP status, never bodies or tokens.

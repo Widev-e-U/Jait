@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { resolve } from 'node:path'
+
+const shotsDir = resolve(__dirname, '../../.jait/shots')
 
 test.use({ screenshot: 'off' })
 
@@ -68,4 +71,42 @@ test('Messenger opens at the bottom and animates only live messages', async ({ p
   messages.push(message('$reduced', 'Reduced motion message', Date.now()))
   await expect(log.getByText('Reduced motion message')).toBeVisible()
   expect(await animations()).not.toContain('Reduced motion message')
+})
+
+test('Messenger shows one sender and time per consecutive group', async ({ page }) => {
+  const roomId = '!room:test'
+  const timestamp = new Date(2026, 10, 27, 10, 30).getTime()
+  const message = (id: string, body: string, offset: number, sender = 'Riley') => ({
+    id, body, sender, timestamp: timestamp + offset, own: sender === 'Alice',
+    encrypted: false, unableToDecrypt: false, pending: false, failed: false,
+  })
+  const messages = [
+    message('$first', 'I found the deployment notes.', 0),
+    message('$second', 'The dates are in the release history.', 20_000),
+    message('$third', 'I can add those to the document.', 40_000),
+    message('$own-first', 'That would be great, thanks!', 65_000, 'Alice'),
+    message('$own-second', 'Please include the staging dates too.', 80_000, 'Alice'),
+    message('$later', 'The document is updated.', 420_000),
+  ]
+  await page.route('**/api/messenger**', route => route.fulfill({ json: { snapshot: {
+    status: 'ready', error: null, notifications: false, assistantAccess: false,
+    session: { homeserver: 'https://matrix.test', userId: '@alice:test', deviceId: 'A' },
+    rooms: [{ id: roomId, name: 'Riley', membership: 'join', unread: 0, service: 'WhatsApp', network: '', timestamp, preview: messages.at(-1)?.body }],
+    selectedRoomId: roomId, messages, typing: [],
+  } } }))
+  await page.setViewportSize({ width: 440, height: 705 })
+  await page.goto('/src/e2e-fixtures/messenger-gateway.html?roomId=%21room%3Atest')
+  const log = page.getByRole('log', { name: 'Messages' })
+  const row = (id: string) => log.locator(`[data-message-id="${id}"]`)
+  await expect(row('$later')).toBeVisible()
+  await expect(log.locator('time')).toHaveCount(3)
+  await expect(log.getByText('Riley', { exact: true })).toHaveCount(2)
+  await expect(log.locator('[data-day-divider]')).toHaveCount(1)
+  await expect(row('$own-second').locator('time')).toHaveCount(0)
+  await page.screenshot({ path: resolve(shotsDir, 'messenger-grouped-messages.png') })
+  const options = row('$second').getByRole('button', { name: 'Message options' })
+  await options.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('menuitem', { name: 'Forward' })).toBeVisible()
+  await page.keyboard.press('Escape')
 })

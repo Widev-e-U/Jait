@@ -155,7 +155,7 @@ it('never uses a local echo id when marking the room read', async () => {
   expect(reads.every(read => !String(read.body?.eventId ?? '').startsWith('~local:'))).toBe(true)
 })
 
-describe('gateway Messenger notifications', () => {
+describe('gateway Messenger refresh and notifications', () => {
   let storage: Storage
   let browser: Window
   let remote: MessengerSnapshot
@@ -198,6 +198,47 @@ describe('gateway Messenger notifications', () => {
   async function poll() {
     await vi.advanceTimersByTimeAsync(2_000)
   }
+
+  it('keeps the same snapshot on idle polls and publishes nested message changes', async () => {
+    const reaction = { key: '👍', count: 1, own: false, senders: ['Alex'] }
+    remote = snapshot([message({ reactions: [reaction] })])
+    const store = await start()
+    const listener = vi.fn()
+    store.subscribe(listener)
+    const initial = store.getSnapshot()
+
+    await poll()
+    expect(store.getSnapshot()).toBe(initial)
+    expect(listener).not.toHaveBeenCalled()
+
+    remote = snapshot([message({ reactions: [{ ...reaction, senders: ['Morgan'] }] })])
+    await poll()
+    expect(store.getSnapshot().messages[0]?.reactions?.[0]?.senders).toEqual(['Morgan'])
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes search results only when they change', async () => {
+    let results = [{ roomId: ROOM_ID, roomName: 'Room', message: message() }]
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => json(
+      url.includes('/search?') ? { results } : { snapshot: remote },
+    )))
+    const store = await start()
+    const listener = vi.fn()
+    store.subscribe(listener)
+
+    store.searchLoadedMessages('earlier')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(store.searchLoadedMessages('earlier')).toEqual(results)
+
+    await poll()
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    results = []
+    await poll()
+    expect(store.searchLoadedMessages('earlier')).toEqual([])
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
 
   it('persists the preference per account and restores it without notifying about old unread messages', async () => {
     const first = await start()

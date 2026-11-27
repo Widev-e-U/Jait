@@ -1,12 +1,12 @@
 import { toast } from 'sonner'
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { automaticReadAllowed } from '@/lib/messenger/notification-actions'
-import { forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type FormEvent } from 'react'
+import { forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal, Reply, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Conversation } from '@/components/chat/conversation'
-import { AlbumViewer, MessengerBubble } from './messenger-message'
+import { AlbumViewer, MessengerBubble, MessengerMessageTime } from './messenger-message'
 import { MessengerStatusView } from './messenger-status-view'
 import { MessengerOptions } from './messenger-options'
 import { dayDividerLabel, needsDayDivider } from '@/lib/messenger/dates'
@@ -136,6 +136,62 @@ const LIST_DELIVERY_LABELS = {
 const LIST_MIN = 240
 const LIST_MAX = 520
 
+function saveListWidth(width: number) {
+  localStorage.setItem('jait.messenger.list-width', String(width))
+}
+
+// Keep resize updates on the sidebar wrapper so its rows and the timeline can reuse their render.
+function MessengerConversationList({ children, className, onHide }: { children: ReactNode; className: string; onHide: () => void }) {
+  const [width, setWidth] = useState(() => {
+    const stored = Number.parseInt(localStorage.getItem('jait.messenger.list-width') ?? '', 10)
+    return Number.isFinite(stored) ? Math.min(LIST_MAX, Math.max(LIST_MIN, stored)) : 320
+  })
+  const drag = useRef<{ x: number; width: number; latestWidth: number } | null>(null)
+  const finishDrag = useCallback(() => {
+    const current = drag.current
+    if (!current) return
+    drag.current = null
+    document.documentElement.classList.remove('is-dragging-col-resize')
+    if (current.latestWidth !== current.width) saveListWidth(current.latestWidth)
+  }, [])
+  useEffect(() => finishDrag, [finishDrag])
+
+  return <aside aria-label="Conversations" style={{ '--list-w': width + 'px' } as CSSProperties} className={className + 'relative w-full shrink-0 flex-col border-r md:w-[var(--list-w)]'}>
+    <div role="separator" aria-label="Resize conversations list" aria-orientation="vertical" aria-valuemin={LIST_MIN} aria-valuemax={LIST_MAX} aria-valuenow={width} tabIndex={0}
+      className="sash-handle absolute inset-y-0 right-0 z-20 hidden w-3 translate-x-1/2 cursor-col-resize touch-none outline-none md:block"
+      onKeyDown={event => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+        event.preventDefault()
+        const next = Math.min(LIST_MAX, Math.max(LIST_MIN, width + (event.key === 'ArrowRight' ? 12 : -12)))
+        if (next === width) return
+        setWidth(next)
+        saveListWidth(next)
+      }}
+      onPointerDown={event => {
+        event.preventDefault()
+        drag.current = { x: event.clientX, width, latestWidth: width }
+        event.currentTarget.setPointerCapture(event.pointerId)
+        document.documentElement.classList.add('is-dragging-col-resize')
+      }}
+      onPointerMove={event => {
+        const start = drag.current
+        if (!start) return
+        const raw = start.width + event.clientX - start.x
+        if (raw < LIST_MIN - 40) {
+          finishDrag()
+          onHide()
+          return
+        }
+        const next = Math.min(LIST_MAX, Math.max(LIST_MIN, Math.round(raw)))
+        if (next === start.latestWidth) return
+        start.latestWidth = next
+        setWidth(next)
+      }}
+      onLostPointerCapture={finishDrag} />
+    {children}
+  </aside>
+}
+
 function ConnectionForm() {
   const { store, snapshot } = useMessenger()
   const [homeserver, setHomeserver] = useUrlSearchState('messenger', 'homeserver')
@@ -210,18 +266,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
     window.history.pushState(window.history.state, '', url.pathname + url.search + url.hash)
     setOptionsOpen(!!pane)
   }
-  const [listWidth, setListWidth] = useState(() => { const stored = Number.parseInt(localStorage.getItem('jait.messenger.list-width') ?? '', 10); return Number.isFinite(stored) ? Math.min(LIST_MAX, Math.max(LIST_MIN, stored)) : 320 })
   const [listHidden, updateListHidden] = useMessengerListHidden()
-  const listDrag = useRef<{ x: number; width: number } | null>(null)
-  const dragList = (clientX: number) => {
-    const start = listDrag.current
-    if (!start) return
-    const raw = start.width + clientX - start.x
-    if (raw < LIST_MIN - 40) { listDrag.current = null; document.documentElement.classList.remove('is-dragging-col-resize'); updateListHidden(true); return }
-    const next = Math.min(LIST_MAX, Math.max(LIST_MIN, Math.round(raw)))
-    setListWidth(next)
-    localStorage.setItem('jait.messenger.list-width', String(next))
-  }
   // One search field drives conversations, loaded-message results, and the open conversation.
   // Older links that used `messageQ` still restore their query.
   const [search, setSearch] = useUrlSearchState('messenger', 'q', () => new URLSearchParams(window.location.search).get('messageQ') ?? '')
@@ -509,14 +554,10 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
       : optionsOpen ? <MessengerOptions onBack={() => setPane('')} onOpenConversation={id => { selectRoom(id); setPane('') }} />
       : <>
       <div className="flex min-h-0 flex-1">
-        <aside aria-label="Conversations" style={{ '--list-w': listWidth + 'px' } as CSSProperties} className={(listHidden ? (roomId ? 'hidden ' : 'flex md:hidden ') : roomId ? 'hidden md:flex ' : 'flex ') + 'relative w-full shrink-0 flex-col border-r md:w-[var(--list-w)]'}>
-          <div role="separator" aria-label="Resize conversations list" aria-orientation="vertical" aria-valuemin={LIST_MIN} aria-valuemax={LIST_MAX} aria-valuenow={listWidth} tabIndex={0}
-            className="sash-handle absolute inset-y-0 right-0 z-20 hidden w-3 translate-x-1/2 cursor-col-resize touch-none outline-none md:block"
-            onKeyDown={event => { if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return; event.preventDefault(); listDrag.current = { x: 0, width: listWidth }; dragList(event.key === 'ArrowRight' ? 12 : -12); listDrag.current = null }}
-            onPointerDown={event => { event.preventDefault(); listDrag.current = { x: event.clientX, width: listWidth }; event.currentTarget.setPointerCapture(event.pointerId); document.documentElement.classList.add('is-dragging-col-resize') }}
-            onPointerMove={event => dragList(event.clientX)}
-            onPointerUp={() => { listDrag.current = null; document.documentElement.classList.remove('is-dragging-col-resize') }}
-            onPointerCancel={() => { listDrag.current = null; document.documentElement.classList.remove('is-dragging-col-resize') }} />
+        <MessengerConversationList
+          className={listHidden ? (roomId ? 'hidden ' : 'flex md:hidden ') : roomId ? 'hidden md:flex ' : 'flex '}
+          onHide={() => updateListHidden(true)}
+        >
           <MessengerHeaderBar
           onOptions={() => setPane('options')}
           search={search}
@@ -549,7 +590,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
             {chatRooms.map(item => roomRow(item))}
             {rooms.length === 0 && <div className="space-y-2 p-5 text-sm text-muted-foreground"><p>{hiddenOpen ? 'No hidden chats.' : snapshot.rooms.length ? 'No matching conversations.' : 'Your conversations will appear here as Matrix syncs.'}</p>{!snapshot.rooms.length && <Button variant="outline" size="sm" onClick={() => setPane('options')}>Connect a bridge</Button>}</div>}
           </div>
-        </aside>
+        </MessengerConversationList>
         <main onPointerDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} onKeyDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} className={(roomId ? 'flex ' : 'hidden md:flex ') + 'relative min-h-0 min-w-0 flex-1 flex-col'}>
           {!room ? <div className="m-auto max-w-sm space-y-2 p-6 text-center text-muted-foreground"><MessageCircle className="mx-auto h-10 w-10 text-primary/60" /><h2 className="font-medium text-foreground">Your personal inbox</h2><p className="text-sm">{roomId ? 'Waiting for this conversation to sync. Use Back to choose another.' : 'Choose a conversation to read and reply as yourself.'}</p>{roomId && <Button variant="outline" size="sm" onClick={() => selectRoom(null)}>Back to conversations</Button>}</div> : <>
             <div className="flex h-14 shrink-0 items-center gap-3 border-b px-3"><Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => selectRoom(null)} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button><MessengerPeerAvatar name={room.peer?.name || room.name} mxcUrl={room.peer?.avatarUrl ?? room.avatarUrl} presence={room.peer?.presence} /><div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold">{room.kind === 'channel' ? '#' + room.name : room.name}</h2><p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">{hasServiceLogo(room.service) && <ServiceLogo service={room.service} className="size-3 shrink-0" />}<span className="truncate">{room.kind === 'channel' ? [room.team, room.service].filter(Boolean).join(' · ') : [presenceLabel(room.peer?.presence, room.peer?.lastActiveAgo), room.service, room.network].filter(Boolean).join(' · ')}</span></p></div>{roomMenu(room, 'Conversation options')}{room.encrypted && <TooltipHint content="Encrypted Matrix room"><span><LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Encrypted room" /></span></TooltipHint>}</div>
@@ -569,6 +610,7 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                 {imageGroups.map(({ messages: group, startIndex: index }) => {
                   const message = group[0]!
                   const album = group.length > 1
+                  const groupStart = groupPositions[index]?.start ?? true
                   const preview = group.slice(0, ALBUM_PREVIEW_SIZE)
                   const remaining = group.length - preview.length
                   const hasReplies = group.some(item => threads?.replies.has(item.id))
@@ -576,9 +618,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                     {needsDayDivider(timeline[index - 1]?.timestamp, message.timestamp) && <p data-day-divider className="mx-auto my-2 w-fit rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">{dayDividerLabel(message.timestamp)}</p>}
                     <div className={hasReplies ? 'rounded-lg border bg-card p-2' : undefined}>
                       <div className={album ? 'flex gap-1.5 ' + (message.own && room.kind !== 'channel' ? 'justify-end' : 'justify-start') : ''}>
-                        {album && !message.own && room.kind !== 'channel' && <div className="w-9 shrink-0 pt-0.5"><MessengerPeerAvatar {...messageAvatarProps(room, message)} /></div>}
+                        {album && !message.own && room.kind !== 'channel' && <div className="w-9 shrink-0 pt-0.5">{groupStart && <MessengerPeerAvatar {...messageAvatarProps(room, message)} />}</div>}
                         <div data-image-group={album ? 'true' : undefined} className={album ? 'w-[min(92%,420px)] min-w-0' : ''}>
-                          {album && (!message.own || room.kind === 'channel') && <p className="mb-0.5 truncate text-[11px] font-semibold leading-4 text-primary">{message.sender}</p>}
+                          {album && groupStart && <div className="mb-0.5 flex min-w-0 items-baseline justify-end gap-1.5 text-[11px] leading-4 text-muted-foreground">
+                            {(!message.own || room.kind === 'channel') && <p className="mr-auto min-w-0 truncate font-semibold text-primary">{message.sender}</p>}
+                            <MessengerMessageTime timestamp={message.timestamp} />
+                          </div>}
                           <div className={album ? 'relative grid grid-cols-2 gap-1' : ''}>
                             {preview.map((item, offset) => <MessengerBubble
                               key={item.id} messageId={item.id} message={item} roomId={room.id} disabled={!ready || busy}
@@ -600,10 +645,12 @@ function MessengerPageContent({ token = null, sttProvider = 'whisper' }: { token
                       {group.map(item => {
                         const replies = threads?.replies.get(item.id)
                         if (!replies?.length) return null
+                        const replyPositions = messageGroupPositions(replies)
                         return <section key={item.id} aria-label="Thread replies" className="mt-2 space-y-2 border-t pt-2 pl-3 sm:pl-8">
-                          {replies.map(reply => <MessengerBubble key={reply.id} messageId={reply.id}
+                          {replies.map((reply, replyIndex) => <MessengerBubble key={reply.id} messageId={reply.id}
                             message={reply.replyTo?.id === item.id ? { ...reply, replyTo: undefined } : reply}
                             roomId={room.id} disabled={!ready || busy} variant="channel" takeArrival={takeArrival}
+                            groupStart={replyPositions[replyIndex]?.start} groupEnd={replyPositions[replyIndex]?.end}
                             onReply={replyToMessage} avatar={messageAvatarProps(room, reply)} />)}
                         </section>
                       })}

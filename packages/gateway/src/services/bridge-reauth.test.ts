@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyCommand, pickRefreshToken, removeCommand, tenantApplyCommand, TeamsReauthService } from './bridge-reauth.js';
 
@@ -55,15 +56,20 @@ describe('applyCommand', () => {
 
 
 describe('Teams sign-in browser startup', () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
 
   function setup(urls: string[]) {
     vi.stubEnv('JAIT_TEAMS_APPLY_CMD', 'unused');
     const navigate = vi.fn();
     for (const url of urls) navigate.mockResolvedValueOnce({ url });
-    const surface = { getLiveViewInfo: () => ({ websockifyPort: 1234 }), navigate };
-    const registry = { stopSurface: vi.fn().mockResolvedValue(undefined), startSurface: vi.fn().mockResolvedValue(surface) };
-    return { service: new TeamsReauthService(registry as never), registry, navigate };
+    const evaluate = vi.fn();
+    const surface = { state: 'running', getLiveViewInfo: () => ({ websockifyPort: 1234 }), navigate, evaluate,
+      networkLog: vi.fn().mockResolvedValue({ nextSeq: 0, entries: [] }) };
+    const registry = { getSurface: () => surface, stopSurface: vi.fn().mockResolvedValue(undefined), startSurface: vi.fn().mockResolvedValue(surface) };
+    return { service: new TeamsReauthService(registry as never), registry, navigate, evaluate };
   }
 
   it('retries an unexpected DuckDuckGo page before showing the sign-in view', async () => {
@@ -83,6 +89,41 @@ describe('Teams sign-in browser startup', () => {
     expect(state.liveViewUrl).toBeNull();
     expect(navigate).toHaveBeenCalledTimes(2);
     expect(registry.stopSurface).toHaveBeenCalledWith('teams-reauth-user', 'teams-reauth-finished');
+  });
+
+  it('fills the Microsoft email field once after a delayed redirect', async () => {
+    vi.useFakeTimers();
+    const { service, evaluate } = setup(['https://teams.microsoft.com/']);
+    const field = { value: '', getClientRects: () => [{}], dispatchEvent: vi.fn() };
+    const location = { origin: 'https://identity.example.com' };
+    const document = { querySelector: vi.fn(() => field) };
+    evaluate.mockImplementation(async expression => ({ value: runInNewContext(expression, { location, document, Event }) }));
+    const email = 'sam@example.com';
+    try {
+      expect((await service.start('user', undefined, email)).phase).toBe('waiting_login');
+      expect(document.querySelector).not.toHaveBeenCalled();
+      location.origin = 'https://login.microsoftonline.com';
+      await vi.advanceTimersByTimeAsync(2_500);
+      expect(field.value).toBe(email);
+      expect(field.dispatchEvent.mock.calls.map(([event]) => event.type)).toEqual(['input', 'change']);
+      field.value = '';
+      await vi.advanceTimersByTimeAsync(2_500);
+      expect(field.value).toBe('');
+    } finally {
+      await service.cancel('user');
+    }
+  });
+
+  it('preserves a Microsoft email already present in the field', async () => {
+    const { service, evaluate } = setup(['https://login.microsoftonline.com/common/login']);
+    const field = { value: 'different@example.com', getClientRects: () => [{}], dispatchEvent: vi.fn() };
+    evaluate.mockImplementation(async expression => ({ value: runInNewContext(expression, {
+      location: { origin: 'https://login.microsoftonline.com' }, document: { querySelector: () => field }, Event,
+    }) }));
+    await service.start('user', undefined, 'sam@example.com');
+    await service.cancel('user');
+    expect(field.value).toBe('different@example.com');
+    expect(field.dispatchEvent).not.toHaveBeenCalled();
   });
 
   it('allows external identity providers reached from Teams', async () => {

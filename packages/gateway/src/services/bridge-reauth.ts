@@ -16,6 +16,7 @@ const TEAMS_URL = 'https://teams.microsoft.com/';
 const TEAMS_CLIENT_ID = '5e3ce6c0-2b1f-4285-8d4b-75ee78787346';
 const TOKEN_ENDPOINT = '/oauth2/v2.0/token';
 const POLL_MS = 2_500;
+const PREFILL_WINDOW_MS = 20_000;
 const MAX_WAIT_MS = 15 * 60_000;
 const APPLY_TIMEOUT_MS = 90_000;
 
@@ -29,6 +30,7 @@ interface Run {
   polling: boolean;
   deadline: number;
   tenant?: { accountId: string; tenantId: string };
+  prefill?: { email: string; deadline: number };
 }
 
 /**
@@ -48,7 +50,7 @@ export class TeamsReauthService {
     return this.runs.get(userId)?.state ?? IDLE;
   }
 
-  async start(userId: string, tenant?: { accountId: string; tenantId: string }): Promise<TeamsReauthState> {
+  async start(userId: string, tenant?: { accountId: string; tenantId: string }, signInEmail?: string): Promise<TeamsReauthState> {
     const existing = this.runs.get(userId);
     if (existing && ['starting', 'waiting_login', 'applying'].includes(existing.state.phase)) {
       if (existing.tenant?.accountId !== tenant?.accountId || existing.tenant?.tenantId !== tenant?.tenantId) {
@@ -93,6 +95,11 @@ export class TeamsReauthService {
       if (isDuckDuckGoPage(page.url)) {
         throw new Error('Teams could not open because the browser showed a search page. Please try signing in again.');
       }
+      if (signInEmail) {
+        run.prefill = { email: signInEmail, deadline: Date.now() + PREFILL_WINDOW_MS };
+        await this.prefillEmail(surface, run);
+      }
+      if (this.runs.get(userId) !== run || run.state.phase !== 'starting') return this.get(userId);
       run.state = {
         ...run.state,
         phase: 'waiting_login',
@@ -130,6 +137,29 @@ export class TeamsReauthService {
     if (state.phase === 'idle') this.runs.delete(userId);
   }
 
+  private async prefillEmail(surface: BrowserSurface, run: Run): Promise<void> {
+    const prefill = run.prefill;
+    if (!prefill) return;
+    if (Date.now() >= prefill.deadline) {
+      run.prefill = undefined;
+      return;
+    }
+    // Check the origin in the same browser evaluation that fills the field,
+    // since Teams may redirect to a third-party identity provider at any time.
+    const result = await surface.evaluate(`(() => {
+      if (location.origin !== 'https://login.microsoftonline.com' && location.origin !== 'https://login.live.com') return false;
+      const field = document.querySelector('input[name="loginfmt"]:is([type="email"], [type="text"])');
+      if (!field || field.disabled || field.readOnly || !field.getClientRects().length) return false;
+      if (!field.value) {
+        field.value = ${JSON.stringify(prefill.email)};
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return true;
+    })()`, { timeoutMs: 1_000, returnByValue: true, signal: AbortSignal.timeout(1_500) }).catch(() => undefined);
+    if (result?.value === true) run.prefill = undefined;
+  }
+
   private async poll(userId: string): Promise<void> {
     const run = this.runs.get(userId);
     if (!run || run.polling || run.state.phase !== 'waiting_login') return;
@@ -144,6 +174,8 @@ export class TeamsReauthService {
         await this.fail(userId, 'Der Browser wurde beendet, bevor die Anmeldung abgeschlossen war.');
         return;
       }
+      await this.prefillEmail(surface, run);
+      if (run.state.phase !== 'waiting_login') return;
       const log = await surface.networkLog({
         urlIncludes: TOKEN_ENDPOINT,
         method: 'POST',

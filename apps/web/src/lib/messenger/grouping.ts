@@ -5,7 +5,7 @@ import { needsDayDivider } from './dates'
 export const MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000
 
 export interface MessageGroupPosition {
-  /** Opens a run: this is the bubble that carries the sender name and the avatar. */
+  /** Opens a run: this bubble carries the time, sender name and avatar where shown. */
   start: boolean
   /** Closes a run: the next message starts a new one, so spacing widens after it. */
   end: boolean
@@ -22,7 +22,11 @@ export function sameMessageGroup(
   windowMs = MESSAGE_GROUP_WINDOW_MS,
 ): boolean {
   if (!previous) return false
-  if (previous.own !== current.own || previous.sender !== current.sender) return false
+  if (previous.own !== current.own) return false
+  const sameSender = previous.senderId && current.senderId
+    ? previous.senderId === current.senderId
+    : previous.sender === current.sender
+  if (!sameSender) return false
   // A retry or an undecryptable placeholder never merges with a settled neighbour.
   if (previous.pending || previous.failed || current.pending || current.failed) return false
   if (previous.unableToDecrypt !== current.unableToDecrypt) return false

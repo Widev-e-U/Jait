@@ -8,7 +8,7 @@ import {
   type IncomingMessengerHandler,
 } from '../services/messenger-service.js';
 import type { MessengerBridge } from '../services/messenger-bridge.js';
-import { bridgeStatuses } from '../services/bridge-status.js';
+import { bridgeStatuses, teamsSignInEmail } from '../services/bridge-status.js';
 import type { TeamsReauthService } from '../services/bridge-reauth.js';
 
 const roomId = z.string().min(3).max(512).startsWith('!');
@@ -154,9 +154,19 @@ export function registerMessengerRoutes(
     if (!user) return;
     reply.header('Cache-Control', 'no-store');
     if (!teamsReauth) return reply.status(404).send({ error: 'Teams re-authentication is unavailable.' });
-    const parsed = z.object({ accountId: z.string().regex(/^8:orgid:[0-9a-fA-F-]{36}$/), tenantId: z.string().uuid() }).strict().optional().safeParse(request.body ?? undefined);
-    if (!parsed.success) return reply.status(400).send({ error: 'Invalid tenant login request.' });
-    return teamsReauth.start(user.id, parsed.data);
+    const parsed = z.union([
+      z.object({ signInEmail: teamsSignInEmail }).strict(),
+      z.object({
+        accountId: z.string().regex(/^8:orgid:[0-9a-fA-F-]{36}$/),
+        tenantId: z.string().uuid(),
+        signInEmail: teamsSignInEmail.optional(),
+      }).strict(),
+    ]).optional().safeParse(request.body ?? undefined);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid Teams login request.' });
+    const tenant = parsed.data && 'tenantId' in parsed.data
+      ? { accountId: parsed.data.accountId, tenantId: parsed.data.tenantId }
+      : undefined;
+    return teamsReauth.start(user.id, tenant, parsed.data?.signInEmail);
   });
   app.delete('/api/messenger/bridge-reauth/teams', async (request, reply) => {
     const user = await auth(request, reply);

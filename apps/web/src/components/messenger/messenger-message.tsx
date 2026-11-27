@@ -19,6 +19,13 @@ import { ForwardDialog } from './messenger-forward-dialog'
 import { useMessenger } from './messenger-provider'
 import { TooltipHint } from '@/components/ui/tooltip'
 
+export function MessengerMessageTime({ timestamp }: { timestamp: number }) {
+  const date = new Date(timestamp)
+  return <TooltipHint content={date.toLocaleString()}>
+    <time dateTime={date.toISOString()}>{date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+  </TooltipHint>
+}
+
 type MessengerAttachmentData = NonNullable<MessengerMessage['attachment']>
 
 function useAttachmentMedia(attachment: MessengerAttachmentData, enabled: boolean, attempt = 0, cacheOnly = false) {
@@ -273,7 +280,9 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   /** A body made only of a short emoji run gets the jumbo treatment. */
   const emojiOnly = !albumTile && !standaloneImage && !editing && isStandaloneEmoji(message.body)
   const wide = standaloneImage || emojiOnly
-  const showSenderName = !albumTile && (!message.own || channel) && groupStart
+  const showTimestamp = !albumTile && groupStart
+  const showSenderName = showTimestamp && (!message.own || channel)
+  const showHeader = showTimestamp || message.edited || message.pending || message.failed
   /** Direct chats get a gutter; only the bubble that opens a run fills it. */
   const showAvatar = !albumTile && !channel && !message.own
   const corner = channel
@@ -320,13 +329,11 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
     className={'group/message flex min-w-0 gap-1.5 [-webkit-touch-callout:none] ' + (!channel && message.own ? 'justify-end' : 'justify-start')}
   >
     {showAvatar && <div data-avatar-gutter className="w-9 shrink-0 select-none pt-0.5">
-      {groupStart
-        ? <MessengerPeerAvatar
-            name={avatar?.name ?? message.sender}
-            presence={avatar?.presence ?? 'unknown'}
-            {...(avatar?.mxcUrl ? { mxcUrl: avatar.mxcUrl } : {})}
-          />
-        : <span aria-hidden className="block h-9 w-9" />}
+      {groupStart && <MessengerPeerAvatar
+        name={avatar?.name ?? message.sender}
+        presence={avatar?.presence ?? 'unknown'}
+        {...(avatar?.mxcUrl ? { mxcUrl: avatar.mxcUrl } : {})}
+      />}
     </div>}
     <div
       ref={bubbleFrame}
@@ -385,12 +392,16 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
       className={'relative grid grid-cols-[minmax(0,1fr)_auto] [touch-action:pan-y] ' + (message.own ? 'gap-x-1 ' : '') + (editing ? 'min-w-44 ' : 'min-w-0 ') + (albumTile ? 'w-full max-w-full' : wide
       ? (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[92%] sm:max-w-[420px]')
       : (channel ? 'max-w-[92%] sm:max-w-[86%]' : 'max-w-[88%] sm:max-w-[74%]'))}>
-      <div className="col-start-1 flex min-w-0 items-baseline justify-end gap-x-1.5 text-[11px] leading-4 text-muted-foreground">
+      <div className={showHeader
+        ? 'col-start-1 flex min-w-0 items-baseline justify-end gap-x-1.5 text-[11px] leading-4 text-muted-foreground'
+        : 'absolute z-10 ' + (albumTile ? 'right-0.5 top-0.5' : channel ? 'left-full top-0 ml-0.5' : 'right-full top-0 mr-0.5')}>
         {showSenderName && <p className="mr-auto min-w-0 truncate font-semibold text-primary">{message.sender}</p>}
         <div className="flex flex-wrap items-center justify-end gap-x-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" disabled={unavailable} aria-label="Message options" className="rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" /></button>
+              <button type="button" disabled={unavailable} aria-label="Message options" className={'rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40 '
+                + (!showHeader && albumTile ? 'bg-background/80 ' : '')
+                + (!showHeader ? '[@media(hover:hover)]:opacity-0 group-hover/message:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100' : '')}><ChevronDown className="h-3.5 w-3.5" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onCloseAutoFocus={event => { if (replyingFromMenu.current) { event.preventDefault(); replyingFromMenu.current = false } }}><DropdownMenuItem onSelect={() => void run(() => navigator.clipboard.writeText(message.body))}>Copy text</DropdownMenuItem>
               {onReply && !message.own && !message.unableToDecrypt && <DropdownMenuItem onSelect={() => { replyingFromMenu.current = true; onReply(message) }}><Reply className="mr-2 h-4 w-4" />Reply</DropdownMenuItem>}
@@ -402,7 +413,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           {message.edited && <span>Edited</span>}
           {message.pending && <span>Sending…</span>}
           {message.failed && <span className="text-destructive">Not sent</span>}
-          <TooltipHint content={new Date(message.timestamp).toLocaleString()}><time dateTime={new Date(message.timestamp).toISOString()}>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
+          {showTimestamp && <MessengerMessageTime timestamp={message.timestamp} />}
         </div>
       </div>
       <div

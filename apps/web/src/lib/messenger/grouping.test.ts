@@ -27,6 +27,12 @@ describe('sameMessageGroup', () => {
     expect(sameMessageGroup(previous, base({ id: 'm3', own: true, timestamp: previous.timestamp + 1 }))).toBe(false)
   })
 
+  it('uses sender IDs to distinguish people with the same display name', () => {
+    const previous = base({ senderId: '@katja:test' })
+    expect(sameMessageGroup(previous, base({ senderId: '@other:test' }))).toBe(false)
+    expect(sameMessageGroup(previous, base({ senderId: previous.senderId, sender: 'Katja M.' }))).toBe(true)
+  })
+
   it('never merges a settled message with a sending or failed one', () => {
     const previous = base()
     expect(sameMessageGroup(previous, base({ id: 'm2', pending: true, timestamp: previous.timestamp + 1 }))).toBe(false)
