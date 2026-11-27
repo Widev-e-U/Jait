@@ -50,6 +50,7 @@ pub struct NodeCapabilities {
     pub voice: bool,
     pub preview: bool,
     pub interactive_terminal: bool,
+    pub gateway_update: bool,
 }
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +62,7 @@ pub struct CapabilityUpdate {
     pub voice: Option<bool>,
     pub preview: Option<bool>,
     pub interactive_terminal: Option<bool>,
+    pub gateway_update: Option<bool>,
 }
 impl CapabilityUpdate {
     fn merge(self, previous: NodeCapabilities) -> NodeCapabilities {
@@ -74,6 +76,7 @@ impl CapabilityUpdate {
             interactive_terminal: self
                 .interactive_terminal
                 .unwrap_or(previous.interactive_terminal),
+            gateway_update: self.gateway_update.unwrap_or(previous.gateway_update),
         }
     }
 }
@@ -87,6 +90,7 @@ pub struct UpsertNodeInput {
     pub client_id: String,
     pub is_gateway: Option<bool>,
     pub protocol_version: Option<f64>,
+    pub app_version: Option<String>,
     pub capabilities: Option<CapabilityUpdate>,
 }
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -98,6 +102,8 @@ pub struct NodeState {
     pub role: NodeRole,
     pub lifecycle: NodeLifecycle,
     pub protocol_version: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app_version: Option<String>,
     pub capabilities: NodeCapabilities,
     pub connected_at: String,
     pub last_seen_at: String,
@@ -149,6 +155,7 @@ impl<C: FnMut() -> String> NodeStateManager<C> {
     pub fn upsert_node(&mut self, input: UpsertNodeInput) -> NodeState {
         let now = (self.clock)();
         let existing = self.records.get(&input.id);
+        let previous = existing.filter(|record| record.client_id == input.client_id);
         let state = NodeState {
             id: input.id.clone(),
             name: input.name,
@@ -159,8 +166,11 @@ impl<C: FnMut() -> String> NodeStateManager<C> {
                 .protocol_version
                 .or_else(|| existing.map(|r| r.state.protocol_version))
                 .unwrap_or(f64::from(NODE_PROTOCOL_VERSION)),
+            app_version: input
+                .app_version
+                .or_else(|| previous.and_then(|r| r.state.app_version.clone())),
             capabilities: input.capabilities.unwrap_or_default().merge(
-                existing
+                previous
                     .map(|r| r.state.capabilities.clone())
                     .unwrap_or_default(),
             ),

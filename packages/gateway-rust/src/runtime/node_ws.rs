@@ -54,6 +54,7 @@ impl ComposedNodes {
             client_id: GATEWAY_NODE_ID.into(),
             is_gateway: Some(true),
             protocol_version: None,
+            app_version: None,
             capabilities: Some(CapabilityUpdate {
                 providers: Some(Vec::new()),
                 surfaces: Some(vec![NodeSurfaceType::Filesystem]),

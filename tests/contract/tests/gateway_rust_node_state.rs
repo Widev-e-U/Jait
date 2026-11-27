@@ -120,6 +120,69 @@ fn partial_updates_null_fallbacks_and_explicit_resets() {
         json!({"action":"snapshot"}),
     ]]);
 }
+
+#[test]
+fn replacement_client_resets_capabilities_and_version_but_preserves_node_identity() {
+    compare(vec![vec![
+        upsert(
+            "a",
+            "Node",
+            "first",
+            json!({
+                "appVersion":"old-version","protocolVersion":4,
+                "capabilities":{"providers":["old-provider"],"surfaces":["terminal"],"tools":["old-tool"],
+                    "voice":true,"screenShare":true,"preview":true,"interactiveTerminal":true,"gatewayUpdate":true},
+            }),
+        ),
+        upsert(
+            "a",
+            "Renamed",
+            "first",
+            json!({"capabilities":{"voice":false}}),
+        ),
+        upsert("a", "Replacement", "second", json!({})),
+        json!({"action":"get","id":"a"}),
+        json!({"action":"client","id":"a"}),
+        json!({"action":"removeClient","clientId":"first"}),
+        json!({"action":"snapshot"}),
+        json!({"action":"removeClient","clientId":"second"}),
+        json!({"action":"snapshot"}),
+    ]]);
+}
+
+#[test]
+fn version_and_update_capability_follow_nullish_and_explicit_value_rules() {
+    compare(vec![vec![
+        upsert(
+            "a",
+            "Node",
+            "first",
+            json!({"appVersion":"1.2.3","capabilities":{"gatewayUpdate":true}}),
+        ),
+        upsert(
+            "a",
+            "Node",
+            "first",
+            json!({"appVersion":null,"capabilities":{"gatewayUpdate":null}}),
+        ),
+        upsert(
+            "a",
+            "Node",
+            "first",
+            json!({"appVersion":"","capabilities":{"gatewayUpdate":false}}),
+        ),
+        upsert(
+            "a",
+            "Node",
+            "second",
+            json!({"appVersion":"new-version","capabilities":{"gatewayUpdate":true}}),
+        ),
+        upsert("a", "Node", "second", json!({})),
+        json!({"action":"snapshot"}),
+        json!({"action":"remove","id":"a"}),
+    ]]);
+}
+
 #[test]
 fn disconnect_reconnect_and_reassignment_preserve_only_live_first_connection() {
     compare(vec![vec![
@@ -222,6 +285,7 @@ fn independent_managers_and_all_capability_fields() {
         "voice",
         "preview",
         "interactiveTerminal",
+        "gatewayUpdate",
     ];
     let traces = fields
         .into_iter()

@@ -1,5 +1,22 @@
 # Gateway migration to Rust
 
+## Connected-node state compatibility — 2026-11-27
+
+The native registry now carries `appVersion` and the advertised `gatewayUpdate`
+capability. Partial updates inherit these values and other capabilities only
+while `clientId` remains the same. A replacement connection starts from capability
+defaults and no app version unless supplied, while the node's first connection
+timestamp and protocol-version inheritance retain the TypeScript behavior.
+Explicit false and empty-string values are preserved; null values fall back only
+within the same connection.
+
+`gateway_rust_node_state` compares replacement, partial updates, removals,
+snapshots, and metadata with the live TypeScript registry. The composed gateway
+still supplies no app version and does not advertise update-RPC support.
+These fields describe peers; they grant no permissions and do not implement
+remote-node transport or updates. Dependencies and coverage manifests are
+unchanged, and full remote-node composition remains separate.
+
 ## Scheduled job lifecycle integration — 2026-11-26
 
 The native application now owns a scheduler poller shared with the job routes.
