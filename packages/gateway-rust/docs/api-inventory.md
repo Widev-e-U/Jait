@@ -14,12 +14,12 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "native-untested": 35,
   "nativeRouteReferencePct": 63.2,
   "nativeTested": 285,
-  "nativeTestedDenominator": 626,
-  "nativeTestedPct": 45.53,
-  "wsTotal": 151,
+  "nativeTestedDenominator": 627,
+  "nativeTestedPct": 45.45,
+  "wsTotal": 152,
   "wsInbound": 44,
-  "wsOutboundCandidates": 107,
-  "wsWithoutDirectionalRustReference": 76,
+  "wsOutboundCandidates": 108,
+  "wsWithoutDirectionalRustReference": 77,
   "clientPathCandidates": 263,
   "clientOnlyRoutes": 5,
   "rustOnlyRoutes": 18,
@@ -36,7 +36,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "wsRustStatus": {
     "native-tested": 33,
     "native-untested": 42,
-    "missing": 76
+    "missing": 77
   },
   "serviceRustStatus": {
     "native-tested": 0,
@@ -513,7 +513,7 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `projectWatcher` (service) — missing; Rust keyword hint present; Node: index.ts:379 projectWatcher.watch
 - `scheduler` (service) — missing; Rust keyword hint present; Node: index.ts:876 scheduler.start, scheduler/service.ts:280 setInterval
 - `threadReviewSync` (service) — missing; Rust keyword hint present; Node: index.ts:877 threadReviewSync.start, services/thread-review-sync.ts:37 setInterval
-- `wsHub` (service) — missing; Rust keyword hint present; Node: index.ts:1543 ws.start, ws.ts:272 setInterval
+- `wsHub` (service) — missing; Rust keyword hint present; Node: index.ts:1543 ws.start, ws.ts:273 setInterval
 - `databaseRetention` (service) — missing; Rust keyword hint present; Node: index.ts:1565 databaseRetention.start, services/database-retention.ts:623 setTimeout
 - `diskJanitor` (service) — missing; Rust keyword hint present; Node: index.ts:1566 diskJanitor.start, services/disk-janitor.ts:291 setTimeout
 - `sandboxMaintenance` (service) — missing; Rust keyword hint absent; Node: index.ts:1570 jaitProvider.startSandboxMaintenance, providers/jait-provider.ts:194 setInterval
@@ -524,8 +524,8 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `browserDevtoolsGrantCleanup` (service) — missing; Rust keyword hint present; Node: routes/browser-devtools.ts:36 setInterval
 - `threadRecoverySweep` (service) — missing; Rust keyword hint absent; Node: routes/threads.ts:297 setInterval
 - `teamsReauthFlowPoll` (flow-poll) — missing; Rust keyword hint present; Node: services/bridge-reauth.ts:104 setInterval
-- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:880 setTimeout
-- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1486 setInterval
+- `messengerConnection` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:881 setTimeout
+- `messengerPresence` (service) — missing; Rust keyword hint present; Node: services/messenger-service.ts:1488 setInterval
 - `orchestratorStandby` (service) — missing; Rust keyword hint absent; Node: services/orchestration/orchestrator.ts:624 setInterval
 - `providerUpdateChecks` (service) — missing; Rust keyword hint present; Node: services/provider-updates.ts:93 setInterval
 
@@ -534,7 +534,7 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `routes/plan-runs-crash.fixture.ts|(top level)` — routes/plan-runs-crash.fixture.ts:40 setInterval — test-only child process stays alive until the restart regression kills it
 - `channels/telegram/connector.ts|TelegramConnector.startTyping` — channels/telegram/connector.ts:578 setInterval — typing indicator while one chat reply is pending
 - `routes/browser-devtools.ts|registerBrowserDevToolsRoutes.upgrade` — routes/browser-devtools.ts:133 setInterval — validity check on one devtools transport, cleared with that transport
-- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4510 setInterval, routes/chat.ts:6542 setInterval, routes/chat.ts:6656 setInterval, routes/chat.ts:6664 setInterval, routes/chat.ts:6752 setInterval, routes/chat.ts:6786 setInterval, routes/chat.ts:6849 setInterval, routes/chat.ts:6876 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
+- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4590 setInterval, routes/chat.ts:6609 setInterval, routes/chat.ts:6723 setInterval, routes/chat.ts:6731 setInterval, routes/chat.ts:6819 setInterval, routes/chat.ts:6853 setInterval, routes/chat.ts:6916 setInterval, routes/chat.ts:6943 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
 - `routes/mcp-server.ts|registerMcpRoutes` — routes/mcp-server.ts:501 setInterval, routes/mcp-server.ts:622 setInterval — keepalive on one MCP connection
 - `tools/browser-handoff.ts|createBrowserHandoffTool.wait` — tools/browser-handoff.ts:25 setInterval — poll inside one browser handoff tool call
 - `tools/terminal-tools.ts|executeInTerminal` — tools/terminal-tools.ts:1029 setInterval — poll inside one terminal tool execution
@@ -543,7 +543,7 @@ Every background site in the Node gateway source is listed in tooling/services-i
 - `services/email/connection.ts|discoverMailSettings` — services/email/connection.ts:65 while (true) — reads one HTTP response body
 - `services/git-forge.ts|GitHubForge.prFileDiffsViaApi` — services/git-forge.ts:366 while (true) — pages through one pull request request
 - `services/git.ts|mapWithConcurrency` — services/git.ts:175 for (;;) — worker loop bounded by the item list
-- `services/messenger-service.ts|SafeMatrixClient.doRequest` — services/messenger-service.ts:195 while (true) — reads one HTTP response body
+- `services/messenger-service.ts|SafeMatrixClient.doRequest` — services/messenger-service.ts:196 while (true) — reads one HTTP response body
 - `services/preview-runner.ts|detectPackageManager` — services/preview-runner.ts:38 while (true) — walks up to the filesystem root
 - `services/subscription-usage-fetchers.ts|fetchOllamaSettingsUsage` — services/subscription-usage-fetchers.ts:84 while (true) — reads one HTTP response body
 - `tools/agent-loop.ts|parseOllamaStream` — tools/agent-loop.ts:1427 while (true) — parses one provider stream
@@ -977,6 +977,7 @@ Client-to-server candidates come from the string arms of the Node hub switch on 
 - server-to-client-candidate: `node.credential` — missing — no binary test
 - server-to-client-candidate: `node.disconnected` — missing — no binary test
 - server-to-client-candidate: `node.hello` — missing — no binary test
+- server-to-client-candidate: `node.registration` — missing — no binary test
 - server-to-client-candidate: `node.registry` — missing — no binary test
 - server-to-client-candidate: `node.update-request` — missing — no binary test
 - server-to-client-candidate: `node.update-response` — missing — no binary test

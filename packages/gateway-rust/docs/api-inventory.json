@@ -8,12 +8,12 @@
     "native-untested": 35,
     "nativeRouteReferencePct": 63.2,
     "nativeTested": 285,
-    "nativeTestedDenominator": 626,
-    "nativeTestedPct": 45.53,
-    "wsTotal": 151,
+    "nativeTestedDenominator": 627,
+    "nativeTestedPct": 45.45,
+    "wsTotal": 152,
     "wsInbound": 44,
-    "wsOutboundCandidates": 107,
-    "wsWithoutDirectionalRustReference": 76,
+    "wsOutboundCandidates": 108,
+    "wsWithoutDirectionalRustReference": 77,
     "clientPathCandidates": 263,
     "clientOnlyRoutes": 5,
     "rustOnlyRoutes": 18,
@@ -30,7 +30,7 @@
     "wsRustStatus": {
       "native-tested": 33,
       "native-untested": 42,
-      "missing": 76
+      "missing": 77
     },
     "serviceRustStatus": {
       "native-tested": 0,
@@ -7543,6 +7543,14 @@
       "rustStatus": "missing"
     },
     {
+      "type": "node.registration",
+      "direction": "server-to-client-candidate",
+      "rustReference": false,
+      "status": "missing",
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
       "type": "node.registry",
       "direction": "server-to-client-candidate",
       "rustReference": false,
@@ -8248,7 +8256,7 @@
       "kind": "service",
       "nodeSites": [
         "index.ts:1543 ws.start",
-        "ws.ts:272 setInterval"
+        "ws.ts:273 setInterval"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8350,7 +8358,7 @@
       "name": "messengerConnection",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:880 setTimeout"
+        "services/messenger-service.ts:881 setTimeout"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8359,7 +8367,7 @@
       "name": "messengerPresence",
       "kind": "service",
       "nodeSites": [
-        "services/messenger-service.ts:1486 setInterval"
+        "services/messenger-service.ts:1488 setInterval"
       ],
       "rustKeywordHint": true,
       "rustStatus": "missing"
@@ -8408,14 +8416,14 @@
     {
       "key": "routes/chat.ts|registerChatRoutes",
       "sites": [
-        "routes/chat.ts:4510 setInterval",
-        "routes/chat.ts:6542 setInterval",
-        "routes/chat.ts:6656 setInterval",
-        "routes/chat.ts:6664 setInterval",
-        "routes/chat.ts:6752 setInterval",
-        "routes/chat.ts:6786 setInterval",
-        "routes/chat.ts:6849 setInterval",
-        "routes/chat.ts:6876 setInterval"
+        "routes/chat.ts:4590 setInterval",
+        "routes/chat.ts:6609 setInterval",
+        "routes/chat.ts:6723 setInterval",
+        "routes/chat.ts:6731 setInterval",
+        "routes/chat.ts:6819 setInterval",
+        "routes/chat.ts:6853 setInterval",
+        "routes/chat.ts:6916 setInterval",
+        "routes/chat.ts:6943 setInterval"
       ],
       "reason": "per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close"
     },
@@ -8479,7 +8487,7 @@
     {
       "key": "services/messenger-service.ts|SafeMatrixClient.doRequest",
       "sites": [
-        "services/messenger-service.ts:195 while (true)"
+        "services/messenger-service.ts:196 while (true)"
       ],
       "reason": "reads one HTTP response body"
     },
