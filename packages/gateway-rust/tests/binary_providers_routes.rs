@@ -153,6 +153,8 @@ async fn provider_routes_through_the_binary() {
     let (st, b) = call(M::GET, "/api/provider-accounts".into(), o.clone(), None).await;
     assert_eq!(st, 200, "{b}");
     assert_eq!(b["accounts"], json!([]));
+    // Unavailable private launchers must not be advertised as usable account types.
+    assert_eq!(b["providerTypes"], json!([]));
     let (st, b) = call(M::GET, "/api/provider-usage".into(), o.clone(), None).await;
     assert!(st == 200 && b["usage"] == json!([]), "{b}");
     let (st, b) = call(
