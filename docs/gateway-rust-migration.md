@@ -1,5 +1,32 @@
 # Gateway migration to Rust
 
+## Messenger thread projection compatibility — 2026-11-27
+
+Native message snapshots now retain `m.thread` replies in event order and expose
+nonempty string `threadRootId` values, including when the root is outside loaded
+history. Other nonempty relation types remain hidden; falsy relation values
+retain the TypeScript timeline-admission behavior.
+
+Thread identity comes from the original event, not replacement content in an
+edit. A literal `is_falling_back: true` suppresses `replyTo` only when a nonempty
+thread root exists. Genuine quotes still resolve loaded and edited parents;
+redacting a parent clears its quote without removing a surviving thread reply.
+This preserves the metadata consumed by the web client's channel-thread grouping.
+
+The existing `gateway_rust_messenger_presence` harness now also compares thread
+roots, message bodies, edits, quotes, reactions and main-timeline read receipts
+with the live TypeScript snapshot. Three new behavioral checks fail before the
+fix; all 12 target checks pass afterward. The 70 native Messenger tests and 42
+TypeScript reference tests pass, along with strict native/contract Clippy and
+driver typechecking/lint. The unrelated workspace voice-assistant typecheck
+blocker noted below remains unchanged.
+
+This is incoming-message projection parity, not full thread transport or send
+support. Per-thread receipt semantics, other message metadata and the previously
+documented text/Unicode limits remain separate. No provider catalogue, runtime
+wiring, dependency or coverage-manifest change is made; production remains
+TypeScript.
+
 ## Messenger presence compatibility — 2026-11-27
 
 The existing native Messenger service now preserves nonempty `senderId` values

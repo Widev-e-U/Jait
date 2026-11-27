@@ -64,7 +64,16 @@ fn project(snapshot: Value) -> Value {
         .iter()
         .map(|message| {
             let mut out = json!({"id":message["id"]});
-            for key in ["senderId", "senderPresence"] {
+            for key in [
+                "body",
+                "edited",
+                "readBy",
+                "reactions",
+                "senderId",
+                "senderPresence",
+                "threadRootId",
+                "replyTo",
+            ] {
                 if let Some(value) = message.get(key) {
                     out[key] = value.clone();
                 }
@@ -103,7 +112,31 @@ async fn native(input: &Value, root: &std::path::Path) -> Value {
             events: serde_json::from_value(room["events"].clone()).unwrap(),
             states: serde_json::from_value(room["states"].clone()).unwrap(),
             previous: None,
-            receipts: vec![],
+            receipts: room
+                .get("receipts")
+                .and_then(Value::as_object)
+                .map(|receipts| {
+                    receipts
+                        .iter()
+                        .map(|(event_id, users)| {
+                            (
+                                event_id.clone(),
+                                users
+                                    .as_object()
+                                    .unwrap()
+                                    .iter()
+                                    .map(|(user_id, receipt)| {
+                                        (
+                                            user_id.clone(),
+                                            serde_json::from_value(receipt.clone()).unwrap(),
+                                        )
+                                    })
+                                    .collect(),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             peer: room
                 .get("peer")
                 .map(|peer| serde_json::from_value(peer.clone()).unwrap()),
@@ -235,4 +268,105 @@ async fn presence_probes_only_target_direct_matrix_peers() {
         }
     }
     compare(calls).await;
+}
+
+fn thread_call(relation: Value) -> Value {
+    let mut input = call(Some("Teams"), false, vec![presence("online")]);
+    input["room"]["events"].as_array_mut().unwrap().push(json!({
+        "event_id":"$thread","type":"m.room.message","sender":"@peer:test",
+        "origin_server_ts":1,"content":{"body":"thread reply","m.relates_to":relation}
+    }));
+    input
+}
+
+#[tokio::test]
+async fn thread_messages_keep_roots_even_when_history_is_missing_and_other_relations_stay_hidden() {
+    let mut calls = Vec::new();
+    for root in [
+        json!("$peer"),
+        json!("$unloaded"),
+        json!(""),
+        Value::Null,
+        json!(42),
+    ] {
+        calls.push(thread_call(json!({"rel_type":"m.thread","event_id":root})));
+    }
+    for relation in [
+        json!({}),
+        json!({"rel_type":""}),
+        json!({"rel_type":null}),
+        json!({"rel_type":false}),
+        json!({"rel_type":0}),
+        json!({"rel_type":true}),
+        json!({"rel_type":1}),
+        json!({"rel_type":{}}),
+        json!({"rel_type":[]}),
+        json!({"rel_type":"m.reference","event_id":"$peer"}),
+        json!({"rel_type":"m.annotation","event_id":"$peer"}),
+    ] {
+        calls.push(thread_call(relation));
+    }
+    compare(calls).await;
+}
+
+#[tokio::test]
+async fn thread_fallback_reply_is_suppressed_only_for_literal_true_with_a_nonempty_root() {
+    let mut calls = Vec::new();
+    for root in [json!("$peer"), json!("$unloaded"), json!(""), Value::Null] {
+        for falling_back in [
+            json!(true),
+            json!(false),
+            Value::Null,
+            json!("true"),
+            json!(1),
+        ] {
+            calls.push(thread_call(json!({
+                "rel_type":"m.thread","event_id":root,"is_falling_back":falling_back,
+                "m.in_reply_to":{"event_id":"$peer"}
+            })));
+        }
+    }
+    compare(calls).await;
+}
+
+#[tokio::test]
+async fn thread_edits_keep_original_roots_with_reactions_receipts_and_redacted_parents() {
+    let mut input = thread_call(json!({
+        "rel_type":"m.thread","event_id":"$peer","m.in_reply_to":{"event_id":"$peer"}
+    }));
+    input["room"]["events"].as_array_mut().unwrap().extend([
+        json!({
+            "event_id":"$edit","type":"m.room.message","sender":"@peer:test","origin_server_ts":2,
+            "content":{"m.relates_to":{"rel_type":"m.replace","event_id":"$thread"},
+                "m.new_content":{"body":"updated","m.relates_to":{"rel_type":"m.thread","event_id":"$wrong-root"}}}
+        }),
+        json!({
+            "event_id":"$forged","type":"m.room.message","sender":"@other:test","origin_server_ts":3,
+            "content":{"m.relates_to":{"rel_type":"m.replace","event_id":"$thread"},"m.new_content":{"body":"forged"}}
+        }),
+        json!({
+            "event_id":"$reaction","type":"m.reaction","sender":"@self:test",
+            "content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"$thread","key":"+1"}}
+        }),
+        json!({
+            "event_id":"$other-reaction","type":"m.reaction","sender":"@other:test",
+            "content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"$thread","key":"+1"}}
+        }),
+        json!({"event_id":"$redact-reaction","type":"m.room.redaction","redacts":"$reaction","content":{}}),
+        json!({
+            "event_id":"$child","type":"m.room.message","sender":"@self:test",
+            "content":{"body":"child","m.relates_to":{"rel_type":"m.thread","event_id":"$thread",
+                "m.in_reply_to":{"event_id":"$thread"}}}
+        }),
+    ]);
+    input["room"]["receipts"] = json!({
+        "$thread":{"@reader:test":{"ts":101}},
+        "$child":{"@reader:test":{"ts":202}}
+    });
+    let mut redacted = input.clone();
+    redacted["room"]["events"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"event_id":"$redact-thread","type":"m.room.redaction","redacts":"$thread","content":{}}));
+    compare(vec![input, redacted]).await;
 }

@@ -451,6 +451,8 @@ pub struct MessengerMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachment: Option<MessageAttachment>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_root_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<MessageReply>,
 }
 
@@ -671,7 +673,10 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
         .filter(|event| {
             event.event_id.is_some()
                 && matches!(event.kind.as_str(), "m.room.message" | "m.room.encrypted")
-                && event.relation_type().is_none()
+                && event
+                    .relates_to()
+                    .and_then(|relation| relation.get("rel_type"))
+                    .is_none_or(|relation| !json_truthy(relation) || relation == "m.thread")
                 && !event.is_redacted()
         })
         .map(|event| {
@@ -767,11 +772,25 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
                 .and_then(|unsigned| unsigned.get("jaitEncrypted"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let reply_target = path(
-                &event.content,
-                &["m.relates_to", "m.in_reply_to", "event_id"],
-            )
-            .and_then(Value::as_str);
+            let thread_root_id = event
+                .relates_to()
+                .filter(|relation| relation["rel_type"] == "m.thread")
+                .and_then(|relation| relation.get("event_id"))
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned);
+            let falling_back = path(&event.content, &["m.relates_to", "is_falling_back"])
+                .and_then(Value::as_bool)
+                == Some(true);
+            let reply_target = if falling_back && thread_root_id.is_some() {
+                None
+            } else {
+                path(
+                    &event.content,
+                    &["m.relates_to", "m.in_reply_to", "event_id"],
+                )
+                .and_then(Value::as_str)
+            };
             let is_reply = reply_target.is_some();
             let reply_to = reply_target.and_then(|target| {
                 let original = originals.get(target)?;
@@ -818,6 +837,7 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
                 reactions: event_reactions,
                 read_by,
                 attachment,
+                thread_root_id,
                 reply_to,
             }
         })

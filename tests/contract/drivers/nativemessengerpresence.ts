@@ -30,8 +30,14 @@ function project(snapshot: MessengerSnapshot) {
     })),
     messages: snapshot.messages.map(message => ({
       id: message.id,
+      body: message.body,
+      edited: message.edited,
+      readBy: message.readBy,
+      reactions: message.reactions,
       ...(message.senderId !== undefined ? { senderId: message.senderId } : {}),
       ...(message.senderPresence !== undefined ? { senderPresence: message.senderPresence } : {}),
+      ...(message.threadRootId !== undefined ? { threadRootId: message.threadRootId } : {}),
+      ...(message.replyTo !== undefined ? { replyTo: message.replyTo } : {}),
     })),
   };
 }
@@ -57,7 +63,7 @@ export async function dispatch(input: unknown) {
     homeserver: 'https://matrix.invalid', userId: '@self:test', deviceId: 'fixture',
     accessToken: 'fixture-token', cryptoStore: 'fixture-store',
   };
-  connection.rooms.set('!room:test', { ...input.room, receipts: {} });
+  connection.rooms.set('!room:test', { ...input.room, receipts: input.room.receipts ?? {} });
   const calls: string[] = [];
   if (input.op === 'nativemessengerpresence.probe') {
     connection.client = {
