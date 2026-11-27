@@ -12,6 +12,10 @@ export const ChatLoopSchema = z.object({
   summary: z.string().max(8000),
   nextMessage: z.string().max(8000),
   evidence: z.array(z.string().max(2000)).max(20),
+  waitForExecution: z.object({
+    terminalId: z.string().min(1).max(200),
+    executionId: z.string().min(1).max(200),
+  }).optional(),
   executionCriteria: z.array(z.number().int().nonnegative().max(19)).max(20).optional(),
   executionEvidence: z.array(z.object({
     criterion: z.number().int().nonnegative().max(19),

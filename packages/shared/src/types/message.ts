@@ -103,6 +103,7 @@ export type WsEventType =
   | "messenger.request"
   | "session.created"
   | "session.closed"
+  | "node.registration"
   | "node.registry"
   | "node.updated"
   | "node.disconnected"

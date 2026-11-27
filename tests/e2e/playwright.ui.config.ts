@@ -11,6 +11,7 @@ export default defineConfig({
   globalSetup: undefined,
   testMatch: [
     'network-jait-nodes.spec.ts',
+    'device-naming.spec.ts',
     'network-resources.spec.ts',
     'provider-selector-model-list.spec.ts',
     'notification-deck.spec.ts',

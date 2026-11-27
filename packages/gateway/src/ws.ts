@@ -9,6 +9,7 @@ import type {
   ScreenShareAnswer,
   ScreenShareIceCandidate,
   ScreenShareSessionState,
+  DeviceRegistrationResult,
   FsNode,
   FsBrowseEntry,
   NodeHelloPayload,
@@ -22,7 +23,7 @@ import * as jose from "jose";
 import { NodeCredentialsService } from "./services/node-credentials.js";
 import { isAllowedRequestOrigin } from "./security/request-origin.js";
 import type { Server as HttpServer } from "node:http";
-import { NODE_PROTOCOL_VERSION } from "@jait/shared";
+import { isAllowedDeviceName, NODE_PROTOCOL_VERSION, normalizeDeviceName } from "@jait/shared";
 import { NodeStateManager } from "./services/node-state-manager.js";
 import type { ToolOutputStreamMetadata } from "./tools/contracts.js";
 import type { JaitDB } from "./db/connection.js";
@@ -693,7 +694,7 @@ export class WsControlPlane {
           return;
         }
         const payload = msg.payload as NodeHelloPayload | undefined;
-        if (!payload?.id || !payload.name || !payload.platform) {
+        if (!payload?.id || !payload.platform) {
           this.send(client.ws, {
             type: "error",
             sessionId: client.sessionId ?? "",
@@ -702,10 +703,12 @@ export class WsControlPlane {
           });
           return;
         }
+        const name = this.reserveDeviceName(client, payload);
+        if (name === null) return;
         client.deviceId = client.deviceId ?? payload.id;
         const node = this.nodeStates.upsertNode({
           id: payload.id,
-          name: payload.name,
+          name,
           platform: payload.platform,
           role: payload.role ?? "remote",
           clientId: client.id,
@@ -713,9 +716,6 @@ export class WsControlPlane {
           appVersion: typeof payload.appVersion === "string" && /^[0-9]+\.[0-9]+\.[0-9]+$/.test(payload.appVersion) ? payload.appVersion : undefined,
           capabilities: payload.capabilities,
         });
-        // Persist node identity + deny-all default grants on first-seen.
-        this.nodePermissions.ensureNodeSeen(payload);
-        this.nodeCredentials.bind(payload.id, client.userId!);
         if (!client.pairedNodeId && (msg.payload as { pairCredential?: boolean }).pairCredential) {
           const credential = this.nodeCredentials.issue(payload.id, client.userId!);
           if (credential) {
@@ -1085,27 +1085,28 @@ export class WsControlPlane {
 
       // ── Filesystem node protocol ────────────────────────────────
       case "fs.register-node": {
-        const p = msg.payload as { id?: string; name?: string; platform?: string; providers?: string[]; providerStatuses?: FsNode["providerStatuses"] } | undefined;
-        if (p?.id && p.name && p.platform) {
+        const p = msg.payload as { id?: string; name?: string; platform?: string; providers?: string[]; providerStatuses?: FsNode["providerStatuses"]; confirmRegistration?: boolean } | undefined;
+        if (p?.id && p.platform) {
+          const existingNode = this.nodeStates.getNode(p.id);
+          const platform = p.platform as FsNode["platform"];
+          const name = this.reserveDeviceName(client, { id: p.id, name: p.name, platform, role: existingNode?.role });
+          if (name === null) return;
           const node: FsNode = {
             id: p.id,
-            name: p.name,
-            platform: p.platform as FsNode["platform"],
+            name,
+            platform,
             clientId: client.id,
             isGateway: false,
             providers: Array.isArray(p.providers) ? p.providers : undefined,
             providerStatuses: Array.isArray(p.providerStatuses) ? p.providerStatuses : undefined,
             registeredAt: new Date().toISOString(),
           };
-          this.nodePermissions.ensureNodeSeen({ id: node.id, name: node.name, platform: node.platform } as NodeHelloPayload);
-          if (!this.nodeCredentials.bind(node.id, client.userId!)) { this.denyControl(client, "NODE_FORBIDDEN"); return; }
           this.fsNodes.set(node.id, node);
           // `node.hello` arrives immediately before `fs.register-node` from the
           // same client and already assigned the authoritative role ("desktop"
           // in Desktop, "mobile" on phones). Keep it — hard-coding "remote"
           // here downgraded desktop nodes and hid them from computer-control
           // targeting (computer_tools only selects role === "desktop").
-          const existingNode = this.nodeStates.getNode(node.id);
           this.nodeStates.upsertNode({
             id: node.id,
             name: node.name,
@@ -1123,6 +1124,7 @@ export class WsControlPlane {
             },
           });
           console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id} — providers: ${node.providers?.join(", ") ?? "none"} — role: ${existingNode?.role ?? "remote"}`);
+          if (p.confirmRegistration === true) this.sendDeviceRegistration(client, { id: node.id, name, ok: true });
           this.onFsNodeRegistered?.(node);
           // Notify all clients so frontends can refresh provider/device lists
           this.broadcastAll({
@@ -1510,6 +1512,29 @@ export class WsControlPlane {
   canAccessTerminal?: (terminalId: string, userId: string | null) => boolean;
   canAccessConsent?: (requestId: string, userId: string | null) => boolean;
   isGatewayOwner?: (userId: string) => boolean;
+  private reserveDeviceName(
+    client: ConnectedClient,
+    identity: Pick<NodeHelloPayload, "id" | "platform" | "role"> & { name?: string },
+  ): string | null {
+    const name = typeof identity.name === "string" ? normalizeDeviceName(identity.name) : "";
+    let code: Extract<DeviceRegistrationResult, { ok: false }>["code"] | null = "INVALID_DEVICE_NAME";
+    if (isAllowedDeviceName(name)) {
+      code = this.nodePermissions.ensureNodeSeen({ ...identity, name }, client.userId);
+      if (!code && this.nodeCredentials.bind(identity.id, client.userId!)) return name;
+    }
+    this.sendDeviceRegistration(client, { id: identity.id, name, ok: false, code: code ?? "DEVICE_REGISTRATION_FAILED" });
+    return null;
+  }
+
+  private sendDeviceRegistration(client: ConnectedClient, payload: DeviceRegistrationResult): void {
+    this.send(client.ws, {
+      type: "node.registration",
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload,
+    });
+  }
+
   canAccessNode?: (nodeId: string, userId: string | null) => boolean;
 
   revokeNodeCredentials(nodeId: string, userId: string): boolean {

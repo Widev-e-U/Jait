@@ -164,3 +164,27 @@ test.describe('mobile status filters', () => {
     await expect(chat).toHaveCount(0)
   })
 })
+
+
+test('forks appear below their parent in project and personal chats', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 760 })
+  await page.goto('/src/e2e-fixtures/index.html?forks=1')
+  await loadSidebar(page)
+  const sidebar = page.getByRole('complementary', { name: 'Projects and chats' })
+  const chatRow = (id: string) => sidebar.locator(`[data-dnd-key="session:${id}"]`)
+  const expectChild = async (parent: string, child: string) => {
+    await expect(chatRow(parent)).toBeVisible()
+    await expect(chatRow(child)).toBeVisible()
+    const parentBounds = (await chatRow(parent).boundingBox())!
+    const childBounds = (await chatRow(child).boundingBox())!
+    expect(childBounds.x).toBeGreaterThan(parentBounds.x)
+    expect(childBounds.y).toBeGreaterThan(parentBounds.y)
+    expect(childBounds.y - parentBounds.y - parentBounds.height).toBeLessThan(8)
+  }
+  await expectChild('Project chat-3', 'terminal-fork')
+  await expectChild('terminal-fork', 'watcher-fork')
+  await expectChild('Personal chat-3', 'manual-fork')
+  await chatRow('manual-fork').click()
+  await expect(chatRow('manual-fork')).toHaveClass(/bg-secondary/)
+  await sidebar.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/session-sidebar-subchats.png') })
+})

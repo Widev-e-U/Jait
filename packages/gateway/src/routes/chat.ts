@@ -3,7 +3,7 @@ import { ProviderSteeringDispatcher } from "../providers/steering-dispatcher.js"
 import type { SteeringMessage } from "../tools/agent-loop.js";
 import { ChatLoopService, chatLoopInstructions } from "../services/chat-loops.js";
 import type { UserQuestionService } from "../services/user-questions.js";
-import { sessionWaits } from "../services/session-waits.js";
+import { backgroundWaitKey, sessionWaits } from "../services/session-waits.js";
 import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import { createLoopTools } from "../tools/loop-tools.js";
 import { TurnUsageAccumulator, summarizeUsage } from "../providers/usage.js";
@@ -40,7 +40,7 @@ import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveProjectRoot } from "../tools/core/get-fs.js";
 import { messageContextMetadata as messageContextMetadataTable, messages as messagesTable, sessionEvents as sessionEventsTable, subAgentHistory as subAgentHistoryTable } from "../db/schema.js";
-import { and, asc, desc, eq, gt, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, ne, like, sql } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { serializePersistedToolCalls } from "../lib/persisted-tool-calls.js";
 import { persistSubAgentHistories, stripSubAgentPayloads } from "../lib/sub-agent-persistence.js";
@@ -250,7 +250,7 @@ function formatExternalProviderFirstTurn(systemPrompt: string, userContent: stri
  * Format the hidden system message injected when a background terminal command
  * (e.g. a test run) finishes, so the re-triggered agent can react to the result.
  */
-export function formatBackgroundCommandNotification(result: BackgroundCommandResult): string {
+export function formatBackgroundCommandNotification(result: BackgroundCommandResult, reportOnly = false): string {
   const status = result.timedOut ? "timed out (execution stopped)" : result.exitCode === 0
     ? "succeeded (exit code 0)"
     : result.exitCode == null
@@ -269,7 +269,9 @@ export function formatBackgroundCommandNotification(result: BackgroundCommandRes
     result.output,
     "```",
     "",
-    "Continue the task: check whether this result completes what the user asked for, then proceed or report back. Always produce a user-visible final response before ending this turn, even if only a concise status update is needed. Do not ask the user to say continue.",
+    reportOnly
+      ? "This fork reports the outcome of one terminal execution. Summarize the observed result, relevant errors and what the output verified. Do not run commands, edit files, or continue the parent task."
+      : "Continue the task: check whether this result completes what the user asked for, then proceed or report back. Always produce a user-visible final response before ending this turn, even if only a concise status update is needed. Do not ask the user to say continue.",
   ].join("\n");
 }
 
@@ -335,13 +337,13 @@ function truncateExternalContextContent(content: string, max = 1200): string {
   return `${compact.slice(0, max - 3)}...`;
 }
 
-function isQuestionBranchMetadata(metadata: string | null | undefined): boolean {
-  if (!metadata) return false;
+function readChatBranchKind(metadata: string | null | undefined): unknown {
+  if (!metadata) return undefined;
   try {
     const parsed = JSON.parse(metadata) as { branch?: { kind?: unknown } };
-    return parsed.branch?.kind === "question";
+    return parsed?.branch?.kind;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -2821,11 +2823,87 @@ export function registerChatRoutes(
     timer.unref?.();
     loopTimers.set(sessionId, timer);
   };
+  const loopTerminalReceiptPrefix = "Background terminal result · ";
+  const forkSelectionKeys = ["chat.provider", "chat.cliModels", "chat.reasoningEffort", "chat.providerRuntimeMode"];
+  function publishSessionFork(parentId: string, branch: NonNullable<ReturnType<SessionService["fork"]>>, userId: string): void {
+    try {
+      sessionStateService?.set(branch.id, sessionStateService.get(parentId, forkSelectionKeys));
+      audit?.write({
+        sessionId: branch.id, actionId: randomUUID(), actionType: "session.fork", status: "executed", consentMethod: "auto",
+      });
+      if (branch.projectId) projectService?.touch(branch.projectId);
+    } catch (error) {
+      app.log.warn({ error, sessionId: branch.id }, "Failed to initialize fork settings or audit");
+    }
+    ws?.broadcastToUser(userId, {
+      type: "chat.created", sessionId: "", timestamp: branch.createdAt,
+      payload: { projectId: branch.projectId ?? null, session: branch },
+    });
+  }
+
+  function forkLoopBackgroundCommands(sessionId: string, userId: string): void {
+    backgroundCommandMonitor.delegateExecutions(sessionId, ({ terminalId, executionId }) => {
+      try {
+        const branch = sessionService?.fork(sessionId, {
+          userId, purpose: { kind: "background-command", terminalId, executionId },
+        });
+        if (!branch) return;
+        const branchWaitKey = `background-fork:${branch.id}`;
+        const parentWaitKey = `background-execution:${executionId}`;
+        const reference = `terminal ${terminalId}, execution ${executionId}`;
+        persistMessage(branch.id, "system", `Watching ${reference} from parent chat ${sessionId}.`);
+        sessionWaits.raise({ kind: "background", key: branchWaitKey, sessionId: branch.id, detail: reference });
+        sessionWaits.raise({ kind: "background", key: parentWaitKey, sessionId, blocking: false, detail: `Watched in chat ${branch.id} (${reference})` });
+        const wait = sessionWaits.get(backgroundWaitKey(terminalId));
+        if (wait?.sessionId === sessionId) sessionWaits.clear(wait.key);
+        publishSessionFork(sessionId, branch, userId);
+        return (result) => {
+          sessionWaits.clear(branchWaitKey);
+          sessionWaits.clear(parentWaitKey);
+          try {
+            const status = result ? formatBackgroundCommandNotice(result) : "Background terminal cancelled or its watcher closed";
+            const receipt = `${loopTerminalReceiptPrefix}${status} · ${reference} · chat ${branch.id}.`;
+            if (sessionService?.getById(sessionId, userId)?.status === "active") {
+              persistMessage(sessionId, "system", receipt);
+              wakeLoop(sessionId);
+            }
+            if (sessionService?.getById(branch.id, userId)?.status !== "active") return;
+            persistMessage(branch.id, "system", `${status} · ${reference}.`);
+            if (result) void deliverCommandCompletion({ ...result, sessionId: branch.id, reportOnly: true }).catch(error => {
+              app.log.error({ error, executionId }, "Failed to deliver background fork result");
+            });
+          } catch (error) {
+            app.log.error({ error, executionId }, "Failed to record background fork result");
+          }
+        };
+      } catch (error) {
+        app.log.error({ error, sessionId, terminalId }, "Failed to fork loop background execution");
+      }
+    });
+  }
+
+  function loopTerminalContext(sessionId: string): string {
+    const active = sessionWaits.list(sessionId).filter(wait => wait.kind === "background" && !wait.blocking);
+    const recent = db?.select({ content: messagesTable.content }).from(messagesTable).where(and(
+      eq(messagesTable.sessionId, sessionId), eq(messagesTable.role, "system"),
+      like(messagesTable.content, `${loopTerminalReceiptPrefix}%`),
+    )).orderBy(desc(messagesTable.createdAt)).limit(8).all() ?? [];
+    if (!active.length && !recent.length) return "";
+    return [
+      "Background executions for this loop. Continue with independent work, keep the running command's inputs stable, and verify results against the revision actually tested. Use terminal.execution with the recorded terminal and execution IDs for evidence. Do not restart an execution that is already running.",
+      ...active.map(wait => wait.detail ?? wait.label), ...recent.map(row => row.content),
+    ].join("\n");
+  }
+
   const dispatchLoop = async (sessionId: string): Promise<void> => {
     if (loopsClosed || !chatLoops || !sessionService || !userService || activeStreams.has(sessionId) || drainingQueuedSessions.has(sessionId) || loopDispatches.has(sessionId)) return;
     const session = sessionService.getById(sessionId);
     let loop = chatLoops.get(sessionId);
     if (!session?.userId || session.status !== "active" || loop?.status !== "running") return;
+    forkLoopBackgroundCommands(sessionId, session.userId);
+    if (loop.waitForExecution && backgroundCommandMonitor.inspectExecution(
+      sessionId, loop.waitForExecution.terminalId, loop.waitForExecution.executionId,
+    )?.status === "running") return;
     if ((loop.continuation?.waitUntil ?? 0) > Date.now()) { wakeLoop(sessionId); return; }
     if (sessionWaits.list(sessionId).some(wait => wait.blocking)) return;
     const queue = parseQueuedChatMessages(sessionStateService?.get(sessionId, ["queued_messages"])["queued_messages"]);
@@ -2845,7 +2923,7 @@ export function registerChatRoutes(
       if (loopsClosed || chatLoops.get(sessionId)?.revision !== loop.revision) return;
       const continuation = buildBackgroundCommandContinuationPayload({
         sessionId, userId: user.id, userService, sessionState: sessionStateService, sessionMetadata: session.metadata,
-        notification: [chatLoopInstructions(loop), `Next message to yourself: ${JSON.stringify(loop.nextMessage || "Begin working towards the goal. Check existing work first.")}`].join("\n\n"),
+        notification: [chatLoopInstructions(loop), loopTerminalContext(sessionId), `Next message to yourself: ${JSON.stringify(loop.nextMessage || "Begin working towards the goal. Check existing work first.")}`].filter(Boolean).join("\n\n"),
       });
       // Never merge the persisted turn options into a continuation: they carry the
       // provider/model of a previous turn (possibly from another chat), which would
@@ -3296,14 +3374,16 @@ export function registerChatRoutes(
   // When a background terminal command (e.g. a test run) finishes, steer the
   // running turn if one is active; otherwise start a hidden system-notification
   // turn so the idle agent wakes up and reacts to the result.
-  const pendingCommandCompletions = new Map<string, BackgroundCommandResult[]>();
-  const queueCommandCompletion = (result: BackgroundCommandResult): void => {
+  type CommandCompletion = BackgroundCommandResult & { reportOnly?: boolean };
+  const pendingCommandCompletions = new Map<string, CommandCompletion[]>();
+  const queueCommandCompletion = (result: CommandCompletion): void => {
     const pending = pendingCommandCompletions.get(result.sessionId) ?? [];
     pending.push(result);
     pendingCommandCompletions.set(result.sessionId, pending);
   };
-  const deliverCommandCompletion = async (result: BackgroundCommandResult): Promise<void> => {
-    const note = formatBackgroundCommandNotification(result);
+  const deliverCommandCompletion = async (result: CommandCompletion): Promise<void> => {
+    const { reportOnly } = result;
+    const note = formatBackgroundCommandNotification(result, reportOnly);
     // Every `return` below drops the notification for good, and the agent has
     // already told the user it would report back — so say why in the log.
     const drop = (reason: string): void => {
@@ -3314,8 +3394,8 @@ export function registerChatRoutes(
     };
 
     try {
-      const steer = await interventionRunResumeRegistry.resumeChatSession(result.sessionId, note, { hidden: true });
-      if (steer.status === "steered") return;
+      const steer = reportOnly ? undefined : await interventionRunResumeRegistry.resumeChatSession(result.sessionId, note, { hidden: true });
+      if (steer?.status === "steered") return;
     } catch {
       /* fall through to the thread/idle path */
     }
@@ -3324,8 +3404,8 @@ export function registerChatRoutes(
       // Background commands started from ACP/CLI provider threads (e.g. Claude Code)
       // carry the threadId as sessionId, not a native chat session ID — resumeChatSession
       // above can't find those, so also check the thread resume registry.
-      const threadResume = await interventionRunResumeRegistry.resumeThread(result.sessionId, note);
-      if (threadResume.status === "queued") return;
+      const threadResume = reportOnly ? undefined : await interventionRunResumeRegistry.resumeThread(result.sessionId, note);
+      if (threadResume?.status === "queued") return;
     } catch {
       /* fall through to the idle path */
     }
@@ -3347,15 +3427,15 @@ export function registerChatRoutes(
         method: "POST",
         url: "/api/chat",
         headers: getInternalChatRequestHeaders(config, token),
-        payload: buildBackgroundCommandContinuationPayload({
+        payload: { ...buildBackgroundCommandContinuationPayload({
           sessionId: result.sessionId,
           notification: note,
-          notice: formatBackgroundCommandNotice(result),
+          notice: reportOnly ? undefined : formatBackgroundCommandNotice(result),
           userId: user.id,
           userService,
           sessionState: sessionStateService,
           sessionMetadata: session.metadata,
-        }),
+        }), ...(reportOnly ? { mode: "ask", runtimeMode: "supervised" } : {}) },
       });
       if (response.statusCode >= 400) {
         drop(`continuation request failed with HTTP ${response.statusCode}`);
@@ -3912,7 +3992,7 @@ export function registerChatRoutes(
         if (teamProfile.requiresApproval) requestRuntimeMode = "supervised";
         requestBodyModel = teamProfile.model?.trim() ?? "";
       }
-      isQuestionBranch = isQuestionBranchMetadata(session.metadata);
+      isQuestionBranch = readChatBranchKind(session.metadata) === "question";
       if (isQuestionBranch) chatMode = "ask";
     }
 
@@ -6291,32 +6371,19 @@ export function registerChatRoutes(
           persona: accumulator.persona ? JSON.stringify(accumulator.persona) : undefined,
         }
       : undefined;
+    const { kind } = request.query as { kind?: string };
+    if (kind !== undefined && kind !== "manual") {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Unknown fork kind" });
+    }
     const branch = sessionService.fork(sessionId, {
       userId: authUser.id,
+      ...(kind === "manual" ? { purpose: { kind: "manual" } } : {}),
       ...(liveSnapshot ? { liveSnapshot } : {}),
     });
     if (!branch) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
-
-    try {
-      audit?.write({
-        sessionId: branch.id,
-        actionId: randomUUID(),
-        actionType: "session.fork",
-        status: "executed",
-        consentMethod: "auto",
-      });
-      if (branch.projectId) projectService?.touch(branch.projectId);
-    } catch {
-      // The branch itself is already durable; audit/project timestamps are best effort.
-    }
-    ws?.broadcastToUser(authUser.id, {
-      type: "chat.created",
-      sessionId: "",
-      timestamp: new Date().toISOString(),
-      payload: { projectId: branch.projectId ?? null, session: branch },
-    });
+    publishSessionFork(sessionId, branch, authUser.id);
     return reply.status(201).send(branch);
   });
 

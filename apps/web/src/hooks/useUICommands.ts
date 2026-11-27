@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import {
   UICommandType,
   UICommandPayload,
@@ -15,6 +15,9 @@ import {
   SessionStreamingSnapshotData,
   TerminalExecutionPayload,
   NODE_PROTOCOL_VERSION,
+  isAllowedDeviceName,
+  normalizeDeviceName,
+  type DeviceRegistrationResult,
 } from '@jait/shared'
 import { desktopOperationError } from '@/lib/desktop-operation-error'
 import { desktopComputerControlAvailable, desktopScreenShareControlAvailable } from '@/lib/desktop-computer-capabilities'
@@ -69,15 +72,31 @@ const DESKTOP_SHARE_CONTROL_TOOLS = ['computer.geometry', 'computer.share.captur
 
 // ── Device / platform helpers ───────────────────────────────────────
 
-function getDeviceName(): string {
-  const platform = detectPlatform()
-  const ua = navigator.userAgent
-  if (platform === 'desktop') return `Desktop (${navigator.platform})`
-  if (platform === 'capacitor') return 'Mobile'
-  if (ua.includes('Chrome')) return `Chrome (${navigator.platform})`
-  if (ua.includes('Firefox')) return `Firefox (${navigator.platform})`
-  if (ua.includes('Safari')) return `Safari (${navigator.platform})`
-  return `Browser (${navigator.platform})`
+const DEVICE_NAME_SETTING = 'jait-device-name'
+
+async function loadDeviceName(): Promise<string | null> {
+  const desktop = window.jaitDesktop
+  const stored = detectPlatform() === 'desktop' && desktop
+    ? await desktop.getSetting(DEVICE_NAME_SETTING, null)
+    : localStorage.getItem(DEVICE_NAME_SETTING)
+  if (typeof stored !== 'string') return null
+  const name = normalizeDeviceName(stored)
+  return isAllowedDeviceName(name) ? name : null
+}
+
+async function saveDeviceName(name: string): Promise<void> {
+  const desktop = window.jaitDesktop
+  if (detectPlatform() === 'desktop' && desktop) {
+    await desktop.setSetting(DEVICE_NAME_SETTING, name)
+  } else {
+    localStorage.setItem(DEVICE_NAME_SETTING, name)
+  }
+}
+
+const deviceRegistrationErrors = {
+  INVALID_DEVICE_NAME: 'Choose a distinctive name for this device.',
+  DEVICE_NAME_TAKEN: 'Another device already uses that name. Choose a different name.',
+  DEVICE_REGISTRATION_FAILED: 'The gateway couldn’t save the device name. Try again.',
 }
 
 export function resolveFsNodePlatform(
@@ -344,11 +363,13 @@ export function useUICommands(opts: UseUICommandsOptions) {
   }, [])
 
   // Handle incoming messages — extracted so it's stable across reconnects
-  const handleMessage = useCallback((event: MessageEvent) => {
+  const handleMessage = useCallback((event: MessageEvent, onDeviceRegistration: (result: DeviceRegistrationResult) => void) => {
     try {
       const msg = JSON.parse(event.data) as { type: string; sessionId?: unknown; payload: unknown }
 
-      if (msg.type === 'ui.command') {
+      if (msg.type === 'node.registration') {
+        onDeviceRegistration(msg.payload as DeviceRegistrationResult)
+      } else if (msg.type === 'ui.command') {
         const payload = msg.payload as UICommandPayload
         const handler = listenersRef.current[payload.command as keyof Listeners]
         if (handler) {
@@ -752,6 +773,38 @@ export function useUICommands(opts: UseUICommandsOptions) {
     }
   }, [])
 
+  const deviceNameRef = useRef<string | null>(null)
+  const confirmedDeviceNameRef = useRef<string | null>(null)
+  const registerDeviceRef = useRef<(() => void) | null>(null)
+  const [deviceNameSetup, setDeviceNameSetup] = useState<{ pending?: boolean; error?: string }>()
+
+  useEffect(() => {
+    if (!canActAsFsNode()) return
+    let active = true
+    void loadDeviceName().catch(() => null).then((name) => {
+      if (!active) return
+      deviceNameRef.current = name
+      confirmedDeviceNameRef.current = name
+      if (name) registerDeviceRef.current?.()
+      else setDeviceNameSetup({})
+    })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    if (!deviceNameSetup?.pending) return
+    const timer = setTimeout(() => {
+      setDeviceNameSetup({ error: 'The gateway hasn’t confirmed the name. Try again.' })
+    }, 15_000)
+    return () => clearTimeout(timer)
+  }, [deviceNameSetup])
+
+  const submitDeviceName = (name: string) => {
+    deviceNameRef.current = name
+    setDeviceNameSetup({ pending: true })
+    registerDeviceRef.current?.()
+  }
+
   // ── Single, stable WS connection — only depends on token ──────────
   // Session changes are handled by re-subscribing, NOT by reconnecting.
   useEffect(() => {
@@ -778,6 +831,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       if (detectPlatform() === 'desktop') void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
       ws.close()
       wsRef.current = null
+      registerDeviceRef.current = null
       currentSessionRef.current = null
     }
 
@@ -845,73 +899,108 @@ export function useUICommands(opts: UseUICommandsOptions) {
         // Subscribe to current session only after pending state is authoritative.
         const sid = sessionIdRef.current
         if (sid) subscribeToSession(ws, sid)
-        // Register as a filesystem node if this client can browse files locally
         if (canActAsFsNode()) {
-          // Ensure device ID is initialised from persistent storage
-          void initDeviceId().then(async (deviceId) => {
-            // Detect locally installed CLI providers and whether the desktop's
-            // own CLI authentication is ready for remote execution.
-            let providerStatuses: Array<{ id: string; installed: boolean; authenticated: boolean | null; detail?: string }> = []
-            if (detectPlatform() === 'desktop' && window.jaitDesktop?.detectProviders) {
-              try {
-                const detectedProviders = await window.jaitDesktop.detectProviders()
-                providerStatuses = detectedProviders.map((provider) => (
-                  typeof provider === 'string'
-                    ? { id: provider, installed: true, authenticated: null }
-                    : provider
-                ))
-              } catch { /* */ }
-            }
-            const providers = providerStatuses
-              .filter((provider) => provider.installed && provider.authenticated !== false)
-              .map((provider) => provider.id)
-            const computerControl = detectPlatform() === 'desktop' && await desktopComputerControlAvailable(window.jaitDesktop)
-            const shareControl = computerControl && await desktopScreenShareControlAvailable(window.jaitDesktop)
-            const nodeMsg = JSON.stringify({
-              type: 'node.hello',
-              payload: {
-                id: deviceId,
-                name: getDeviceName(),
-                platform: detectFsNodePlatform(),
-                role: detectPlatform() === 'desktop' ? 'desktop' : 'mobile',
-                protocolVersion: NODE_PROTOCOL_VERSION,
-                capabilities: {
-                  providers,
-                  surfaces: ['filesystem', 'terminal', ...(computerControl ? ['computer'] : [])],
-                  tools: [...DESKTOP_NODE_TOOLS, ...(computerControl ? DESKTOP_COMPUTER_TOOLS : []), ...(shareControl ? DESKTOP_SHARE_CONTROL_TOOLS : [])],
-                  screenShare: true,
-                  voice: false,
-                  preview: false,
-                  // Only claim interactive-terminal RPC support when the desktop
-                  // bridge actually exposes terminalOp. Older builds register the
-                  // "terminal" surface (subscribe/output) but never answer
-                  // terminal.op-request, which would otherwise hang the gateway.
-                  interactiveTerminal: detectPlatform() === 'desktop' && !!window.jaitDesktop?.terminalOp,
-                },
-              },
-            })
-            if (ws.readyState === WebSocket.OPEN) ws.send(nodeMsg)
-            const fsNodeMsg = JSON.stringify({
-              type: 'fs.register-node',
-              payload: {
-                id: deviceId,
-                name: getDeviceName(),
-                platform: detectFsNodePlatform(),
-                providers,
-                providerStatuses,
-              },
-            })
-            if (ws.readyState === WebSocket.OPEN) ws.send(fsNodeMsg)
-          })
+          registerDeviceRef.current = () => {
+            const name = deviceNameRef.current
+            if (name) void registerDevice(name)
+          }
+          registerDeviceRef.current()
         }
       }
 
-      ws.onmessage = handleMessage
+      let registration: { id: string; name: string } | undefined
+      async function registerDevice(name: string) {
+        try {
+          const deviceId = await initDeviceId()
+          // Detect locally installed CLI providers and whether the desktop's
+          // own CLI authentication is ready for remote execution.
+          let providerStatuses: Array<{ id: string; installed: boolean; authenticated: boolean | null; detail?: string }> = []
+          if (detectPlatform() === 'desktop' && window.jaitDesktop?.detectProviders) {
+            try {
+              const detectedProviders = await window.jaitDesktop.detectProviders()
+              providerStatuses = detectedProviders.map((provider) => (
+                typeof provider === 'string'
+                  ? { id: provider, installed: true, authenticated: null }
+                  : provider
+              ))
+            } catch { /* */ }
+          }
+          const providers = providerStatuses
+            .filter((provider) => provider.installed && provider.authenticated !== false)
+            .map((provider) => provider.id)
+          const computerControl = detectPlatform() === 'desktop' && await desktopComputerControlAvailable(window.jaitDesktop)
+          const shareControl = computerControl && await desktopScreenShareControlAvailable(window.jaitDesktop)
+          if (wsRef.current !== ws || ws.readyState !== WebSocket.OPEN || name !== deviceNameRef.current) return
+          registration = { id: deviceId, name }
+          const nodeMsg = JSON.stringify({
+            type: 'node.hello',
+            payload: {
+              id: deviceId,
+              name,
+              platform: detectFsNodePlatform(),
+              role: detectPlatform() === 'desktop' ? 'desktop' : 'mobile',
+              protocolVersion: NODE_PROTOCOL_VERSION,
+              capabilities: {
+                providers,
+                surfaces: ['filesystem', 'terminal', ...(computerControl ? ['computer'] : [])],
+                tools: [...DESKTOP_NODE_TOOLS, ...(computerControl ? DESKTOP_COMPUTER_TOOLS : []), ...(shareControl ? DESKTOP_SHARE_CONTROL_TOOLS : [])],
+                screenShare: true,
+                voice: false,
+                preview: false,
+                // Only claim interactive-terminal RPC support when the desktop
+                // bridge actually exposes terminalOp. Older builds register the
+                // "terminal" surface (subscribe/output) but never answer
+                // terminal.op-request, which would otherwise hang the gateway.
+                interactiveTerminal: detectPlatform() === 'desktop' && !!window.jaitDesktop?.terminalOp,
+              },
+            },
+          })
+          ws.send(nodeMsg)
+          const fsNodeMsg = JSON.stringify({
+            type: 'fs.register-node',
+            payload: {
+              id: deviceId,
+              name,
+              platform: detectFsNodePlatform(),
+              providers,
+              providerStatuses,
+              confirmRegistration: true,
+            },
+          })
+          ws.send(fsNodeMsg)
+        } catch {
+          if (wsRef.current === ws && name === deviceNameRef.current) {
+            setDeviceNameSetup({ error: 'Jait couldn’t register this device. Try again.' })
+          }
+        }
+      }
+
+      ws.onmessage = (event) => handleMessage(event, (result) => {
+        if (!registration || wsRef.current !== ws || result?.id !== registration.id
+          || result.name !== registration.name || result.name !== deviceNameRef.current) return
+        registration = undefined
+        if (!result.ok) {
+          deviceNameRef.current = null
+          confirmedDeviceNameRef.current = null
+          setDeviceNameSetup({ error: deviceRegistrationErrors[result.code] })
+        } else if (confirmedDeviceNameRef.current !== result.name) {
+          void saveDeviceName(result.name).then(() => {
+            if (deviceNameRef.current !== result.name) return
+            confirmedDeviceNameRef.current = result.name
+            setDeviceNameSetup(undefined)
+          }).catch(() => {
+            if (deviceNameRef.current === result.name) {
+              setDeviceNameSetup({ error: 'Jait couldn’t save the name on this device. Try again.' })
+            }
+          })
+        }
+      })
 
       ws.onclose = () => {
         // A remote controller must re-authorize after the node link drops.
         if (detectPlatform() === 'desktop') void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
         wsRef.current = null
+        registerDeviceRef.current = null
         currentSessionRef.current = null
         onConnectionStateChangeRef.current?.({ connected: false, reconnected: false })
         // Auto-reconnect after 1s
@@ -1094,5 +1183,5 @@ export function useUICommands(opts: UseUICommandsOptions) {
     }
   }, [])
 
-  return { sendUIState, sendArchitectureRenderResult }
+  return { sendUIState, sendArchitectureRenderResult, deviceNameSetup, submitDeviceName }
 }

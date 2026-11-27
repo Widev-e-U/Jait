@@ -16,6 +16,19 @@ const sessions = (prefix: string, projectId: string | null): ProjectSession[] =>
   metadata: null,
 }))
 
+const fixtureOptions = new URLSearchParams(window.location.search)
+
+function fork(parent: ProjectSession, id: string, kind: 'manual' | 'background-command'): ProjectSession {
+  const label = kind === 'manual' ? 'Fork' : 'Background terminal'
+  return {
+    ...parent,
+    id,
+    name: `${label} · ${parent.name}`,
+    lastActiveAt: new Date().toISOString(),
+    metadata: JSON.stringify({ branch: { kind, parentSessionId: parent.id } }),
+  }
+}
+
 const personalSessions = sessions('Personal chat', null)
 
 const project = (name: number | string, lastActiveAt: string): ProjectRecord => ({
@@ -37,6 +50,19 @@ const project = (name: number | string, lastActiveAt: string): ProjectRecord => 
 
 // Project 1 is the most recently active, project 12 the least.
 const gatewayProjects = Array.from({ length: 12 }, (_, index) => project(index + 1, new Date(Date.UTC(2026, 5, 30 - index)).toISOString()))
+
+if (fixtureOptions.has('forks')) {
+  const personalParent = personalSessions.find((session) => session.id === 'Personal chat-3')!
+  personalParent.name = 'Release notes'
+  personalSessions.push(fork(personalParent, 'manual-fork', 'manual'))
+
+  const projectSessions = gatewayProjects[0]!.sessions
+  const projectParent = projectSessions.find((session) => session.id === 'Project chat-3')!
+  projectParent.name = 'Rust migration'
+  const watcher = fork(projectParent, 'terminal-fork', 'background-command')
+  projectSessions.push(watcher, { ...fork(watcher, 'watcher-fork', 'manual'), name: 'Build review' })
+}
+
 
 // Stands in for the gateway: `GET /api/projects?limit=N` returns the N most
 // recently active projects, newest first, and whether older ones remain.
@@ -72,7 +98,9 @@ function Harness() {
           loading={state.loading}
           hasMoreProjects={state.hasMoreProjects}
           showFewerProjects={state.projects.length > state.projectListLimit}
-          isMobile={new URLSearchParams(window.location.search).has('touch')}
+          isMobile={fixtureOptions.has('touch')}
+          onSelectProjectSession={state.switchSession}
+          onSelectPersonalSession={(sessionId) => state.switchSession(null, sessionId)}
           onSelectProject={() => {}}
           onCreateProject={() => {}}
           onRemoveProject={() => {}}

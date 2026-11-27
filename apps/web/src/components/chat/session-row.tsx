@@ -1,5 +1,6 @@
 import {
   CircleQuestionMark,
+  CornerDownRight,
   Infinity as InfinityIcon,
   Loader2,
   MessageSquare,
@@ -34,6 +35,7 @@ export { isSessionUnread } from '@jait/shared'
 
 export interface SessionRowProps {
   session: SessionRowSession
+  branchDepth?: number
   isActive: boolean
   isStreaming?: boolean
   isWaitingForApproval?: boolean
@@ -103,6 +105,7 @@ function SessionWaitIcon({ wait, Icon }: { wait: SessionWait; Icon: LucideIcon }
  */
 export function SessionRow({
   session,
+  branchDepth = 0,
   isActive,
   isStreaming = false,
   isWaitingForApproval = false,
@@ -124,13 +127,20 @@ export function SessionRow({
     <div
       className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${
         isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
-      }`}
+      }${branchDepth > 0 ? ' relative' : ''}`}
       onClick={onRowClick}
       onContextMenu={onRowContextMenu}
       data-dnd-key={dndKey}
       {...dragProps}
+      style={branchDepth ? { ...dragProps?.style, marginInlineStart: `${Math.min(branchDepth, 4) * 0.75}rem` } : dragProps?.style}
       {...longPressProps}
     >
+      {branchDepth > 0 && (
+        <>
+          <CornerDownRight aria-hidden="true" className="pointer-events-none absolute -start-3 size-3 text-muted-foreground rtl:-scale-x-100" />
+          <span className="sr-only">Subchat</span>
+        </>
+      )}
       {dragHandle}
       {wait && waitIcon ? (
         <SessionWaitIcon wait={wait} Icon={waitIcon} />

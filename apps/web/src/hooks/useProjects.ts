@@ -637,15 +637,15 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     }
   }, [activeProjectId, onLoginRequired, persistSelection, token])
 
-  const forkSession = useCallback(async (sourceSessionId: string) => {
+  const forkSession = useCallback(async (sourceSessionId: string, kind?: 'manual') => {
     if (!token) {
       onLoginRequired?.()
       return null
     }
     try {
-      const response = await fetch(`${API_URL}/api/sessions/${sourceSessionId}/fork`, {
+      const response = await fetch(`${API_URL}/api/sessions/${sourceSessionId}/fork${kind ? '?kind=manual' : ''}`, {
         method: 'POST',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        headers: authHeaders(token),
       })
       if (response.status === 401) {
         onLoginRequired?.()

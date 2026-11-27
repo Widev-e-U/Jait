@@ -1,4 +1,4 @@
-import { Bug, CheckCircle2, ExternalLink, MessageSquarePlus, PanelRightOpen } from 'lucide-react'
+import { Bug, CheckCircle2, ExternalLink, GitFork, MessageSquarePlus, PanelRightOpen } from 'lucide-react'
 
 import { ManagerRepoPicker } from '@/components/manager/manager-thread-ui'
 import { SendTargetSelector, type SendTarget } from '@/components/chat/send-target-selector'
@@ -28,6 +28,7 @@ interface DeveloperComposerControlRowProps {
   onClearApproveAll: () => void
   onSendTargetChange: (target: SendTarget) => void
   onStartNewChat: () => void
+  onForkCurrentChat?: () => void
   onStartNewChatInTab?: () => void
   onStartNewChatInWindow?: () => void
   onSelectRepo: (repoId: string) => void
@@ -52,6 +53,7 @@ export function DeveloperComposerControlRow({
   onClearApproveAll,
   onSendTargetChange,
   onStartNewChat,
+  onForkCurrentChat,
   onStartNewChatInTab,
   onStartNewChatInWindow,
   onSelectRepo,
@@ -142,14 +144,22 @@ export function DeveloperComposerControlRow({
                     <MessageSquarePlus className="h-3.5 w-3.5" />
                     Open here
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={onStartNewChatInTab} className="gap-2 text-xs" disabled={!onStartNewChatInTab}>
-                    <PanelRightOpen className="h-3.5 w-3.5" />
-                    Open in new tab
+                  <DropdownMenuItem onSelect={onForkCurrentChat} className="gap-2 text-xs" disabled={!onForkCurrentChat}>
+                    <GitFork className="h-3.5 w-3.5" />
+                    Fork current chat
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={onStartNewChatInWindow} className="gap-2 text-xs" disabled={!onStartNewChatInWindow}>
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    Open in new window
-                  </DropdownMenuItem>
+                  {onStartNewChatInTab && (
+                    <DropdownMenuItem onSelect={onStartNewChatInTab} className="gap-2 text-xs">
+                      <PanelRightOpen className="h-3.5 w-3.5" />
+                      Open in new tab
+                    </DropdownMenuItem>
+                  )}
+                  {onStartNewChatInWindow && (
+                    <DropdownMenuItem onSelect={onStartNewChatInWindow} className="gap-2 text-xs">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Open in new window
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

@@ -97,5 +97,24 @@ for (const width of [390, 1280]) {
       await expect(page.getByRole('dialog', { name: 'Choose a project' })).toBeVisible()
       await expect(personal).toHaveAttribute('aria-pressed', 'true')
     }
+    await page.keyboard.press('Escape')
+    const newChat = page.getByRole('button', { name: 'New chat', exact: true }).first()
+    await newChat.click()
+    const menu = page.getByRole('menu')
+    const fork = menu.getByRole('menuitem', { name: 'Fork current chat' })
+    await expect(fork).toBeEnabled()
+    await expect(menu.getByRole('menuitem', { name: 'Open in new tab' })).toHaveCount(width === 1280 ? 1 : 0)
+    await expect(menu.getByRole('menuitem', { name: 'Open in new window' })).toHaveCount(0)
+    await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/', `new-chat-fork-menu-${width}.png`) })
+    const forkResponse = page.waitForResponse(response => response.url().includes(`/api/sessions/${session.id}/fork?kind=manual`))
+    const selection = page.waitForRequest(req => req.url().endsWith('/api/projects/select') && req.method() === 'POST')
+    await fork.click()
+    const response = await forkResponse
+    expect(response.status(), await response.text()).toBe(201)
+    const branch = await response.json() as { id: string; metadata: string }
+    expect(branch.id).not.toBe(session.id)
+    expect(JSON.parse(branch.metadata).branch).toMatchObject({ kind: 'manual', parentSessionId: session.id })
+    expect((await selection).postDataJSON()).toMatchObject({ sessionId: branch.id })
+
   })
 }

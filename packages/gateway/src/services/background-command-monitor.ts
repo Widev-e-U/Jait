@@ -160,8 +160,13 @@ interface ActiveWatcher {
   terminalId: string;
   cancel: () => void;
   stop?: () => void;
-  snapshot?: () => TerminalExecutionSnapshot;
+  executionId: string;
+  snapshot: () => TerminalExecutionSnapshot;
+  onSettled?: (result: BackgroundCommandResult | null) => void;
 }
+
+type BackgroundExecutionDelegate = (execution: { terminalId: string; executionId: string }) =>
+  ActiveWatcher["onSettled"];
 
 class BackgroundCommandMonitor {
   private handler: BackgroundCompletionHandler | undefined;
@@ -212,6 +217,21 @@ class BackgroundCommandMonitor {
     return () => {
       if (this.handler === handler) this.handler = undefined;
     };
+  }
+
+  delegateExecutions(sessionId: string, create: BackgroundExecutionDelegate): void {
+    for (const entry of this.active) {
+      if (entry.sessionId === sessionId && !entry.onSettled) {
+        entry.onSettled = create({ terminalId: entry.terminalId, executionId: entry.executionId });
+      }
+    }
+  }
+
+  private settleDelegate(entry: ActiveWatcher, result: BackgroundCommandResult | null): boolean {
+    const notify = entry.onSettled;
+    if (!notify) return false;
+    queueMicrotask(() => notify(result));
+    return true;
   }
 
   /** Number of commands currently being watched (for tests/introspection). */
@@ -277,12 +297,14 @@ class BackgroundCommandMonitor {
     const entry: ActiveWatcher = {
       sessionId: options.sessionId,
       terminalId: options.terminalId,
+      executionId: options.executionId ?? options.terminalId,
       snapshot: () => ({ terminalId: options.terminalId, executionId: options.executionId ?? options.terminalId,
         status: "running", output: (options.getOutput?.() ?? "").slice(-16_000), exitCode: null,
         durationMs: Date.now() - options.startedAt }),
       cancel: () => {
         cancelled = true;
         this.active.delete(entry);
+        this.settleDelegate(entry, null);
         options.onCancel?.();
       },
     };
@@ -296,8 +318,7 @@ class BackgroundCommandMonitor {
           executionId: options.executionId ?? options.terminalId,
           status: timedOut ? "timed_out" : exitCode === 0 ? "completed" : "failed",
           exitCode, output: output.slice(-16_000), durationMs: Date.now() - options.startedAt });
-        if (options.shouldNotify?.() === false) return;
-        this.invokeHandler({
+        const result: BackgroundCommandResult = {
           sessionId: options.sessionId,
           terminalId: options.terminalId,
           command: options.command,
@@ -305,9 +326,12 @@ class BackgroundCommandMonitor {
           output,
           durationMs: Date.now() - options.startedAt,
           ...(timedOut ? { timedOut: true } : {}),
-        });
+        };
+        if (!this.settleDelegate(entry, result) && options.shouldNotify?.() !== false) this.invokeHandler(result);
       })
-      .catch(() => this.active.delete(entry));
+      .catch(() => {
+        if (this.active.delete(entry)) this.settleDelegate(entry, null);
+      });
     return true;
   }
 
@@ -334,7 +358,7 @@ class BackgroundCommandMonitor {
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
 
-    const cleanup = () => {
+    const cleanup = (result: BackgroundCommandResult | null = null) => {
       if (stopped) return;
       stopped = true;
       // Cancellation/expiry also ends in-flight output delivery.
@@ -348,7 +372,11 @@ class BackgroundCommandMonitor {
       }
       try { options.surface.removeExitListener?.(exitListener); } catch { /* surface already gone */ }
       this.active.delete(entry);
-      options.onStop?.();
+      try {
+        options.onStop?.();
+      } finally {
+        this.settleDelegate(entry, result);
+      }
     };
 
     const finish = (exitCode: number | null, timedOut = false) => {
@@ -364,10 +392,7 @@ class BackgroundCommandMonitor {
       } catch {
         // Completion bookkeeping must not prevent watcher cleanup or notification.
       }
-      cleanup();
-
-      if (options.shouldNotify?.() === false) return;
-      this.invokeHandler({
+      const result: BackgroundCommandResult = {
         sessionId: options.sessionId,
         terminalId: options.terminalId,
         command: options.command,
@@ -375,7 +400,10 @@ class BackgroundCommandMonitor {
         output,
         durationMs: Date.now() - startedAt,
         ...(timedOut ? { timedOut: true } : {}),
-      });
+      };
+      cleanup(result);
+
+      if (!entry.onSettled && options.shouldNotify?.() !== false) this.invokeHandler(result);
     };
 
     const listener = (data: string) => {
@@ -425,6 +453,7 @@ class BackgroundCommandMonitor {
       sessionId: options.sessionId,
       terminalId: options.terminalId,
       cancel: cleanup,
+      executionId: options.executionId ?? options.terminalId,
       stop: options.onCancel,
       snapshot: () => ({ terminalId: options.terminalId, executionId: options.executionId ?? options.terminalId,
         status: "running", output: extractCompletionOutput(raw, options.command, options.shell),

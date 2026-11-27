@@ -6,6 +6,7 @@ import { ScreenShareService } from "@jait/screen-share";
 import type { AppConfig } from "./config.js";
 import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
 import type { BackgroundCommandResult } from "./services/background-command-monitor.js";
+import { NodePermissionsService } from "./services/node-permissions.js";
 import { openDatabase, migrateDatabase } from "./db/index.js";
 
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
@@ -525,6 +526,60 @@ describe("WsControlPlane", () => {
   });
 
   describe("multi-device synchronization", () => {
+    it("requires a unique device name on both registration paths, including offline devices", async () => {
+      const permissions = new NodePermissionsService(db);
+      permissions.ensureNodeSeen({ id: "first-pc", name: "Desktop (Win32)", platform: "windows", role: "desktop" }, "naming-owner");
+      permissions.updatePermissions("first-pc", { terminal: true });
+      const token = await createToken("naming-owner");
+      const connect = async () => {
+        const client = openWs(port, { token });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        return client;
+      };
+      const first = await connect();
+      const second = await connect();
+      const register = async (client: typeof first, type: string, id: string, name: string) => {
+        client.ws.send(JSON.stringify({ type, payload: {
+          id, name, platform: "windows", confirmRegistration: true,
+        } }));
+        for (;;) {
+          const message = await client.collector.next();
+          if (message.type === "node.registration") return message.payload;
+        }
+      };
+
+      try {
+        expect(await register(first, "node.hello", "first-pc", "Desktop (Win32)"))
+          .toMatchObject({ ok: false, code: "INVALID_DEVICE_NAME" });
+        expect(await register(first, "fs.register-node", "first-pc", "Desktop (Win32)"))
+          .toMatchObject({ ok: false, code: "INVALID_DEVICE_NAME" });
+        expect(plane.getFsNodes().some(node => node.id === "first-pc")).toBe(false);
+
+        expect(await register(first, "fs.register-node", "first-pc", "Office PC"))
+          .toEqual({ id: "first-pc", name: "Office PC", ok: true });
+        first.ws.close();
+        await vi.waitFor(() => expect(plane.getFsNodes().some(node => node.id === "first-pc")).toBe(false));
+
+        for (const type of ["node.hello", "fs.register-node"]) {
+          expect(await register(second, type, "second-pc", "  OFFICE   pc  "))
+            .toMatchObject({ ok: false, code: "DEVICE_NAME_TAKEN" });
+        }
+        expect(plane.getFsNodes().some(node => node.id === "second-pc")).toBe(false);
+        expect(await register(second, "fs.register-node", "second-pc", "Studio PC"))
+          .toEqual({ id: "second-pc", name: "Studio PC", ok: true });
+
+        expect(await register(second, "fs.register-node", "first-pc", "Office PC"))
+          .toEqual({ id: "first-pc", name: "Office PC", ok: true });
+        second.ws.send(JSON.stringify({ type: "nodes.list" }));
+        expect((await nextNodesPermissions(second)).payload.nodes)
+          .toEqual(expect.arrayContaining([expect.objectContaining({ id: "first-pc", name: "Office PC", permissions: expect.objectContaining({ terminal: true }) })]));
+      } finally {
+        first.ws.close();
+        second.ws.close();
+      }
+    });
+
     it("relays screen-share signals only between approved session participants", async () => {
       const token = await createToken("user-screen-share");
       const screenShare = new ScreenShareService();

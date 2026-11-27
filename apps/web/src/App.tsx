@@ -82,6 +82,7 @@ import { UnreadChatCountContext, useUnreadChatCount } from '@/hooks/useUnreadCha
 import { useDesktopOpenFolder } from '@/hooks/useDesktopOpenFolder'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useBackendState } from '@/hooks/useBackendState'
+import { DeviceNameDialog } from '@/components/onboarding/DeviceNameDialog'
 import { NodePermissionsGate, shouldShowNodePermissionsGate } from '@/components/onboarding/NodePermissionsGate'
 import { FirstProjectSetup } from '@/components/onboarding/FirstProjectSetup'
 import { readFirstProjectSetupDone, saveFirstProjectSetupDone, shouldOfferFirstProjectSetup } from '@/components/onboarding/first-project-setup'
@@ -2077,7 +2078,7 @@ function App() {
   // every device agrees and a reload cannot show a stale "running".
   const agentControl = useAgentControl({ token, enabled: !!token })
 
-  const { sendUIState, sendArchitectureRenderResult } = useUICommands({
+  const { sendUIState, sendArchitectureRenderResult, deviceNameSetup, submitDeviceName } = useUICommands({
     sessionId: activeSessionId,
     token,
     onStateSync: handleStateSync,
@@ -4808,6 +4809,19 @@ function App() {
     void createSession()
   }, [createSession])
 
+  const forkInProgress = useRef(false)
+  const handleForkCurrentChat = useCallback(async () => {
+    if (!activeSessionId || forkInProgress.current) return
+    forkInProgress.current = true
+    try {
+      const branch = await forkSession(activeSessionId, 'manual')
+      if (!branch) toast.error('Failed to fork the current chat')
+      else if (activeSessionIdRef.current === activeSessionId) switchSession(branch.projectId ?? null, branch.id)
+    } finally {
+      forkInProgress.current = false
+    }
+  }, [activeSessionId, forkSession, switchSession])
+
   const handleNewChatInProject = useCallback((projectId: string) => {
     return handleSwitchProject(projectId, undefined, true, { createChat: true })
   }, [handleSwitchProject])
@@ -5133,8 +5147,9 @@ function App() {
           onClearApproveAll={handleClearApproveAll}
           onSendTargetChange={setSendTarget}
           onStartNewChat={handleStartNewChat}
-          onStartNewChatInTab={handleStartNewChatInTab}
-          onStartNewChatInWindow={handleStartNewChatInWindow}
+          onForkCurrentChat={activeSessionId ? handleForkCurrentChat : undefined}
+          onStartNewChatInTab={isMobile || isCapacitor ? undefined : handleStartNewChatInTab}
+          onStartNewChatInWindow={!isMobile && isDesktop ? handleStartNewChatInWindow : undefined}
           onSelectRepo={automation.setSelectedRepoId}
         />
       ) : null,
@@ -5159,6 +5174,10 @@ function App() {
       handleFolderPickerOpen,
       handleClearApproveAll,
       handleStartNewChat,
+      handleForkCurrentChat,
+      isCapacitor,
+      isMobile,
+      isDesktop,
       handleStartNewChatInTab,
       handleStartNewChatInWindow,
     ],
@@ -5255,11 +5274,12 @@ function App() {
     <UnreadChatCountContext.Provider value={unreadChatCount}>
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
-        {showNodePermissionsGate && <NodePermissionsGate token={token} onFirstRunComplete={() => setNodePermissionSetupReady(true)} onOpenNodeSettings={(nodeId) => {
+        {showNodePermissionsGate && deviceNameSetup && <DeviceNameDialog {...deviceNameSetup} onSubmit={submitDeviceName} />}
+        {showNodePermissionsGate && !deviceNameSetup && <NodePermissionsGate token={token} onFirstRunComplete={() => setNodePermissionSetupReady(true)} onOpenNodeSettings={(nodeId) => {
           setNodeSettingsTargetId(nodeId)
           setCurrentView('settings')
         }} />}
-        {showFirstProjectSetup && (
+        {!deviceNameSetup && showFirstProjectSetup && (
           <FirstProjectSetup
             nodes={fsNodes}
             repositories={automation.repositories}

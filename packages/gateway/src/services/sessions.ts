@@ -26,6 +26,7 @@ export interface SessionForkLiveSnapshot {
 export interface ForkSessionParams {
   userId: string;
   liveSnapshot?: SessionForkLiveSnapshot;
+  purpose?: { kind: "manual" } | { kind: "background-command"; terminalId: string; executionId: string };
 }
 
 export class SessionService {
@@ -79,18 +80,18 @@ export class SessionService {
       }
     }
     delete metadata["loop"];
+    const purpose = params.purpose ?? { kind: "question" };
     metadata["branch"] = {
-      kind: "question",
+      ...purpose,
       parentSessionId: source.id,
       forkedAt,
     };
 
-    const sourceRows = this.db
-      .select()
-      .from(messages)
-      .where(eq(messages.sessionId, source.id))
-      .orderBy(messages.createdAt, messages.id)
-      .all();
+    const sourceMessages = this.db.select().from(messages).where(eq(messages.sessionId, source.id));
+    const sourceRows = purpose.kind === "background-command"
+      ? sourceMessages.orderBy(desc(messages.createdAt), desc(messages.id)).limit(40).all().reverse()
+      : sourceMessages.orderBy(messages.createdAt, messages.id).all();
+    const prefix = purpose.kind === "background-command" ? "Background terminal" : purpose.kind === "manual" ? "Fork" : "Question";
 
     // A streaming assistant checkpoint belongs to the in-flight parent turn.
     // Replace it with the exact live accumulator captured at fork time so the
@@ -109,7 +110,7 @@ export class SessionService {
         id: branchSessionId,
         userId: params.userId,
         projectId: source.projectId,
-        name: `Question · ${source.name?.trim() || "Chat"}`,
+        name: `${prefix} · ${source.name?.trim() || "Chat"}`,
         projectPath: source.projectPath,
         createdAt: forkedAt,
         lastActiveAt: forkedAt,
@@ -124,6 +125,7 @@ export class SessionService {
           id: messageId,
           sessionId: branchSessionId,
           role: row.role,
+          authorUserId: row.authorUserId,
           content: row.content,
           toolCalls: row.toolCalls,
           segments: row.segments,

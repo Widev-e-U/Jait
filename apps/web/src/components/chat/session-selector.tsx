@@ -30,6 +30,7 @@ import { getLatestProjectSessionId, isReadOnlyChatSession } from '@/lib/project-
 import { getProjectRepository } from '@/lib/project-repositories'
 import { SessionRow, isSessionUnread } from '@/components/chat/session-row'
 import { formatAgo } from '@/lib/relative-time'
+import { sessionSidebarBranches } from '@/lib/session-sidebar-branches'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTouchSidebarDrag } from '@/hooks/useTouchSidebarDrag'
 import {
@@ -761,12 +762,12 @@ export function SessionSelector({
         .some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
     ))
   }, [displayedPersonalSessions, orderedPersonalSessions, normalizedSearchQuery, onSearch, statusFilter, streamingSessionIds, approvalSessionIds, questionSessionIds])
-  const recentPersonalSessions = normalizedSearchQuery
-    ? filteredPersonalSessions
-    : filteredPersonalSessions.slice(0, visiblePersonalSessions)
+  const { rows: recentPersonalSessions, hasOlder: hasOlderPersonalSessions } = sessionSidebarBranches(
+    filteredPersonalSessions,
+    normalizedSearchQuery ? undefined : visiblePersonalSessions,
+    normalizedSearchQuery ? undefined : manualOrder['sessions:personal'],
+  )
   sessionOrderIdsRef.current.set('sessions:personal', personalOrderIds)
-  const hasOlderPersonalSessions = !normalizedSearchQuery
-    && filteredPersonalSessions.length > recentPersonalSessions.length
 
   return (
     <div className="flex flex-col h-full">
@@ -937,10 +938,11 @@ export function SessionSelector({
                   sessionOrderIdsRef.current.set(`sessions:${project.id}`, orderedSessionIds)
                   const sortedSessions = orderedSessions.filter(matchesStatus)
                   const visibleSessionLimit = visibleSessionsByProject[project.id] ?? RECENT_SESSIONS_LIMIT
-                  const recentSessions = normalizedSearchQuery
-                    ? sortedSessions
-                    : sortedSessions.slice(0, visibleSessionLimit)
-                  const hasOlderSessions = !normalizedSearchQuery && sortedSessions.length > recentSessions.length
+                  const { rows: recentSessions, hasOlder: hasOlderSessions } = sessionSidebarBranches(
+                    sortedSessions,
+                    normalizedSearchQuery ? undefined : visibleSessionLimit,
+                    normalizedSearchQuery ? undefined : manualOrder[`sessions:${project.id}`],
+                  )
                   const projectReorderPosition = (event: React.DragEvent<HTMLDivElement>) => {
                     if (normalizedSearchQuery || !dragProjectRef.current) return null
                     const source = projects.find((item) => item.id === dragProjectRef.current)
@@ -1333,7 +1335,7 @@ export function SessionSelector({
                     </div>
                     {!isCollapsed && recentSessions.length > 0 && (
                       <div className="ml-[22px] space-y-0.5 border-l pl-1.5">
-                        {recentSessions.map((session) => {
+                        {recentSessions.map(({ session, depth }) => {
                           const isActiveSession = openSessionIds?.has(session.id) ?? (isActiveProject && session.id === activeSessionId)
                           const isStreaming = streamingSessionIds?.has(session.id) ?? false
                           touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: project.id, ids: orderedSessionIds })
@@ -1343,6 +1345,7 @@ export function SessionSelector({
                               dndKey={`session:${session.id}`}
                               dragHandle={touchHandle({ kind: 'session', id: session.id, projectId: project.id, streaming: isStreaming, label: session.name || 'chat' })}
                               session={session}
+                              branchDepth={depth}
                               isActive={isActiveSession}
                               isStreaming={isStreaming}
                               isWaitingForApproval={approvalSessionIds?.has(session.id)}
@@ -1525,7 +1528,7 @@ export function SessionSelector({
                     {view === 'chats' && normalizedSearchQuery && !searchLoading && filteredPersonalSessions.length === 0 && (
                       <p className="py-4 text-center text-xs text-muted-foreground">No matching personal chats.</p>
                     )}
-                    {recentPersonalSessions.map((session) => {
+                    {recentPersonalSessions.map(({ session, depth }) => {
                       const isActive = openSessionIds?.has(session.id) ?? (activeProjectId === null && session.id === activeSessionId)
                       const isStreaming = streamingSessionIds?.has(session.id) ?? false
                   touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: null, ids: personalOrderIds })
@@ -1535,6 +1538,7 @@ export function SessionSelector({
                       dndKey={`session:${session.id}`}
                       dragHandle={touchHandle({ kind: 'session', id: session.id, projectId: null, streaming: isStreaming, label: session.name || 'chat' })}
                       session={session}
+                      branchDepth={depth}
                       isActive={isActive}
                       isStreaming={isStreaming}
                       isWaitingForApproval={approvalSessionIds?.has(session.id)}

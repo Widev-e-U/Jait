@@ -30,6 +30,31 @@ describe("BackgroundCommandMonitor", () => {
   beforeEach(() => backgroundCommandMonitor.clearForTests());
   afterEach(() => backgroundCommandMonitor.clearForTests());
 
+  it.each(["completion", "cancellation", "timeout"] as const)("settles a delegated local execution once on %s", async (outcome) => {
+    const ordinaryHandler = vi.fn();
+    const onSettled = vi.fn();
+    const createFork = vi.fn(() => onSettled);
+    backgroundCommandMonitor.setCompletionHandler(ordinaryHandler);
+    const surface = new FakeSurface();
+    backgroundCommandMonitor.track({
+      sessionId: "s", terminalId: "t", executionId: "e", command: "npm test", surface,
+      ...(outcome === "timeout" ? { maxWatchMs: 1, onTimeout: vi.fn() } : {}),
+    });
+    backgroundCommandMonitor.delegateExecutions("another-session", createFork);
+    expect(createFork).not.toHaveBeenCalled();
+    backgroundCommandMonitor.delegateExecutions("s", createFork);
+    backgroundCommandMonitor.delegateExecutions("s", createFork);
+    expect(createFork).toHaveBeenCalledExactlyOnceWith({ terminalId: "t", executionId: "e" });
+    if (outcome === "completion") surface.emit(oscDone(7));
+    if (outcome === "cancellation") backgroundCommandMonitor.cancelExecution("s", "t", "e");
+    const result = outcome === "cancellation" ? null : expect.objectContaining(
+      outcome === "timeout" ? { timedOut: true } : { exitCode: 7 },
+    );
+    await vi.waitFor(() => expect(onSettled).toHaveBeenCalledExactlyOnceWith(result));
+    expect(ordinaryHandler).not.toHaveBeenCalled();
+    expect(backgroundCommandMonitor.activeCount).toBe(0);
+  });
+
   it("fires the handler with exit code and cleaned output when a background command finishes", async () => {
     const results: BackgroundCommandResult[] = [];
     backgroundCommandMonitor.setCompletionHandler((r) => {

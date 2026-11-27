@@ -20,7 +20,7 @@ export function describeLoop(tool: string, loop: unknown): string {
 }
 
 export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
-  type LoopInput = { goal: string; criteria: string[]; executionCriteria?: number[]; revision: number; outcome: "continue" | "complete" | "waiting"; summary: string; nextMessage?: string; evidence?: string[]; executionRefs?: Array<{ criterion: number; terminalId: string; executionId: string }> };
+  type LoopInput = { goal: string; criteria: string[]; executionCriteria?: number[]; revision: number; outcome: "continue" | "complete" | "waiting"; summary: string; nextMessage?: string; evidence?: string[]; waitForExecution?: { terminalId: string; executionId: string }; executionRefs?: Array<{ criterion: number; terminalId: string; executionId: string }> };
   const execute = (tool: string, run: (input: LoopInput, context: ToolContext) => unknown) => async (input: unknown, context: ToolContext): Promise<ToolResult> => {
     try {
       if (!context.userId || (context.threadId && context.threadId !== context.sessionId)) throw new Error("Loop tools require an authenticated chat; thread workers cannot start chat loops");
@@ -50,6 +50,9 @@ export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
       ...base, name: "loop.check", displayName: "Check loop goal",
       description: "Evaluate the active goal before ending each turn. On continuation, report concrete new progress and supporting evidence, including integrated code, a passing focused regression, or a resolved blocker even if overall completion counts are unchanged. Distinguish provider capacity failures from work blockers. Continue with a concrete next message, wait for user input, or report verified completion with one evidence entry per criterion and then hand off through user.ask. Completion alone does not stop the loop. The waiting outcome requires a pending user.ask request; the gateway can also choose a brief automatic wait between turns. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal. The gateway uses configured System One to review reported evidence, may reject completion, while review failures and repeated stalls do not pause continuation. Inspect the returned status and monitor.",
       parameters: { type: "object", properties: {
+        waitForExecution: { type: "object", description: "With outcome=continue, wait for this tracked execution to settle before the next loop turn. Use only once independent work is exhausted.", required: ["terminalId", "executionId"], properties: {
+          terminalId: { type: "string", minLength: 1, maxLength: 200 }, executionId: { type: "string", minLength: 1, maxLength: 200 },
+        } },
         executionRefs: { type: "array", maxItems: 20, description: "Optional tracked terminal executions supporting criteria; criterion is the zero-based criterion index. Completion rejects missing or unsuccessful executions. A successful exit does not establish relevance or workspace freshness.", items: { type: "object", required: ["criterion", "terminalId", "executionId"], properties: { criterion: { type: "number" }, terminalId: { type: "string" }, executionId: { type: "string" } } } },
         revision: { type: "number" }, outcome: { type: "string", enum: ["continue", "complete", "waiting"] },
         summary: { type: "string", minLength: 1, maxLength: 8000 },

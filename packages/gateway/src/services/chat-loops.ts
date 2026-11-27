@@ -9,6 +9,7 @@ import { sessionWaits } from "./session-waits.js";
 type LoopCheckInput = {
   revision: number; outcome: "continue" | "complete" | "waiting";
   summary: string; nextMessage?: string; evidence?: string[];
+  waitForExecution?: ChatLoop["waitForExecution"];
   executionRefs?: Array<{ criterion: number; terminalId: string; executionId: string }>;
 };
 const COMPLETION_NEXT_MESSAGE = "The acceptance criteria are verified. Present the result and use user.ask to ask the user for the next instruction. Do not invent additional work or stop the loop yourself.";
@@ -52,7 +53,7 @@ export class ChatLoopService {
     if (!loop) throw new Error("This chat has no loop goal");
     if (loop.status === "completed") throw new Error("Set a new goal to start another loop");
     return this.save(sessionId, { ...loop, status: action === "resume" ? "running" : "paused", checkedIteration: -1,
-      ...(action === "resume" ? { budgetStartIteration: loop.iteration, stalledChecks: 0, uncheckedTurns: 0, continuation: undefined } : {}) }, userId);
+      ...(action === "resume" ? { budgetStartIteration: loop.iteration, stalledChecks: 0, uncheckedTurns: 0, continuation: undefined, waitForExecution: undefined } : {}) }, userId);
   }
 
   /**
@@ -91,8 +92,11 @@ export class ChatLoopService {
     if (input.outcome === "complete" && (evidence.length !== loop.criteria.length || evidence.some(item => typeof item !== "string" || !item.trim()))) {
       throw new Error("Completion needs one nonblank piece of verification evidence per acceptance criterion, in order");
     }
+    if (input.waitForExecution && (input.outcome !== "continue" || !backgroundCommandMonitor.inspectExecution(
+      sessionId, input.waitForExecution.terminalId, input.waitForExecution.executionId,
+    ))) throw new Error("Waiting for an execution requires outcome=continue and a tracked execution in this chat");
     // Validate sizes before sending any data to a model or changing metadata.
-    ChatLoopSchema.parse({ ...loop, summary: input.summary, nextMessage: input.nextMessage ?? "", evidence });
+    ChatLoopSchema.parse({ ...loop, summary: input.summary, nextMessage: input.nextMessage ?? "", evidence, waitForExecution: input.waitForExecution });
     return loop;
   }
 
@@ -101,7 +105,7 @@ export class ChatLoopService {
     if (input.outcome === "complete" && (loop.executionCriteria?.length ?? 0) > 0) throw new Error("Execution criteria require monitored verification");
     return this.save(sessionId, {
       ...loop, status: input.outcome === "waiting" ? "waiting" : "running",
-      checkedIteration: loop.iteration, summary: input.summary.trim(), nextMessage: input.outcome === "complete" ? COMPLETION_NEXT_MESSAGE : input.nextMessage?.trim() ?? "", evidence: input.evidence ?? [],
+      waitForExecution: input.waitForExecution, checkedIteration: loop.iteration, summary: input.summary.trim(), nextMessage: input.outcome === "complete" ? COMPLETION_NEXT_MESSAGE : input.nextMessage?.trim() ?? "", evidence: input.evidence ?? [],
     }, userId);
   }
 
@@ -196,6 +200,7 @@ export class ChatLoopService {
     const rejected = monitor.status === "rejected";
     return this.save(sessionId, {
       ...loop, monitor, stalledChecks, executionEvidence, checkedIteration: loop.iteration,
+      waitForExecution: input.waitForExecution,
       status: "running",
       summary: input.summary.trim(), evidence: input.evidence ?? [],
       nextMessage: completionAccepted ? COMPLETION_NEXT_MESSAGE
@@ -284,6 +289,7 @@ export function chatLoopInstructions(loop: ChatLoop | null): string | undefined 
     `Loop revision: ${loop.revision}; completed turns: ${loop.iteration}.`,
     `Progress: ${JSON.stringify(loop.summary)}`,
     `Gateway monitor: ${JSON.stringify(loop.monitor ?? null)}. Stalled checkpoints and unchecked turns do not stop continuation. System One reviews reported evidence when configured and can reject completion; an unavailable review never completes the goal but does not pause a continue checkpoint.`,
+    "A tracked background terminal can run alongside independent work. If the next checkpoint depends on its result and no independent work remains, use loop.check with outcome=continue and waitForExecution set to its terminalId and executionId.",
     "Before ending this turn, discover and call loop.check. Read loop.status for the current revision first. Report failed or incomplete verification as an explicit blocker and prioritize fixing it before relying on older passes. Cite tracked terminal executions using executionRefs when available; a successful exit alone does not establish a criterion or prove the current workspace is unchanged. Report concrete new progress and its evidence on continue checks, including integrated code, focused passing tests or resolved blockers; an unchanged overall completion count does not mean no progress. Distinguish provider or capacity failures from unresolved work, and do not present a plan or repeated claim as completed progress. Check every criterion against actual evidence; use outcome=complete only after all criteria have passed, supplying one verification evidence entry per criterion. This records verified progress and keeps the loop active: present the result and ask the user what to do next with user.ask. Do not invent work beyond the authorized goal. Otherwise use outcome=continue and write the next concrete message to yourself. If a user answer is required, use user.ask; only a pending user.ask Q&A request permits outcome=waiting. A text question alone cannot stop the loop. Never pause the loop merely because you want to stop. The user controls Stop/Pause in the UI; no model-facing pause tool is exposed. Never treat missing approval as permission. Existing consent, assessment scopes, exclusions and tool limits still apply. Do not start additional agents unless the user authorized them.",
   ].join("\n");
 }

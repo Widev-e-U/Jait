@@ -1,5 +1,6 @@
 // @jait/shared — main entry point
 export * from "./chat-node.js";
+export * from "./device-name.js";
 export * from "./messenger.js";
 export * from "./agent-control.js";
 

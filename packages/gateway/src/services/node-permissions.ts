@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { consentLog, nodePermissions, nodes } from "../db/schema.js";
 import type { JaitDB } from "../db/connection.js";
-import type { NodeCapability, NodeHelloPayload } from "@jait/shared";
+import { deviceNameKey, type NodeCapability, type NodeHelloPayload } from "@jait/shared";
 
 export const NODE_CAPABILITIES: readonly NodeCapability[] = [
   "terminal",
@@ -32,67 +32,49 @@ export function isNodeCapability(value: unknown): value is NodeCapability {
 export class NodePermissionsService {
   constructor(private db: JaitDB | null) {}
 
-  /**
-   * Persist a node's identity on first-seen and backfill zero-grant rows for
-   * every capability (deny-all). On subsequent hellos only `last_seen_at` is
-   * refreshed. Safe to call on every `node.hello`.
-   */
-  ensureNodeSeen(hello: NodeHelloPayload, now = new Date().toISOString()): void {
-    if (!this.db) return;
-    const nodeId = hello.id;
-    const name = hello.name ?? null;
-    const platform = hello.platform ?? null;
-    const role = hello.role ?? "remote";
+  private memoryNames = new Map<string, { userId: string | null; name: string }>();
+
+  /** Reserve a name and persist the node identity before exposing it to clients. */
+  ensureNodeSeen(
+    hello: Pick<NodeHelloPayload, "id" | "name" | "platform" | "role">,
+    userId: string | null = null,
+    now = new Date().toISOString(),
+  ): "DEVICE_NAME_TAKEN" | "DEVICE_REGISTRATION_FAILED" | null {
+    const { id: nodeId, name, platform, role } = hello;
+    const key = deviceNameKey(name);
+    if (!this.db) {
+      for (const [id, entry] of this.memoryNames) {
+        if (id !== nodeId && entry.userId === userId && deviceNameKey(entry.name) === key) return "DEVICE_NAME_TAKEN";
+      }
+      this.memoryNames.set(nodeId, { userId, name });
+      return null;
+    }
 
     try {
-      const existing = this.db
-        .select({ nodeId: nodes.nodeId })
-        .from(nodes)
-        .where(eq(nodes.nodeId, nodeId))
-        .all();
-
-      if (existing.length === 0) {
-        this.db
-          .insert(nodes)
-          .values({
-            nodeId,
-            name,
-            platform,
-            role,
-            firstSeenAt: now,
-            lastSeenAt: now,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .run();
-
-        // Backfill deny-all rows. Insert individually so each upsert is
-        // independent; a partial failure still leaves deny-by-default intact.
-        for (const capability of NODE_CAPABILITIES) {
-          try {
-            this.db
-              .insert(nodePermissions)
-              .values({
-                nodeId,
-                capability,
-                granted: 0,
-                updatedAt: now,
-              })
-              .run();
-          } catch {
-            // Non-fatal: default (no row / 0) is deny anyway.
-          }
+      return this.db.transaction((tx) => {
+        const existing = tx.select().from(nodes).where(eq(nodes.nodeId, nodeId)).get();
+        if (existing?.userId && existing.userId !== userId) return "DEVICE_REGISTRATION_FAILED";
+        const ownedNodes = tx.select({ nodeId: nodes.nodeId, name: nodes.name }).from(nodes)
+          .where(userId === null ? isNull(nodes.userId) : eq(nodes.userId, userId)).all();
+        if (ownedNodes.some(node => node.nodeId !== nodeId && node.name && deviceNameKey(node.name) === key)) {
+          return "DEVICE_NAME_TAKEN";
         }
-      } else {
-        this.db
-          .update(nodes)
-          .set({ lastSeenAt: now, updatedAt: now })
-          .where(eq(nodes.nodeId, nodeId))
-          .run();
-      }
+        if (existing) {
+          tx.update(nodes).set({ userId, name, platform, role, lastSeenAt: now, updatedAt: now })
+            .where(eq(nodes.nodeId, nodeId)).run();
+        } else {
+          tx.insert(nodes).values({
+            nodeId, userId, name, platform, role: role ?? "remote",
+            firstSeenAt: now, lastSeenAt: now, createdAt: now, updatedAt: now,
+          }).run();
+          tx.insert(nodePermissions).values(NODE_CAPABILITIES.map(capability => ({
+            nodeId, capability, granted: 0, updatedAt: now,
+          }))).onConflictDoNothing().run();
+        }
+        return null;
+      });
     } catch {
-      // Persistence is best-effort at registration time; live registry and
-      // enforcement continue to work off the DB state when it is available.
+      return "DEVICE_REGISTRATION_FAILED";
     }
   }
 

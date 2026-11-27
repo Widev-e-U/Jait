@@ -8,7 +8,8 @@ import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
 import { ChatLoopService } from "../services/chat-loops.js";
-import { sessionWaits } from "../services/session-waits.js";
+import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
+import { backgroundWaitKey, sessionWaits } from "../services/session-waits.js";
 import { WsControlPlane } from "../ws.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { messages } from "../db/schema.js";
@@ -94,6 +95,8 @@ describe("chat loop automatic continuation", () => {
     await app.ready();
   });
   afterEach(async () => {
+    backgroundCommandMonitor.stopForSession(sessionId);
+    await Promise.resolve();
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
@@ -119,6 +122,50 @@ describe("chat loop automatic continuation", () => {
     expect(readMessages().filter(message => message.role === "user")).toHaveLength(0);
     expect(readMessages().filter(message => message.role === "assistant")).toHaveLength(3);
     expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("forks a watched execution once and resumes a dependent checkpoint when it settles", async () => {
+    const execution = { terminalId: "test-terminal", executionId: "test-execution" };
+    let finishCommand!: () => void;
+    const exitPromise = new Promise<{ exitCode: number; output: string }>(resolve => {
+      finishCommand = () => resolve({ exitCode: 0, output: "Fixture build passed" });
+    });
+    const findBranches = () => sessions.list("active", userId).filter(session => session.id !== sessionId);
+    onTurn = () => {
+      if (!JSON.stringify(calls.at(-1)).includes("Next message to yourself:")) return;
+      const loop = loops.get(sessionId)!;
+      if (loop.iteration === 0) {
+        backgroundCommandMonitor.trackExternal({ ...execution, sessionId, command: "test build", startedAt: Date.now(), exitPromise });
+        sessionWaits.raise({ key: backgroundWaitKey(execution.terminalId), kind: "background", sessionId });
+        loops.check(sessionId, { revision: loop.revision, outcome: "continue", summary: "Build running", nextMessage: "Review independent work" });
+      } else if (loop.iteration === 1) {
+        loops.check(sessionId, { revision: loop.revision, outcome: "continue", summary: "Independent work reviewed", nextMessage: "Verify build", waitForExecution: execution });
+      } else {
+        checkpointAndAsk({ revision: loop.revision, outcome: "waiting", summary: "Build received" });
+      }
+    };
+    loops.goal(sessionId, "Finish build", ["Verification"], userId);
+    await vi.waitFor(() => expect(loops.get(sessionId)?.iteration).toBe(2), { timeout: 5000 });
+    expect(calls).toHaveLength(2);
+    expect(findBranches()).toHaveLength(1);
+    const [branch] = findBranches();
+    expect(JSON.parse(branch!.metadata!)).toMatchObject({ branch: { kind: "background-command", parentSessionId: sessionId, ...execution } });
+    expect(loops.get(branch!.id)).toBeNull();
+    expect(sessionWaits.list(sessionId)).toMatchObject([{ kind: "background", blocking: false }]);
+    expect(sessionWaits.list(branch!.id)).toMatchObject([{ kind: "background", blocking: true }]);
+    await new Promise(resolve => setTimeout(resolve, 350));
+    expect(calls).toHaveLength(2);
+    finishCommand();
+    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ iteration: 3, status: "waiting" }), { timeout: 5000 });
+    const parentTurns = calls.filter(call => JSON.stringify(call).includes("Next message to yourself:"));
+    expect(parentTurns).toHaveLength(3);
+    expect(JSON.stringify(parentTurns.at(-1))).toContain("Background terminal result");
+    expect(findBranches()).toHaveLength(1);
+    expect(sessionWaits.list(branch!.id)).toEqual([]);
+    expect(readMessages()).toContainEqual(expect.objectContaining({ role: "system", content: expect.stringContaining("(exit 0)") }));
+    const forkTurns = calls.filter(call => JSON.stringify(call).includes("This fork reports the outcome"));
+    expect(forkTurns).toHaveLength(1);
+    expect(JSON.stringify(forkTurns[0])).toContain("Fixture build passed");
   });
 
   it("restores a running loop after gateway startup without an open browser", async () => {
