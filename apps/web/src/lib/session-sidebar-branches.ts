@@ -3,7 +3,7 @@ interface BranchSession {
   metadata?: string | null
 }
 
-type SessionBranchRow<T> = { session: T; depth: number }
+type SessionBranchRow<T> = { session: T; depth: number; hasChildren: boolean }
 
 function readParentId(metadata: BranchSession['metadata']): string | undefined {
   if (!metadata) return undefined
@@ -15,11 +15,23 @@ function readParentId(metadata: BranchSession['metadata']): string | undefined {
   }
 }
 
+/** Parent chats within a single project or the personal chat list. */
+export function sessionSidebarParentIds(sessions: readonly BranchSession[]): Set<string> {
+  const ids = new Set(sessions.map((session) => session.id))
+  const parents = new Set<string>()
+  for (const session of sessions) {
+    const parent = readParentId(session.metadata)
+    if (parent && parent !== session.id && ids.has(parent)) parents.add(parent)
+  }
+  return parents
+}
+
 /** Keep each parent and its visible descendants together when paging the sidebar. */
 export function sessionSidebarBranches<T extends BranchSession>(
   sessions: readonly T[],
   limit = Infinity,
   manualOrder?: readonly string[],
+  collapsedParents?: ReadonlySet<string>,
 ): { rows: SessionBranchRow<T>[]; hasOlder: boolean } {
   const indices = new Map(sessions.map((session, index) => [session.id, index]))
   const arranged = new Set(manualOrder)
@@ -41,9 +53,9 @@ export function sessionSidebarBranches<T extends BranchSession>(
   // The second pass also keeps rows reachable if older or malformed metadata forms a cycle.
   for (const root of [...roots, ...sessions]) {
     if (seen.has(root.id)) continue
-    const rows: SessionBranchRow<T>[] = []
+    const rows: Array<Omit<SessionBranchRow<T>, 'hasChildren'>> = []
     let rank = indices.get(root.id)!
-    const pending: SessionBranchRow<T>[] = [{ session: root, depth: 0 }]
+    const pending: typeof rows = [{ session: root, depth: 0 }]
     while (pending.length) {
       const row = pending.pop()!
       if (seen.has(row.session.id)) continue
@@ -57,7 +69,15 @@ export function sessionSidebarBranches<T extends BranchSession>(
         pending.push({ session: descendants[index]!, depth: row.depth + 1 })
       }
     }
-    groups.push({ rows, rank })
+    const visibleRows: SessionBranchRow<T>[] = []
+    let collapsedDepth = Infinity
+    for (const [index, row] of rows.entries()) {
+      if (row.depth > collapsedDepth) continue
+      const hasChildren = (rows[index + 1]?.depth ?? 0) > row.depth
+      visibleRows.push({ ...row, hasChildren })
+      collapsedDepth = hasChildren && collapsedParents?.has(row.session.id) ? row.depth : Infinity
+    }
+    groups.push({ rows: visibleRows, rank })
   }
 
   groups.sort((a, b) => a.rank - b.rank)

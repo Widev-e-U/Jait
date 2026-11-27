@@ -30,7 +30,7 @@ import { getLatestProjectSessionId, isReadOnlyChatSession } from '@/lib/project-
 import { getProjectRepository } from '@/lib/project-repositories'
 import { SessionRow, isSessionUnread } from '@/components/chat/session-row'
 import { formatAgo } from '@/lib/relative-time'
-import { sessionSidebarBranches } from '@/lib/session-sidebar-branches'
+import { sessionSidebarBranches, sessionSidebarParentIds } from '@/lib/session-sidebar-branches'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTouchSidebarDrag } from '@/hooks/useTouchSidebarDrag'
 import {
@@ -177,6 +177,7 @@ const SIDEBAR_HEADER_HEIGHT = 'h-[35px]'
 const SIDEBAR_HEADER_ACTION = 'rounded p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-50 disabled:hover:bg-transparent'
 
 const COLLAPSED_FOLDERS_STORAGE_KEY = 'jait.sidebar.collapsedFolders'
+const COLLAPSED_CHATS_STORAGE_KEY = 'jait.sidebar.collapsedChats'
 /** Per nesting level; deep enough to read, shallow enough for a 256px sidebar. */
 const FOLDER_INDENT_PX = 12
 /** Internal drag payload for re-parenting a folder within the sidebar. */
@@ -210,8 +211,12 @@ export function getSessionContextMenuPosition(
  * without a server round-trip.
  */
 export function readCollapsedFolders(): Set<string> {
+  return readCollapsedIds(COLLAPSED_FOLDERS_STORAGE_KEY)
+}
+
+function readCollapsedIds(storageKey: string): Set<string> {
   try {
-    const raw = window.localStorage.getItem(COLLAPSED_FOLDERS_STORAGE_KEY)
+    const raw = window.localStorage.getItem(storageKey)
     if (!raw) return new Set()
     const parsed = JSON.parse(raw) as unknown
     return Array.isArray(parsed) ? new Set(parsed.filter((id): id is string => typeof id === 'string')) : new Set()
@@ -220,9 +225,9 @@ export function readCollapsedFolders(): Set<string> {
   }
 }
 
-function writeCollapsedFolders(ids: Set<string>) {
+function writeCollapsedIds(storageKey: string, ids: Set<string>) {
   try {
-    window.localStorage.setItem(COLLAPSED_FOLDERS_STORAGE_KEY, JSON.stringify([...ids]))
+    window.localStorage.setItem(storageKey, JSON.stringify([...ids]))
   } catch {
     /* private mode / quota — the tree still works, it just won't persist */
   }
@@ -476,7 +481,16 @@ export function SessionSelector({
     [onlineNodeIds, projects]
   )
 
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => readCollapsedFolders())
+  const [collapsedFolders, setCollapsedFolders] = useState(readCollapsedFolders)
+  const [collapsedChats, setCollapsedChats] = useState(() => readCollapsedIds(COLLAPSED_CHATS_STORAGE_KEY))
+  const showChatBranchesExpanded = !!normalizedSearchQuery || statusFilter !== 'all'
+  const parentChatIds = useMemo(() => {
+    const parents = sessionSidebarParentIds(personalSessions)
+    for (const project of projects) {
+      for (const id of sessionSidebarParentIds(project.sessions)) parents.add(id)
+    }
+    return parents
+  }, [personalSessions, projects])
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null)
   // Right-click / long-press coordinates for the project menu. On desktop the
@@ -488,7 +502,7 @@ export function SessionSelector({
     [openMenuProjectId, projects]
   )
 
-  const setProjectsCollapsed = (collapsed: boolean) => {
+  const setSidebarCollapsed = (collapsed: boolean) => {
     const next = new Set<string>()
     if (collapsed) {
       for (const project of projects) {
@@ -497,7 +511,20 @@ export function SessionSelector({
       }
     }
     setCollapsedFolders(next)
-    writeCollapsedFolders(next)
+    writeCollapsedIds(COLLAPSED_FOLDERS_STORAGE_KEY, next)
+    const chats = collapsed ? parentChatIds : new Set<string>()
+    setCollapsedChats(chats)
+    writeCollapsedIds(COLLAPSED_CHATS_STORAGE_KEY, chats)
+  }
+
+  const toggleChatBranch = (sessionId: string) => {
+    setCollapsedChats((current) => {
+      const next = new Set(current)
+      if (next.has(sessionId)) next.delete(sessionId)
+      else next.add(sessionId)
+      writeCollapsedIds(COLLAPSED_CHATS_STORAGE_KEY, next)
+      return next
+    })
   }
 
   const toggleFolder = useCallback((projectId: string) => {
@@ -505,7 +532,7 @@ export function SessionSelector({
       const next = new Set(current)
       if (next.has(projectId)) next.delete(projectId)
       else next.add(projectId)
-      writeCollapsedFolders(next)
+      writeCollapsedIds(COLLAPSED_FOLDERS_STORAGE_KEY, next)
       return next
     })
   }, [])
@@ -766,6 +793,7 @@ export function SessionSelector({
     filteredPersonalSessions,
     normalizedSearchQuery ? undefined : visiblePersonalSessions,
     normalizedSearchQuery ? undefined : manualOrder['sessions:personal'],
+    showChatBranchesExpanded ? undefined : collapsedChats,
   )
   sessionOrderIdsRef.current.set('sessions:personal', personalOrderIds)
 
@@ -865,8 +893,8 @@ export function SessionSelector({
                 </span>
                 <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="Project actions">
                   {([
-                    ['Collapse projects', ChevronsDownUp, () => setProjectsCollapsed(true), !!normalizedSearchQuery || revealUnreadProjects || projects.length === 0],
-                    ['Expand projects', ChevronsUpDown, () => setProjectsCollapsed(false), !!normalizedSearchQuery || revealUnreadProjects || collapsedFolders.size === 0],
+                    ['Collapse all', ChevronsDownUp, () => setSidebarCollapsed(true), !!normalizedSearchQuery || revealUnreadProjects || (projects.length === 0 && parentChatIds.size === 0)],
+                    ['Expand all', ChevronsUpDown, () => setSidebarCollapsed(false), !!normalizedSearchQuery || revealUnreadProjects || (collapsedFolders.size === 0 && collapsedChats.size === 0)],
                     ['New project', Plus, onCreateProject, false],
                   ] as const).map(([label, Icon, onClick, disabled]) => (
                     <Tooltip key={label}>
@@ -942,6 +970,7 @@ export function SessionSelector({
                     sortedSessions,
                     normalizedSearchQuery ? undefined : visibleSessionLimit,
                     normalizedSearchQuery ? undefined : manualOrder[`sessions:${project.id}`],
+                    showChatBranchesExpanded ? undefined : collapsedChats,
                   )
                   const projectReorderPosition = (event: React.DragEvent<HTMLDivElement>) => {
                     if (normalizedSearchQuery || !dragProjectRef.current) return null
@@ -1335,7 +1364,7 @@ export function SessionSelector({
                     </div>
                     {!isCollapsed && recentSessions.length > 0 && (
                       <div className="ml-[22px] space-y-0.5 border-l pl-1.5">
-                        {recentSessions.map(({ session, depth }) => {
+                        {recentSessions.map(({ session, depth, hasChildren }) => {
                           const isActiveSession = openSessionIds?.has(session.id) ?? (isActiveProject && session.id === activeSessionId)
                           const isStreaming = streamingSessionIds?.has(session.id) ?? false
                           touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: project.id, ids: orderedSessionIds })
@@ -1346,6 +1375,8 @@ export function SessionSelector({
                               dragHandle={touchHandle({ kind: 'session', id: session.id, projectId: project.id, streaming: isStreaming, label: session.name || 'chat' })}
                               session={session}
                               branchDepth={depth}
+                              branchCollapsed={collapsedChats.has(session.id)}
+                              onToggleBranch={hasChildren && !showChatBranchesExpanded ? () => toggleChatBranch(session.id) : undefined}
                               isActive={isActiveSession}
                               isStreaming={isStreaming}
                               isWaitingForApproval={approvalSessionIds?.has(session.id)}
@@ -1528,7 +1559,7 @@ export function SessionSelector({
                     {view === 'chats' && normalizedSearchQuery && !searchLoading && filteredPersonalSessions.length === 0 && (
                       <p className="py-4 text-center text-xs text-muted-foreground">No matching personal chats.</p>
                     )}
-                    {recentPersonalSessions.map(({ session, depth }) => {
+                    {recentPersonalSessions.map(({ session, depth, hasChildren }) => {
                       const isActive = openSessionIds?.has(session.id) ?? (activeProjectId === null && session.id === activeSessionId)
                       const isStreaming = streamingSessionIds?.has(session.id) ?? false
                   touchTargetsRef.current.set(`session:${session.id}`, { kind: 'session', id: session.id, projectId: null, ids: personalOrderIds })
@@ -1539,6 +1570,8 @@ export function SessionSelector({
                       dragHandle={touchHandle({ kind: 'session', id: session.id, projectId: null, streaming: isStreaming, label: session.name || 'chat' })}
                       session={session}
                       branchDepth={depth}
+                      branchCollapsed={collapsedChats.has(session.id)}
+                      onToggleBranch={hasChildren && !showChatBranchesExpanded ? () => toggleChatBranch(session.id) : undefined}
                       isActive={isActive}
                       isStreaming={isStreaming}
                       isWaitingForApproval={approvalSessionIds?.has(session.id)}

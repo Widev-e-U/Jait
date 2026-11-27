@@ -1,4 +1,6 @@
 import {
+  ChevronDown,
+  ChevronRight,
   CircleQuestionMark,
   CornerDownRight,
   Infinity as InfinityIcon,
@@ -36,6 +38,8 @@ export { isSessionUnread } from '@jait/shared'
 export interface SessionRowProps {
   session: SessionRowSession
   branchDepth?: number
+  branchCollapsed?: boolean
+  onToggleBranch?: () => void
   isActive: boolean
   isStreaming?: boolean
   isWaitingForApproval?: boolean
@@ -106,6 +110,8 @@ function SessionWaitIcon({ wait, Icon }: { wait: SessionWait; Icon: LucideIcon }
 export function SessionRow({
   session,
   branchDepth = 0,
+  branchCollapsed = false,
+  onToggleBranch,
   isActive,
   isStreaming = false,
   isWaitingForApproval = false,
@@ -123,6 +129,42 @@ export function SessionRow({
   const loop = readChatLoop(session.metadata)
   const waitIcon = sessionWaitIcon(wait)
   const unread = isSessionUnread(session)
+  const branchToggleLabel = branchCollapsed ? 'Expand subchats' : 'Collapse subchats'
+  const statusIcon = wait && waitIcon ? (
+    <SessionWaitIcon wait={wait} Icon={waitIcon} />
+  ) : isAwaitingAnswer ? (
+    <TooltipHint content="Waiting for your answer">
+      <CircleQuestionMark
+        className="h-3.5 w-3.5 shrink-0 text-amber-500"
+        aria-label="Waiting for your answer"
+        data-testid="session-row-question"
+      />
+    </TooltipHint>
+  ) : isWaitingForApproval ? (
+    <TooltipHint content="Waiting for approval">
+      <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Waiting for approval" />
+    </TooltipHint>
+  ) : loop?.status === 'running' ? (
+    <TooltipHint content="Goal loop running">
+      <span className="relative flex size-3.5 shrink-0 items-center justify-center" role="status" aria-label="Goal loop running" data-testid="session-row-loop">
+        <span className="absolute inset-[-2px] rounded-full border border-primary/25 border-t-primary animate-spin motion-reduce:animate-none" />
+        <InfinityIcon className="size-3 text-primary" />
+      </span>
+    </TooltipHint>
+  ) : loop?.status === 'waiting' ? (
+    <CircleQuestionMark className="size-3.5 shrink-0 text-amber-500" aria-label="Loop waiting for your answer" />
+  ) : isStreaming ? (
+    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+  ) : chatError || loop?.status === 'error' ? (
+    <TooltipHint content={`Last reply failed: ${chatError?.message || loop?.summary}`}>
+      <MessageSquareX
+        className="h-3.5 w-3.5 shrink-0 text-destructive"
+        aria-label="Last reply failed"
+      />
+    </TooltipHint>
+  ) : (
+    <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+  )
   return (
     <div
       className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors select-none [-webkit-touch-callout:none] ${
@@ -141,47 +183,32 @@ export function SessionRow({
           <span className="sr-only">Subchat</span>
         </>
       )}
-      {dragHandle}
-      {wait && waitIcon ? (
-        <SessionWaitIcon wait={wait} Icon={waitIcon} />
-      ) : isAwaitingAnswer ? (
-        <TooltipHint content="Waiting for your answer">
-          <CircleQuestionMark
-            className="h-3.5 w-3.5 shrink-0 text-amber-500"
-            aria-label="Waiting for your answer"
-            data-testid="session-row-question"
-          />
-        </TooltipHint>
-      ) : isWaitingForApproval ? (
-        <TooltipHint content="Waiting for approval">
-          <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Waiting for approval" />
-        </TooltipHint>
-      ) : loop?.status === 'running' ? (
-        <TooltipHint content="Goal loop running">
-          <span className="relative flex size-3.5 shrink-0 items-center justify-center" role="status" aria-label="Goal loop running" data-testid="session-row-loop">
-            <span className="absolute inset-[-2px] rounded-full border border-primary/25 border-t-primary animate-spin motion-reduce:animate-none" />
-            <InfinityIcon className="size-3 text-primary" />
-          </span>
-        </TooltipHint>
-      ) : loop?.status === 'waiting' ? (
-        <CircleQuestionMark className="size-3.5 shrink-0 text-amber-500" aria-label="Loop waiting for your answer" />
-      ) : isStreaming ? (
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-      ) : chatError || loop?.status === 'error' ? (
-        <TooltipHint content={`Last reply failed: ${chatError?.message || loop?.summary}`}>
-          <MessageSquareX
-            className="h-3.5 w-3.5 shrink-0 text-destructive"
-            aria-label="Last reply failed"
-          />
-        </TooltipHint>
-      ) : (
-        <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-      )}
+      <div className="flex shrink-0 items-center gap-1">
+        {dragHandle}
+        {onToggleBranch ? (
+          <TooltipHint content={branchToggleLabel}>
+            <button
+              type="button"
+              aria-label={branchToggleLabel}
+              aria-expanded={!branchCollapsed}
+              className="relative flex size-3.5 !min-w-0 shrink-0 items-center justify-center rounded text-muted-foreground before:absolute before:-inset-y-2 before:-inset-x-1 hover:text-foreground"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggleBranch()
+              }}
+            >
+              {branchCollapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
+            </button>
+          </TooltipHint>
+        ) : statusIcon}
+      </div>
       <div className="min-w-0 flex-1">
         <div className={`truncate text-xs ${unread ? 'font-bold text-foreground' : 'font-normal'}`}>
           {session.name || fallbackLabel}
         </div>
       </div>
+      {onToggleBranch && statusIcon}
       <SessionChatIcon metadata={session.metadata ?? null} unread={unread} />
       <span className="shrink-0 text-2xs text-muted-foreground">
         {formatAgo(session.lastActiveAt || session.createdAt || '')}

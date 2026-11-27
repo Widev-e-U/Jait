@@ -56,8 +56,8 @@ test('project header actions collapse and expand projects with search-bar alignm
   const sidebar = page.getByRole('complementary', { name: 'Projects and chats' })
   const header = sidebar.locator('[data-dnd-key="zone:root"]')
   const search = sidebar.getByRole('searchbox').locator('..')
-  const collapse = header.getByRole('button', { name: 'Collapse projects', exact: true })
-  const expand = header.getByRole('button', { name: 'Expand projects', exact: true })
+  const collapse = header.getByRole('button', { name: 'Collapse all', exact: true })
+  const expand = header.getByRole('button', { name: 'Expand all', exact: true })
   const project = projectRow(page, 'project-1')
   const chat = sidebar.locator('[data-dnd-key="session:Project chat-1"]')
   const personalChat = sidebar.locator('[data-dnd-key="session:Personal chat-1"]')
@@ -184,7 +184,66 @@ test('forks appear below their parent in project and personal chats', async ({ p
   await expectChild('Project chat-3', 'terminal-fork')
   await expectChild('terminal-fork', 'watcher-fork')
   await expectChild('Personal chat-3', 'manual-fork')
+
+  const gripToLabel = async (row: Locator, label: string) => {
+    const grip = (await row.locator('.lucide-grip-vertical').boundingBox())!
+    const text = (await row.getByText(label, { exact: true }).boundingBox())!
+    return text.x - (grip.x + grip.width)
+  }
+  const project = projectRow(page, 'project-1')
+  const projectSpacing = await gripToLabel(project, 'Project 1')
+  for (const [id, label] of [
+    ['Project chat-3', 'Rust migration'],
+    ['terminal-fork', 'Background terminal · Rust migration'],
+    ['manual-fork', 'Fork · Release notes'],
+  ]) {
+    expect(await gripToLabel(chatRow(id), label)).toBeCloseTo(projectSpacing)
+  }
+
   await chatRow('manual-fork').click()
   await expect(chatRow('manual-fork')).toHaveClass(/bg-secondary/)
   await sidebar.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/session-sidebar-subchats.png') })
+})
+
+
+test('collapses nested subchats locally and with the sidebar controls', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 1000 })
+  await page.goto('/src/e2e-fixtures/index.html?forks=1')
+  await loadSidebar(page)
+  const sidebar = page.getByRole('complementary', { name: 'Projects and chats' })
+  const chatRow = (id: string) => sidebar.locator(`[data-dnd-key="session:${id}"]`)
+  const projectParent = chatRow('Project chat-3')
+  const watcher = chatRow('terminal-fork')
+  const grandchild = chatRow('watcher-fork')
+  const personalParent = chatRow('Personal chat-3')
+  const personalChild = chatRow('manual-fork')
+  const collapse = (row: Locator) => row.getByRole('button', { name: 'Collapse subchats' })
+  const expand = (row: Locator) => row.getByRole('button', { name: 'Expand subchats' })
+
+  await expect(grandchild).toBeVisible()
+  await collapse(watcher).click()
+  await expect(grandchild).toHaveCount(0)
+  await collapse(projectParent).click()
+  await expect(watcher).toHaveCount(0)
+  await expect(personalChild).toBeVisible()
+  await expect(projectParent).not.toHaveClass(/bg-secondary/)
+  await page.reload()
+  await loadSidebar(page)
+  await expect(expand(projectParent)).toHaveAttribute('aria-expanded', 'false')
+  await expand(projectParent).click()
+  await expect(expand(watcher)).toBeVisible()
+  await expect(grandchild).toHaveCount(0)
+
+  await sidebar.getByRole('button', { name: 'Collapse all', exact: true }).click()
+  await expect(expand(personalParent)).toBeVisible()
+  await expect(personalChild).toHaveCount(0)
+  await projectRow(page, 'project-1').getByRole('button', { name: 'Expand project' }).click()
+  await expect(expand(projectParent)).toBeVisible()
+  await expect(watcher).toHaveCount(0)
+  await sidebar.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/session-sidebar-collapsed-subchats.png') })
+
+  await sidebar.getByRole('button', { name: 'Expand all', exact: true }).click()
+  await expect(collapse(projectParent)).toHaveAttribute('aria-expanded', 'true')
+  await expect(grandchild).toBeVisible()
+  await expect(personalChild).toBeVisible()
 })
