@@ -32,6 +32,9 @@ jobs:
       - name: Release workflow regression tests
         run: node --test .github/scripts/*.test.mjs
 
+      - name: Desktop IPC regression tests
+        run: node --test apps/desktop/src-tauri/guest-js/shim.test.mjs
+
       - name: Local deployment guard tests
         run: node --test scripts/local-deploy.test.mjs
 

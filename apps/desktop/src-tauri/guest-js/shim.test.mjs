@@ -31,9 +31,10 @@ const CONTRACT = [
 ];
 
 /** Build a fresh sandbox around shim.js with a controllable invoke backend. */
-function loadShim({ boot = {}, responder = null } = {}) {
+function loadShim({ boot = {}, responder = null, deferUnlisten = null } = {}) {
   const log = []; // { cmd, args }
-  const listeners = new Map(); // event -> Set(handlerId-ish)
+  const listeners = new Map(); // event -> Map(eventId, handlerId)
+  let nextEventId = 0;
   let resolver = responder || (() => ({ status: 'ok', value: null }));
 
   const window = {
@@ -51,18 +52,15 @@ function loadShim({ boot = {}, responder = null } = {}) {
       if (cmd === 'plugin:event|listen') {
         const event = args && args.event;
         const handler = args && args.handler;
-        if (!listeners.has(event)) listeners.set(event, new Set());
-        listeners.get(event).add(handler);
-        return Promise.resolve(() => {
-          listeners.get(event)?.delete(handler);
-          // Real Tauri v2's unlisten tears the shell-side handler down; record
-          // it as the unlisten command so tests can assert the teardown.
-          log.push({ cmd: 'plugin:event|unlisten', args: { event, eventId: handler } });
-          return Promise.resolve(null);
-        });
+        const eventId = nextEventId++;
+        if (!listeners.has(event)) listeners.set(event, new Map());
+        listeners.get(event).set(eventId, handler);
+        return Promise.resolve(eventId);
       }
       if (cmd === 'plugin:event|unlisten') {
-        listeners.get(args?.event)?.delete(args?.eventId);
+        const finish = () => { listeners.get(args?.event)?.delete(args?.eventId); };
+        if (deferUnlisten) return deferUnlisten.then(finish);
+        finish();
         return Promise.resolve(null);
       }
       const out = internals.__respond(cmd, args);
@@ -97,8 +95,10 @@ function loadShim({ boot = {}, responder = null } = {}) {
     /** Fire a shell-side event into every registered shim callback. */
     emit(event, payload) {
       const results = [];
-      for (const cb of callbacks.values()) {
-        try { results.push(cb({ event, payload })); } catch (e) { results.push(e); }
+      for (const [id, handler] of listeners.get(event) || []) {
+        const callback = callbacks.get(handler);
+        if (!callback) continue;
+        try { results.push(callback({ event, id, payload })); } catch (e) { results.push(e); }
       }
       return results;
     },
@@ -344,6 +344,67 @@ test('gateway events fan out to all listeners and remove clears them', async () 
 
   const unlisten = log.filter((l) => l.cmd === 'plugin:event|unlisten');
   assert.equal(unlisten.length, 1, 'shell listener should be torn down');
+});
+
+test('resubscribing forwards every provider chunk once, including repeated text', async () => {
+  const { window, emit, listeners } = loadShim();
+  const desktop = window.jaitDesktop;
+  const oldChunks = [];
+  desktop.onGatewayEvent((_event, data) => oldChunks.push(data));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  desktop.removeGatewayEventListener();
+
+  const chunks = [];
+  desktop.onGatewayEvent((_event, data) => chunks.push(data.notification.params.delta));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  for (const delta of ['I', ' really', ' really', ' agree.']) {
+    emit('gateway:event', {
+      type: 'provider.event-from-child',
+      notification: { method: 'item/agentMessage/delta', params: { delta } },
+    });
+  }
+  assert.deepEqual(oldChunks, []);
+  assert.equal(chunks.join(''), 'I really really agree.');
+  assert.equal(listeners.get('gateway:event').size, 1);
+});
+
+test('a retired gateway subscription ignores events while native cleanup is pending', async () => {
+  let finishUnlisten;
+  const deferUnlisten = new Promise((resolve) => { finishUnlisten = resolve; });
+  const { window, emit, listeners } = loadShim({ deferUnlisten });
+  const chunks = [];
+  const onChunk = (_event, data) => chunks.push(data);
+  window.jaitDesktop.onGatewayEvent(onChunk);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.jaitDesktop.removeGatewayEventListener();
+  window.jaitDesktop.onGatewayEvent(onChunk);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(listeners.get('gateway:event').size, 2);
+  emit('gateway:event', 'chunk');
+  finishUnlisten();
+  await deferUnlisten;
+  assert.deepEqual(chunks, ['chunk']);
+  assert.equal(listeners.get('gateway:event').size, 1);
+});
+
+test('removing gateway listeners during registration tears down the pending subscription', async () => {
+  const { window, listeners } = loadShim();
+  window.jaitDesktop.onGatewayEvent(() => {});
+  window.jaitDesktop.removeGatewayEventListener();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(listeners.get('gateway:event').size, 0);
+});
+
+test('removing a pending window event listener uses the returned event ID', async () => {
+  const { window, emit, listeners } = loadShim();
+  const seen = [];
+  const stop = window.jaitDesktop.onScreenShareStart((_event, data) => seen.push(data));
+  stop();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  emit('screenshare-start', { id: 1 });
+  assert.deepEqual(seen, []);
+  assert.equal(listeners.get('screenshare-start').size, 0);
 });
 
 test('gateway provider stream keeps its callback after the first event', async () => {

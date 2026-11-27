@@ -52,7 +52,7 @@
     return internals.invoke(cmd, args).then(function (payload) {
       // desktop:* commands come back wrapped in the shell's { status, value }
       // envelope; raw Tauri plugin commands (e.g. plugin:event|listen, which
-      // resolves to an unlisten fn/id) must pass through untouched.
+      // resolves to a numeric event ID) must pass through untouched.
       if (payload && typeof payload === 'object' && payload.status === 'ok') return payload.value;
       if (payload && typeof payload === 'object' && payload.status === 'error') {
         throw new Error(String((payload.error && payload.error.message) || payload.error));
@@ -71,107 +71,90 @@
     return dispatch(channel, args).catch(function () { return null; });
   }
 
-  // ── Gateway event fan-out ───────────────────────────────────────────────
+  function unlistenTauriEvent(event, eventId) {
+    var eventPlugin = window.__TAURI_EVENT_PLUGIN_INTERNALS__;
+    if (eventPlugin && typeof eventPlugin.unregisterListener === 'function') {
+      eventPlugin.unregisterListener(event, eventId);
+    }
+    invoke('plugin:event|unlisten', { event: event, eventId: eventId }).catch(function () {});
+  }
+
+  // ── Gateway event fan-out ────────────────────────────────────────────────
   var gatewayListeners = [];
-  var gatewayUnlisten = null;
-  // In-flight flag: a subscribe arriving while plugin:event|listen is still
-  // resolving must not start a second registration (that would fan every
-  // event out twice). It joins gatewayPending and is flushed by the first
-  // bridge resolution.
-  var gatewayConnecting = false;
+  var gatewayBridge = null;
 
   function ensureGatewayBridge() {
-    if (gatewayUnlisten || gatewayConnecting) return;
-    if (!gatewayListeners.length && !gatewayPending.length) return;
+    if (gatewayBridge || !gatewayListeners.length) return;
     if (!window.__TAURI_INTERNALS__) {
       setTimeout(ensureGatewayBridge, 20);
       return;
     }
-    // Mark in-flight before the async invoke: a second subscribe arriving
-    // while plugin:event|listen is resolving joins gatewayPending instead.
-    gatewayConnecting = true;
+    var bridge = { eventId: null };
+    gatewayBridge = bridge;
     var handler = function (evt) {
+      // Native teardown is asynchronous and an old callback can still fire.
+      if (gatewayBridge !== bridge) return;
       var payload = evt && evt.payload !== undefined ? evt.payload : evt;
       var target = evt && evt.event;
-      // Deliver synchronously to whichever listeners currently exist. Any
-      // registered while the plugin:event|listen call was still in flight
-      // (gatewayConnecting) live in gatewayPending — move them out now so
-      // events are never dropped between registration and bridge resolution.
-      while (gatewayPending.length) {
-        gatewayListeners.push(gatewayPending.shift());
-      }
       var listeners = gatewayListeners.slice();
       for (var i = 0; i < listeners.length; i++) {
         try { listeners[i]({ sender: 'tauri', event: target || 'gateway:event' }, payload); }
         catch (e) { /* listener errors must not break the pump */ }
       }
     };
-    // Event listeners persist across the entire stream; once=true deletes
-    // the JavaScript callback after the first Rust event.
     var callbackId = window.__TAURI_INTERNALS__.transformCallback(handler, false);
     invoke('plugin:event|listen', {
       event: 'gateway:event',
       target: { kind: 'Any' },
       handler: callbackId,
     })
-      .then(function (unlisten) {
-        gatewayConnecting = false;
-        gatewayUnlisten = typeof unlisten === 'function' ? unlisten : null;
-        while (gatewayPending.length) {
-          gatewayListeners.push(gatewayPending.shift());
-        }
+      .then(function (eventId) {
+        bridge.eventId = eventId;
+        if (!gatewayListeners.length) removeGatewayEventListener();
       })
       .catch(function () {
-        // Bridge unavailable: listeners stay pending; reset so a later
-        // subscribe can retry the registration.
-        gatewayConnecting = false;
+        if (gatewayBridge === bridge) gatewayBridge = null;
       });
   }
 
-  var gatewayPending = [];
-
   function onGatewayEvent(callback) {
     if (typeof callback !== 'function') return;
-    if (gatewayUnlisten) {
-      gatewayListeners.push(callback);
-    } else {
-      gatewayPending.push(callback);
-      ensureGatewayBridge();
-    }
+    gatewayListeners.push(callback);
+    ensureGatewayBridge();
   }
 
-  // the legacy desktop shell's removeGatewayEventListener removes all listeners at once.
+  // The legacy desktop shell removes all listeners at once.
   function removeGatewayEventListener() {
     gatewayListeners.length = 0;
-    gatewayPending.length = 0;
-    if (gatewayUnlisten) {
-      try { gatewayUnlisten(); } catch (e) { /* already gone */ }
-      gatewayUnlisten = null;
+    if (gatewayBridge && gatewayBridge.eventId !== null) {
+      var eventId = gatewayBridge.eventId;
+      gatewayBridge = null;
+      unlistenTauriEvent('gateway:event', eventId);
     }
   }
 
-  function onTauriWindowEvent(eventId, callback) {
+  function onTauriWindowEvent(event, callback) {
     try {
       var internals = window.__TAURI_INTERNALS__;
       if (!internals || !internals.transformCallback) return function () {};
-      var handler = function (evt) {
-        // Per-event registration only receives `eventId`, but the shell's
-        // emit fan-out (and any single-callback harness) may invoke the
-        // transformCallback for sibling channels — filter by name.
-        if (evt && evt.event !== undefined && evt.event !== null
-          && String(evt.event) !== eventId) return;
+      var stopped = false;
+      var callbackId = internals.transformCallback(function (evt) {
+        if (stopped) return;
         var payload = evt && evt.payload !== undefined ? evt.payload : evt;
-        try { callback({ sender: 'tauri', event: eventId }, payload); } catch (e) {}
-      };
-      var callbackId = internals.transformCallback(handler, false);
-      invoke('plugin:event|listen', {
-        event: eventId,
+        try { callback({ sender: 'tauri', event: event }, payload); } catch (e) {}
+      }, false);
+      var registration = invoke('plugin:event|listen', {
+        event: event,
         target: { kind: 'Any' },
         handler: callbackId,
-      }).catch(function () {});
+      });
+      registration.catch(function () {});
       return function () {
-        invoke('plugin:event|unlisten', { event: eventId, eventId: callbackId })
-          .catch(function () {});
+        if (stopped) return;
+        stopped = true;
+        registration.then(function (eventId) {
+          unlistenTauriEvent(event, eventId);
+        }).catch(function () {});
       };
     } catch (e) {
       return function () {};
