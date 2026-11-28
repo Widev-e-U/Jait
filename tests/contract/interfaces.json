@@ -1746,7 +1746,7 @@
     },
     {
       "path": "packages/gateway/package.json",
-      "fingerprint": "27b2c857bb077bb2",
+      "fingerprint": "fdba95da48d9b7f1",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -1792,7 +1792,7 @@
         "packages/gateway/package.json#dependency:yaml",
         "packages/gateway/package.json#dependency:zod"
       ],
-      "claims_fingerprint": "b44b4bb3184e72f0",
+      "claims_fingerprint": "ace1a98c633046c3",
       "claims": [
         {
           "id": "packages/gateway/package.json#dependency:@agentclientprotocol/claude-agent-acp",
@@ -1800,7 +1800,7 @@
           "name": "@agentclientprotocol/claude-agent-acp",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "0.107.1"
           },
@@ -1814,7 +1814,7 @@
           "name": "@agentclientprotocol/codex-acp",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "2.6.0"
           },
@@ -1828,7 +1828,7 @@
           "name": "@agentclientprotocol/sdk",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^1.9.0"
           },
@@ -1842,7 +1842,7 @@
           "name": "@browserbasehq/stagehand",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "4.4.0"
           },
@@ -1856,7 +1856,7 @@
           "name": "@fastify/cookie",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^11.1.5"
           },
@@ -1870,7 +1870,7 @@
           "name": "@fastify/cors",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^11.4.3"
           },
@@ -1884,7 +1884,7 @@
           "name": "@fastify/static",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^10.1.12"
           },
@@ -1898,7 +1898,7 @@
           "name": "@fastify/websocket",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^11.3.7"
           },
@@ -1912,7 +1912,7 @@
           "name": "@jait/screen-share",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "workspace:*"
           },
@@ -1926,7 +1926,7 @@
           "name": "@jait/shared",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "workspace:*"
           },
@@ -1940,7 +1940,7 @@
           "name": "@matrix-org/matrix-sdk-crypto-nodejs",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "0.6.1"
           },
@@ -1954,7 +1954,7 @@
           "name": "@matrix-org/matrix-sdk-crypto-wasm",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^18.9.2"
           },
@@ -1968,7 +1968,7 @@
           "name": "@modelcontextprotocol/sdk",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^1.32.2"
           },
@@ -1982,7 +1982,7 @@
           "name": "@openai/codex",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "0.169.0"
           },
@@ -1996,7 +1996,7 @@
           "name": "@parcel/watcher",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^2.6.0"
           },
@@ -2010,7 +2010,7 @@
           "name": "baileys",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^7.0.0-rc14"
           },
@@ -2024,7 +2024,7 @@
           "name": "bun-pty",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^0.4.11"
           },
@@ -2038,7 +2038,7 @@
           "name": "dotenv",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^16.6.1"
           },
@@ -2052,7 +2052,7 @@
           "name": "drizzle-orm",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^0.45.4"
           },
@@ -2066,7 +2066,7 @@
           "name": "fast-xml-parser",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^5.12.1"
           },
@@ -2080,7 +2080,7 @@
           "name": "fastify",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^5.12.8"
           },
@@ -2094,7 +2094,7 @@
           "name": "htmlparser2",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^12.0.0"
           },
@@ -2108,7 +2108,7 @@
           "name": "imapflow",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^2.12.2"
           },
@@ -2122,7 +2122,7 @@
           "name": "jose",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^6.2.18"
           },
@@ -2136,7 +2136,7 @@
           "name": "mailparser",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^3.15.0"
           },
@@ -2150,7 +2150,7 @@
           "name": "matrix-bot-sdk",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^0.8.0"
           },
@@ -2164,7 +2164,7 @@
           "name": "matrix-encrypt-attachment",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^1.0.3"
           },
@@ -2178,7 +2178,7 @@
           "name": "nanoid",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^5.1.16"
           },
@@ -2192,7 +2192,7 @@
           "name": "node-pty",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^1.1.0"
           },
@@ -2206,7 +2206,7 @@
           "name": "nodemailer",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^10.6.1"
           },
@@ -2220,7 +2220,7 @@
           "name": "pino",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^9.14.0"
           },
@@ -2234,7 +2234,7 @@
           "name": "playwright",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^1.65.1"
           },
@@ -2248,7 +2248,7 @@
           "name": "qrcode",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^1.5.4"
           },
@@ -2262,7 +2262,7 @@
           "name": "sharp",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "0.35.5"
           },
@@ -2276,7 +2276,7 @@
           "name": "ws",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^8.23.0"
           },
@@ -2290,7 +2290,7 @@
           "name": "yaml",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^2.9.1"
           },
@@ -2304,7 +2304,7 @@
           "name": "zod",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "version": "^4.6.7"
           },
@@ -2318,7 +2318,7 @@
           "name": "jait",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "entry": "./bin/jait.mjs"
           },
@@ -2332,7 +2332,7 @@
           "name": "jait-matrix",
           "start": 0,
           "end": 2884,
-          "fingerprint": "27b2c857bb077bb2",
+          "fingerprint": "fdba95da48d9b7f1",
           "details": {
             "entry": "./bin/matrix-stack.mjs"
           },
@@ -4825,7 +4825,7 @@
     },
     {
       "path": "packages/gateway/src/db/migrations.ts",
-      "fingerprint": "dd6abcf0c623531d",
+      "fingerprint": "d1023afb769a306d",
       "migration_owner": "R07-storage",
       "status": "pending",
       "required_test_ids": [],
@@ -4909,12 +4909,15 @@
         "packages/gateway/src/db/migrations.ts#db_migration:7243",
         "packages/gateway/src/db/migrations.ts#db_migration:72852",
         "packages/gateway/src/db/migrations.ts#db_migration:72993",
+        "packages/gateway/src/db/migrations.ts#db_migration:73813",
+        "packages/gateway/src/db/migrations.ts#db_migration:74714",
+        "packages/gateway/src/db/migrations.ts#db_migration:74867",
         "packages/gateway/src/db/migrations.ts#db_migration:7597",
         "packages/gateway/src/db/migrations.ts#db_migration:7913",
         "packages/gateway/src/db/migrations.ts#db_migration:9546",
         "packages/gateway/src/db/migrations.ts#db_migration:9901"
       ],
-      "claims_fingerprint": "0999ae37cc811030",
+      "claims_fingerprint": "e09f46f6bb940fe7",
       "claims": [
         {
           "id": "packages/gateway/src/db/migrations.ts#db_migration:10519",
@@ -6003,6 +6006,48 @@
           "fingerprint": "bce752d8f9f53e1a",
           "details": {
             "version": "82"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/db/migrations.ts#db_migration:73813",
+          "kind": "db_migration",
+          "name": "archive_completed_terminal_forks",
+          "start": 73813,
+          "end": 74710,
+          "fingerprint": "b869dc9fe16cd5e3",
+          "details": {
+            "version": "83"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/db/migrations.ts#db_migration:74714",
+          "kind": "db_migration",
+          "name": "meeting_transcript_review",
+          "start": 74714,
+          "end": 74863,
+          "fingerprint": "c8193590a1e229b1",
+          "details": {
+            "version": "84"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/db/migrations.ts#db_migration:74867",
+          "kind": "db_migration",
+          "name": "meeting_auto_save",
+          "start": 74867,
+          "end": 75029,
+          "fingerprint": "71007dbfe61b0219",
+          "details": {
+            "version": "85"
           },
           "status": "pending",
           "required_test_ids": [],
@@ -8628,7 +8673,7 @@
     },
     {
       "path": "packages/gateway/src/meetings/endpoints.ts",
-      "fingerprint": "26d0bcb1f8eb5882",
+      "fingerprint": "7669f647900f5cab",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -8637,7 +8682,7 @@
         "packages/gateway/src/meetings/endpoints.ts#dependency:0",
         "packages/gateway/src/meetings/endpoints.ts#dependency:44"
       ],
-      "claims_fingerprint": "2045ec49954ee801",
+      "claims_fingerprint": "b15f2dd1ec9db347",
       "claims": [
         {
           "id": "packages/gateway/src/meetings/endpoints.ts#dependency:0",
@@ -8658,8 +8703,8 @@
           "kind": "dependency",
           "name": "@jait/shared",
           "start": 44,
-          "end": 96,
-          "fingerprint": "37d29e399882c7bb",
+          "end": 118,
+          "fingerprint": "e979692935c9fc63",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
           },
@@ -8671,7 +8716,7 @@
     },
     {
       "path": "packages/gateway/src/meetings/jobs.ts",
-      "fingerprint": "a169abbb9e2e0d7f",
+      "fingerprint": "bfdd3fd1b03f1237",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -8679,15 +8724,15 @@
       "interface_ids": [
         "packages/gateway/src/meetings/jobs.ts#dependency:0"
       ],
-      "claims_fingerprint": "08c35d0b96c154eb",
+      "claims_fingerprint": "6bb4c3673a91cedf",
       "claims": [
         {
           "id": "packages/gateway/src/meetings/jobs.ts#dependency:0",
           "kind": "dependency",
           "name": "@jait/shared",
           "start": 0,
-          "end": 69,
-          "fingerprint": "7e21e37e831fb7ba",
+          "end": 99,
+          "fingerprint": "8866de2b7b22bad3",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
           },
@@ -12349,16 +12394,15 @@
     },
     {
       "path": "packages/gateway/src/routes/chat.ts",
-      "fingerprint": "4f4d7a4e0786aeba",
+      "fingerprint": "98613ee746a13771",
       "migration_owner": "R04-http",
       "status": "pending",
       "required_test_ids": [],
       "gap": "Workstream owner only; individual assignee and exact behavioral Rust test IDs/branch coverage pending. Static test imports are not evidence.",
       "interface_ids": [
-        "packages/gateway/src/routes/chat.ts#bridge:111286",
-        "packages/gateway/src/routes/chat.ts#bridge:113116",
-        "packages/gateway/src/routes/chat.ts#bridge:295277",
-        "packages/gateway/src/routes/chat.ts#config:188694",
+        "packages/gateway/src/routes/chat.ts#bridge:111162",
+        "packages/gateway/src/routes/chat.ts#bridge:295140",
+        "packages/gateway/src/routes/chat.ts#config:188993",
         "packages/gateway/src/routes/chat.ts#dependency:1136",
         "packages/gateway/src/routes/chat.ts#dependency:1174",
         "packages/gateway/src/routes/chat.ts#dependency:1228",
@@ -12369,155 +12413,157 @@
         "packages/gateway/src/routes/chat.ts#dependency:3075",
         "packages/gateway/src/routes/chat.ts#dependency:5234",
         "packages/gateway/src/routes/chat.ts#dependency:958",
-        "packages/gateway/src/routes/chat.ts#route:121624",
-        "packages/gateway/src/routes/chat.ts#route:122035",
-        "packages/gateway/src/routes/chat.ts#route:157921",
-        "packages/gateway/src/routes/chat.ts#route:164642",
-        "packages/gateway/src/routes/chat.ts#route:281184",
-        "packages/gateway/src/routes/chat.ts#route:282396",
-        "packages/gateway/src/routes/chat.ts#route:285577",
-        "packages/gateway/src/routes/chat.ts#route:293832",
-        "packages/gateway/src/routes/chat.ts#route:295914",
-        "packages/gateway/src/routes/chat.ts#route:296230",
-        "packages/gateway/src/routes/chat.ts#route:297011",
-        "packages/gateway/src/routes/chat.ts#route:300071",
-        "packages/gateway/src/routes/chat.ts#route:303214",
-        "packages/gateway/src/routes/chat.ts#route:304966",
-        "packages/gateway/src/routes/chat.ts#route:307688",
-        "packages/gateway/src/routes/chat.ts#route:312784",
-        "packages/gateway/src/routes/chat.ts#route:318825",
-        "packages/gateway/src/routes/chat.ts#route:322668",
-        "packages/gateway/src/routes/chat.ts#route:325601",
-        "packages/gateway/src/routes/chat.ts#route:328951",
-        "packages/gateway/src/routes/chat.ts#route:329959",
-        "packages/gateway/src/routes/chat.ts#route:334812",
-        "packages/gateway/src/routes/chat.ts#schema:252663",
-        "packages/gateway/src/routes/chat.ts#sse_event:184551",
-        "packages/gateway/src/routes/chat.ts#sse_event:200899",
-        "packages/gateway/src/routes/chat.ts#sse_event:305422",
-        "packages/gateway/src/routes/chat.ts#sse_event:306090",
-        "packages/gateway/src/routes/chat.ts#sse_event:306801",
-        "packages/gateway/src/routes/chat.ts#sse_event:307574",
-        "packages/gateway/src/routes/chat.ts#sse_event:308357",
-        "packages/gateway/src/routes/chat.ts#sse_event:309634",
-        "packages/gateway/src/routes/chat.ts#sse_event:310049",
-        "packages/gateway/src/routes/chat.ts#sse_event:311481",
-        "packages/gateway/src/routes/chat.ts#sse_event:311695",
-        "packages/gateway/src/routes/chat.ts#sse_event:313337",
-        "packages/gateway/src/routes/chat.ts#sse_event:317028",
-        "packages/gateway/src/routes/chat.ts#sse_event:317562",
-        "packages/gateway/src/routes/chat.ts#sse_event:318172",
-        "packages/gateway/src/routes/chat.ts#sse_event:319382",
-        "packages/gateway/src/routes/chat.ts#sse_event:321157",
-        "packages/gateway/src/routes/chat.ts#sse_event:321431",
-        "packages/gateway/src/routes/chat.ts#sse_event:322212",
-        "packages/gateway/src/routes/chat.ts#sse_event:71460",
-        "packages/gateway/src/routes/chat.ts#sse_event:71802",
-        "packages/gateway/src/routes/chat.ts#sse_event:71841",
-        "packages/gateway/src/routes/chat.ts#sse_event:71883",
-        "packages/gateway/src/routes/chat.ts#sse_event:71989",
-        "packages/gateway/src/routes/chat.ts#sse_event:72087",
-        "packages/gateway/src/routes/chat.ts#sse_event:72149",
-        "packages/gateway/src/routes/chat.ts#sse_event:72279",
-        "packages/gateway/src/routes/chat.ts#sse_event:72379",
-        "packages/gateway/src/routes/chat.ts#sse_event:72436",
-        "packages/gateway/src/routes/chat.ts#sse_event:72452",
-        "packages/gateway/src/routes/chat.ts#sse_event:72468",
-        "packages/gateway/src/routes/chat.ts#sse_event:72498",
-        "packages/gateway/src/routes/chat.ts#sse_event:72660",
-        "packages/gateway/src/routes/chat.ts#sse_event:72748",
-        "packages/gateway/src/routes/chat.ts#ws_event:112754",
-        "packages/gateway/src/routes/chat.ts#ws_event:126634",
-        "packages/gateway/src/routes/chat.ts#ws_event:132238",
-        "packages/gateway/src/routes/chat.ts#ws_event:152432",
-        "packages/gateway/src/routes/chat.ts#ws_event:176823",
-        "packages/gateway/src/routes/chat.ts#ws_event:191201",
-        "packages/gateway/src/routes/chat.ts#ws_event:191470",
-        "packages/gateway/src/routes/chat.ts#ws_event:191847",
-        "packages/gateway/src/routes/chat.ts#ws_event:201390",
-        "packages/gateway/src/routes/chat.ts#ws_event:204739",
-        "packages/gateway/src/routes/chat.ts#ws_event:219283",
-        "packages/gateway/src/routes/chat.ts#ws_event:221368",
-        "packages/gateway/src/routes/chat.ts#ws_event:221738",
-        "packages/gateway/src/routes/chat.ts#ws_event:223394",
-        "packages/gateway/src/routes/chat.ts#ws_event:223488",
-        "packages/gateway/src/routes/chat.ts#ws_event:225020",
-        "packages/gateway/src/routes/chat.ts#ws_event:225117",
-        "packages/gateway/src/routes/chat.ts#ws_event:226921",
-        "packages/gateway/src/routes/chat.ts#ws_event:227085",
-        "packages/gateway/src/routes/chat.ts#ws_event:227770",
-        "packages/gateway/src/routes/chat.ts#ws_event:228578",
-        "packages/gateway/src/routes/chat.ts#ws_event:228787",
-        "packages/gateway/src/routes/chat.ts#ws_event:229287",
-        "packages/gateway/src/routes/chat.ts#ws_event:229739",
-        "packages/gateway/src/routes/chat.ts#ws_event:230332",
-        "packages/gateway/src/routes/chat.ts#ws_event:230714",
-        "packages/gateway/src/routes/chat.ts#ws_event:231964",
-        "packages/gateway/src/routes/chat.ts#ws_event:232927",
-        "packages/gateway/src/routes/chat.ts#ws_event:233025",
-        "packages/gateway/src/routes/chat.ts#ws_event:233383",
-        "packages/gateway/src/routes/chat.ts#ws_event:233476",
-        "packages/gateway/src/routes/chat.ts#ws_event:236293",
-        "packages/gateway/src/routes/chat.ts#ws_event:248952",
-        "packages/gateway/src/routes/chat.ts#ws_event:255689",
-        "packages/gateway/src/routes/chat.ts#ws_event:256124",
-        "packages/gateway/src/routes/chat.ts#ws_event:263291",
-        "packages/gateway/src/routes/chat.ts#ws_event:267708",
-        "packages/gateway/src/routes/chat.ts#ws_event:268907",
-        "packages/gateway/src/routes/chat.ts#ws_event:269654",
-        "packages/gateway/src/routes/chat.ts#ws_event:269760",
-        "packages/gateway/src/routes/chat.ts#ws_event:269802",
-        "packages/gateway/src/routes/chat.ts#ws_event:274392",
-        "packages/gateway/src/routes/chat.ts#ws_event:306137",
-        "packages/gateway/src/routes/chat.ts#ws_event:307244",
-        "packages/gateway/src/routes/chat.ts#ws_event:307361",
-        "packages/gateway/src/routes/chat.ts#ws_event:307523",
-        "packages/gateway/src/routes/chat.ts#ws_event:309695",
-        "packages/gateway/src/routes/chat.ts#ws_event:310104",
-        "packages/gateway/src/routes/chat.ts#ws_event:317609",
-        "packages/gateway/src/routes/chat.ts#ws_event:321011",
-        "packages/gateway/src/routes/chat.ts#ws_event:322065",
-        "packages/gateway/src/routes/chat.ts#ws_event:332008",
-        "packages/gateway/src/routes/chat.ts#ws_event:332137",
-        "packages/gateway/src/routes/chat.ts#ws_event:332468",
-        "packages/gateway/src/routes/chat.ts#ws_event:332891",
-        "packages/gateway/src/routes/chat.ts#ws_event:333131",
-        "packages/gateway/src/routes/chat.ts#ws_event:334010",
-        "packages/gateway/src/routes/chat.ts#ws_event:334524",
-        "packages/gateway/src/routes/chat.ts#ws_event:38386",
-        "packages/gateway/src/routes/chat.ts#ws_event:38543",
-        "packages/gateway/src/routes/chat.ts#ws_event:38922",
-        "packages/gateway/src/routes/chat.ts#ws_event:39214",
-        "packages/gateway/src/routes/chat.ts#ws_event:39807",
-        "packages/gateway/src/routes/chat.ts#ws_event:40090",
-        "packages/gateway/src/routes/chat.ts#ws_event:40442",
-        "packages/gateway/src/routes/chat.ts#ws_event:40837",
-        "packages/gateway/src/routes/chat.ts#ws_event:54826",
-        "packages/gateway/src/routes/chat.ts#ws_event:54898",
-        "packages/gateway/src/routes/chat.ts#ws_event:55277",
-        "packages/gateway/src/routes/chat.ts#ws_event:55353",
-        "packages/gateway/src/routes/chat.ts#ws_event:55779",
-        "packages/gateway/src/routes/chat.ts#ws_event:55868",
-        "packages/gateway/src/routes/chat.ts#ws_event:57145",
-        "packages/gateway/src/routes/chat.ts#ws_event:57227",
-        "packages/gateway/src/routes/chat.ts#ws_event:58440",
-        "packages/gateway/src/routes/chat.ts#ws_event:59102",
-        "packages/gateway/src/routes/chat.ts#ws_event:59190",
-        "packages/gateway/src/routes/chat.ts#ws_event:59547",
-        "packages/gateway/src/routes/chat.ts#ws_event:60234",
-        "packages/gateway/src/routes/chat.ts#ws_event:61822",
-        "packages/gateway/src/routes/chat.ts#ws_event:61920",
-        "packages/gateway/src/routes/chat.ts#ws_event:63181",
-        "packages/gateway/src/routes/chat.ts#ws_event:63279"
+        "packages/gateway/src/routes/chat.ts#route:122567",
+        "packages/gateway/src/routes/chat.ts#route:122978",
+        "packages/gateway/src/routes/chat.ts#route:158728",
+        "packages/gateway/src/routes/chat.ts#route:165037",
+        "packages/gateway/src/routes/chat.ts#route:281047",
+        "packages/gateway/src/routes/chat.ts#route:282259",
+        "packages/gateway/src/routes/chat.ts#route:285440",
+        "packages/gateway/src/routes/chat.ts#route:293695",
+        "packages/gateway/src/routes/chat.ts#route:295777",
+        "packages/gateway/src/routes/chat.ts#route:296093",
+        "packages/gateway/src/routes/chat.ts#route:296874",
+        "packages/gateway/src/routes/chat.ts#route:299934",
+        "packages/gateway/src/routes/chat.ts#route:303077",
+        "packages/gateway/src/routes/chat.ts#route:304829",
+        "packages/gateway/src/routes/chat.ts#route:307551",
+        "packages/gateway/src/routes/chat.ts#route:312647",
+        "packages/gateway/src/routes/chat.ts#route:318688",
+        "packages/gateway/src/routes/chat.ts#route:322531",
+        "packages/gateway/src/routes/chat.ts#route:325464",
+        "packages/gateway/src/routes/chat.ts#route:328814",
+        "packages/gateway/src/routes/chat.ts#route:329822",
+        "packages/gateway/src/routes/chat.ts#route:334675",
+        "packages/gateway/src/routes/chat.ts#schema:252526",
+        "packages/gateway/src/routes/chat.ts#sse_event:184946",
+        "packages/gateway/src/routes/chat.ts#sse_event:201198",
+        "packages/gateway/src/routes/chat.ts#sse_event:305285",
+        "packages/gateway/src/routes/chat.ts#sse_event:305953",
+        "packages/gateway/src/routes/chat.ts#sse_event:306664",
+        "packages/gateway/src/routes/chat.ts#sse_event:307437",
+        "packages/gateway/src/routes/chat.ts#sse_event:308220",
+        "packages/gateway/src/routes/chat.ts#sse_event:309497",
+        "packages/gateway/src/routes/chat.ts#sse_event:309912",
+        "packages/gateway/src/routes/chat.ts#sse_event:311344",
+        "packages/gateway/src/routes/chat.ts#sse_event:311558",
+        "packages/gateway/src/routes/chat.ts#sse_event:313200",
+        "packages/gateway/src/routes/chat.ts#sse_event:316891",
+        "packages/gateway/src/routes/chat.ts#sse_event:317425",
+        "packages/gateway/src/routes/chat.ts#sse_event:318035",
+        "packages/gateway/src/routes/chat.ts#sse_event:319245",
+        "packages/gateway/src/routes/chat.ts#sse_event:321020",
+        "packages/gateway/src/routes/chat.ts#sse_event:321294",
+        "packages/gateway/src/routes/chat.ts#sse_event:322075",
+        "packages/gateway/src/routes/chat.ts#sse_event:71336",
+        "packages/gateway/src/routes/chat.ts#sse_event:71678",
+        "packages/gateway/src/routes/chat.ts#sse_event:71717",
+        "packages/gateway/src/routes/chat.ts#sse_event:71759",
+        "packages/gateway/src/routes/chat.ts#sse_event:71865",
+        "packages/gateway/src/routes/chat.ts#sse_event:71963",
+        "packages/gateway/src/routes/chat.ts#sse_event:72025",
+        "packages/gateway/src/routes/chat.ts#sse_event:72155",
+        "packages/gateway/src/routes/chat.ts#sse_event:72255",
+        "packages/gateway/src/routes/chat.ts#sse_event:72312",
+        "packages/gateway/src/routes/chat.ts#sse_event:72328",
+        "packages/gateway/src/routes/chat.ts#sse_event:72344",
+        "packages/gateway/src/routes/chat.ts#sse_event:72374",
+        "packages/gateway/src/routes/chat.ts#sse_event:72536",
+        "packages/gateway/src/routes/chat.ts#sse_event:72624",
+        "packages/gateway/src/routes/chat.ts#ws_event:112630",
+        "packages/gateway/src/routes/chat.ts#ws_event:114242",
+        "packages/gateway/src/routes/chat.ts#ws_event:115309",
+        "packages/gateway/src/routes/chat.ts#ws_event:127577",
+        "packages/gateway/src/routes/chat.ts#ws_event:133181",
+        "packages/gateway/src/routes/chat.ts#ws_event:153239",
+        "packages/gateway/src/routes/chat.ts#ws_event:177218",
+        "packages/gateway/src/routes/chat.ts#ws_event:191500",
+        "packages/gateway/src/routes/chat.ts#ws_event:191769",
+        "packages/gateway/src/routes/chat.ts#ws_event:192146",
+        "packages/gateway/src/routes/chat.ts#ws_event:201689",
+        "packages/gateway/src/routes/chat.ts#ws_event:205038",
+        "packages/gateway/src/routes/chat.ts#ws_event:219146",
+        "packages/gateway/src/routes/chat.ts#ws_event:221231",
+        "packages/gateway/src/routes/chat.ts#ws_event:221601",
+        "packages/gateway/src/routes/chat.ts#ws_event:223257",
+        "packages/gateway/src/routes/chat.ts#ws_event:223351",
+        "packages/gateway/src/routes/chat.ts#ws_event:224883",
+        "packages/gateway/src/routes/chat.ts#ws_event:224980",
+        "packages/gateway/src/routes/chat.ts#ws_event:226784",
+        "packages/gateway/src/routes/chat.ts#ws_event:226948",
+        "packages/gateway/src/routes/chat.ts#ws_event:227633",
+        "packages/gateway/src/routes/chat.ts#ws_event:228441",
+        "packages/gateway/src/routes/chat.ts#ws_event:228650",
+        "packages/gateway/src/routes/chat.ts#ws_event:229150",
+        "packages/gateway/src/routes/chat.ts#ws_event:229602",
+        "packages/gateway/src/routes/chat.ts#ws_event:230195",
+        "packages/gateway/src/routes/chat.ts#ws_event:230577",
+        "packages/gateway/src/routes/chat.ts#ws_event:231827",
+        "packages/gateway/src/routes/chat.ts#ws_event:232790",
+        "packages/gateway/src/routes/chat.ts#ws_event:232888",
+        "packages/gateway/src/routes/chat.ts#ws_event:233246",
+        "packages/gateway/src/routes/chat.ts#ws_event:233339",
+        "packages/gateway/src/routes/chat.ts#ws_event:236156",
+        "packages/gateway/src/routes/chat.ts#ws_event:248815",
+        "packages/gateway/src/routes/chat.ts#ws_event:255552",
+        "packages/gateway/src/routes/chat.ts#ws_event:255987",
+        "packages/gateway/src/routes/chat.ts#ws_event:263154",
+        "packages/gateway/src/routes/chat.ts#ws_event:267571",
+        "packages/gateway/src/routes/chat.ts#ws_event:268770",
+        "packages/gateway/src/routes/chat.ts#ws_event:269517",
+        "packages/gateway/src/routes/chat.ts#ws_event:269623",
+        "packages/gateway/src/routes/chat.ts#ws_event:269665",
+        "packages/gateway/src/routes/chat.ts#ws_event:274255",
+        "packages/gateway/src/routes/chat.ts#ws_event:306000",
+        "packages/gateway/src/routes/chat.ts#ws_event:307107",
+        "packages/gateway/src/routes/chat.ts#ws_event:307224",
+        "packages/gateway/src/routes/chat.ts#ws_event:307386",
+        "packages/gateway/src/routes/chat.ts#ws_event:309558",
+        "packages/gateway/src/routes/chat.ts#ws_event:309967",
+        "packages/gateway/src/routes/chat.ts#ws_event:317472",
+        "packages/gateway/src/routes/chat.ts#ws_event:320874",
+        "packages/gateway/src/routes/chat.ts#ws_event:321928",
+        "packages/gateway/src/routes/chat.ts#ws_event:331871",
+        "packages/gateway/src/routes/chat.ts#ws_event:332000",
+        "packages/gateway/src/routes/chat.ts#ws_event:332331",
+        "packages/gateway/src/routes/chat.ts#ws_event:332754",
+        "packages/gateway/src/routes/chat.ts#ws_event:332994",
+        "packages/gateway/src/routes/chat.ts#ws_event:333873",
+        "packages/gateway/src/routes/chat.ts#ws_event:334387",
+        "packages/gateway/src/routes/chat.ts#ws_event:38262",
+        "packages/gateway/src/routes/chat.ts#ws_event:38419",
+        "packages/gateway/src/routes/chat.ts#ws_event:38798",
+        "packages/gateway/src/routes/chat.ts#ws_event:39090",
+        "packages/gateway/src/routes/chat.ts#ws_event:39683",
+        "packages/gateway/src/routes/chat.ts#ws_event:39966",
+        "packages/gateway/src/routes/chat.ts#ws_event:40318",
+        "packages/gateway/src/routes/chat.ts#ws_event:40713",
+        "packages/gateway/src/routes/chat.ts#ws_event:54702",
+        "packages/gateway/src/routes/chat.ts#ws_event:54774",
+        "packages/gateway/src/routes/chat.ts#ws_event:55153",
+        "packages/gateway/src/routes/chat.ts#ws_event:55229",
+        "packages/gateway/src/routes/chat.ts#ws_event:55655",
+        "packages/gateway/src/routes/chat.ts#ws_event:55744",
+        "packages/gateway/src/routes/chat.ts#ws_event:57021",
+        "packages/gateway/src/routes/chat.ts#ws_event:57103",
+        "packages/gateway/src/routes/chat.ts#ws_event:58316",
+        "packages/gateway/src/routes/chat.ts#ws_event:58978",
+        "packages/gateway/src/routes/chat.ts#ws_event:59066",
+        "packages/gateway/src/routes/chat.ts#ws_event:59423",
+        "packages/gateway/src/routes/chat.ts#ws_event:60110",
+        "packages/gateway/src/routes/chat.ts#ws_event:61698",
+        "packages/gateway/src/routes/chat.ts#ws_event:61796",
+        "packages/gateway/src/routes/chat.ts#ws_event:63057",
+        "packages/gateway/src/routes/chat.ts#ws_event:63155"
       ],
-      "claims_fingerprint": "11bfd2591c0e4a38",
+      "claims_fingerprint": "53e709a62c9550b9",
       "claims": [
         {
-          "id": "packages/gateway/src/routes/chat.ts#bridge:111286",
+          "id": "packages/gateway/src/routes/chat.ts#bridge:111162",
           "kind": "bridge",
           "name": "toolRegistry.register",
-          "start": 111286,
-          "end": 111313,
+          "start": 111162,
+          "end": 111189,
           "fingerprint": "1f0e1016dd0e3f3e",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -12527,25 +12573,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#bridge:113116",
+          "id": "packages/gateway/src/routes/chat.ts#bridge:295140",
           "kind": "bridge",
           "name": "<dynamic executable>",
-          "start": 113116,
-          "end": 113244,
-          "fingerprint": "14e6b71fc5164313",
-          "details": {
-            "expression": "sessionId"
-          },
-          "status": "pending",
-          "required_test_ids": [],
-          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
-        },
-        {
-          "id": "packages/gateway/src/routes/chat.ts#bridge:295277",
-          "kind": "bridge",
-          "name": "<dynamic executable>",
-          "start": 295277,
-          "end": 295461,
+          "start": 295140,
+          "end": 295324,
           "fingerprint": "9d46f2245ce5180b",
           "details": {
             "expression": "sessionId"
@@ -12555,11 +12587,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#config:188694",
+          "id": "packages/gateway/src/routes/chat.ts#config:188993",
           "kind": "config",
           "name": "SHELL",
-          "start": 188694,
-          "end": 188711,
+          "start": 188993,
+          "end": 189010,
           "fingerprint": "a947e01856f34aa3",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -12709,11 +12741,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:121624",
+          "id": "packages/gateway/src/routes/chat.ts#route:122567",
           "kind": "route",
           "name": "/api/sessions/:sessionId/loop",
-          "start": 121624,
-          "end": 122031,
+          "start": 122567,
+          "end": 122974,
           "fingerprint": "09fee2b081e7be96",
           "details": {
             "methods": "GET",
@@ -12727,11 +12759,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:122035",
+          "id": "packages/gateway/src/routes/chat.ts#route:122978",
           "kind": "route",
           "name": "/api/sessions/:sessionId/loop",
-          "start": 122035,
-          "end": 122846,
+          "start": 122978,
+          "end": 123789,
           "fingerprint": "02057b22734a9c82",
           "details": {
             "methods": "POST",
@@ -12745,12 +12777,12 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:157921",
+          "id": "packages/gateway/src/routes/chat.ts#route:158728",
           "kind": "route",
           "name": "/api/chat/prewarm",
-          "start": 157921,
-          "end": 164547,
-          "fingerprint": "be411e7eaed2e055",
+          "start": 158728,
+          "end": 164942,
+          "fingerprint": "7fc1ab247124e4d7",
           "details": {
             "methods": "POST",
             "receiver": "app",
@@ -12763,12 +12795,12 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:164642",
+          "id": "packages/gateway/src/routes/chat.ts#route:165037",
           "kind": "route",
           "name": "/api/chat",
-          "start": 164642,
-          "end": 281179,
-          "fingerprint": "d590fafed5e1a81a",
+          "start": 165037,
+          "end": 281042,
+          "fingerprint": "e472074284681692",
           "details": {
             "methods": "POST",
             "receiver": "app",
@@ -12781,11 +12813,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:281184",
+          "id": "packages/gateway/src/routes/chat.ts#route:281047",
           "kind": "route",
           "name": "/api/sessions/:sessionId/approve",
-          "start": 281184,
-          "end": 282348,
+          "start": 281047,
+          "end": 282211,
           "fingerprint": "baf5a61cdee0005f",
           "details": {
             "methods": "POST",
@@ -12799,11 +12831,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:282396",
+          "id": "packages/gateway/src/routes/chat.ts#route:282259",
           "kind": "route",
           "name": "/api/sessions/:sessionId/cancel",
-          "start": 282396,
-          "end": 285486,
+          "start": 282259,
+          "end": 285349,
           "fingerprint": "06aafa178aabf060",
           "details": {
             "methods": "POST",
@@ -12817,11 +12849,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:285577",
+          "id": "packages/gateway/src/routes/chat.ts#route:285440",
           "kind": "route",
           "name": "/api/sessions/:sessionId/restart-from",
-          "start": 285577,
-          "end": 293591,
+          "start": 285440,
+          "end": 293454,
           "fingerprint": "4113b0a19d2f08bd",
           "details": {
             "methods": "POST",
@@ -12835,11 +12867,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:293832",
+          "id": "packages/gateway/src/routes/chat.ts#route:293695",
           "kind": "route",
           "name": "/api/sessions/:sessionId/fork",
-          "start": 293832,
-          "end": 295682,
+          "start": 293695,
+          "end": 295545,
           "fingerprint": "458716c15f2b3fcf",
           "details": {
             "methods": "POST",
@@ -12853,11 +12885,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:295914",
+          "id": "packages/gateway/src/routes/chat.ts#route:295777",
           "kind": "route",
           "name": "/api/sessions/streaming",
-          "start": 295914,
-          "end": 296146,
+          "start": 295777,
+          "end": 296009,
           "fingerprint": "8089d00fb1f35221",
           "details": {
             "methods": "GET",
@@ -12871,11 +12903,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:296230",
+          "id": "packages/gateway/src/routes/chat.ts#route:296093",
           "kind": "route",
           "name": "/api/sessions/:sessionId/runtime",
-          "start": 296230,
-          "end": 296974,
+          "start": 296093,
+          "end": 296837,
           "fingerprint": "59d3eeb39c93564b",
           "details": {
             "methods": "GET",
@@ -12889,11 +12921,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:297011",
+          "id": "packages/gateway/src/routes/chat.ts#route:296874",
           "kind": "route",
           "name": "/api/sessions/:sessionId/messages",
-          "start": 297011,
-          "end": 299683,
+          "start": 296874,
+          "end": 299546,
           "fingerprint": "c3df8dcacb776404",
           "details": {
             "methods": "GET",
@@ -12907,11 +12939,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:300071",
+          "id": "packages/gateway/src/routes/chat.ts#route:299934",
           "kind": "route",
           "name": "/api/sessions/:sessionId/messages/:messageIndex/context-flow",
-          "start": 300071,
-          "end": 302825,
+          "start": 299934,
+          "end": 302688,
           "fingerprint": "7e4f784640334f39",
           "details": {
             "methods": "GET",
@@ -12925,11 +12957,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:303214",
+          "id": "packages/gateway/src/routes/chat.ts#route:303077",
           "kind": "route",
           "name": "/api/sessions/:sessionId/sub-agents/:subAgentId",
-          "start": 303214,
-          "end": 304658,
+          "start": 303077,
+          "end": 304521,
           "fingerprint": "3c39eecae2e0d19f",
           "details": {
             "methods": "GET",
@@ -12943,11 +12975,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:304966",
+          "id": "packages/gateway/src/routes/chat.ts#route:304829",
           "kind": "route",
           "name": "/api/sessions/:sessionId/shared-stream",
-          "start": 304966,
-          "end": 307683,
+          "start": 304829,
+          "end": 307546,
           "fingerprint": "15c91519ae89df31",
           "details": {
             "methods": "GET",
@@ -12961,11 +12993,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:307688",
+          "id": "packages/gateway/src/routes/chat.ts#route:307551",
           "kind": "route",
           "name": "/api/sessions/:sessionId/stream",
-          "start": 307688,
-          "end": 312052,
+          "start": 307551,
+          "end": 311915,
           "fingerprint": "917d32257a2cec1c",
           "details": {
             "methods": "GET",
@@ -12979,11 +13011,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:312784",
+          "id": "packages/gateway/src/routes/chat.ts#route:312647",
           "kind": "route",
           "name": "/api/sessions/:sessionId/events",
-          "start": 312784,
-          "end": 318305,
+          "start": 312647,
+          "end": 318168,
           "fingerprint": "facb8478a3ff8f6f",
           "details": {
             "methods": "GET",
@@ -12997,11 +13029,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:318825",
+          "id": "packages/gateway/src/routes/chat.ts#route:318688",
           "kind": "route",
           "name": "/api/sessions/:sessionId/trajectory",
-          "start": 318825,
-          "end": 322483,
+          "start": 318688,
+          "end": 322346,
           "fingerprint": "1770ef524d04eac6",
           "details": {
             "methods": "GET",
@@ -13015,11 +13047,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:322668",
+          "id": "packages/gateway/src/routes/chat.ts#route:322531",
           "kind": "route",
           "name": "/api/sessions/:sessionId/retry-tool",
-          "start": 322668,
-          "end": 325402,
+          "start": 322531,
+          "end": 325265,
           "fingerprint": "39d2c124505b698c",
           "details": {
             "methods": "POST",
@@ -13033,11 +13065,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:325601",
+          "id": "packages/gateway/src/routes/chat.ts#route:325464",
           "kind": "route",
           "name": "/api/sessions/:sessionId/steer",
-          "start": 325601,
-          "end": 328844,
+          "start": 325464,
+          "end": 328707,
           "fingerprint": "78f58c3332e3d686",
           "details": {
             "methods": "POST",
@@ -13051,11 +13083,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:328951",
+          "id": "packages/gateway/src/routes/chat.ts#route:328814",
           "kind": "route",
           "name": "/api/sessions/:sessionId/plan",
-          "start": 328951,
-          "end": 329868,
+          "start": 328814,
+          "end": 329731,
           "fingerprint": "0917f27a637afe03",
           "details": {
             "methods": "GET",
@@ -13069,11 +13101,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:329959",
+          "id": "packages/gateway/src/routes/chat.ts#route:329822",
           "kind": "route",
           "name": "/api/sessions/:sessionId/plan/execute",
-          "start": 329959,
-          "end": 334724,
+          "start": 329822,
+          "end": 334587,
           "fingerprint": "6cd37761bb9d57d6",
           "details": {
             "methods": "POST",
@@ -13087,11 +13119,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#route:334812",
+          "id": "packages/gateway/src/routes/chat.ts#route:334675",
           "kind": "route",
           "name": "/api/sessions/:sessionId/plan/reject",
-          "start": 334812,
-          "end": 336031,
+          "start": 334675,
+          "end": 335894,
           "fingerprint": "91c89ec722960de7",
           "details": {
             "methods": "POST",
@@ -13105,11 +13137,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#schema:252663",
+          "id": "packages/gateway/src/routes/chat.ts#schema:252526",
           "kind": "schema",
           "name": "toolSchemas",
-          "start": 252663,
-          "end": 252879,
+          "start": 252526,
+          "end": 252742,
           "fingerprint": "4ac6e0b4f09edfb9",
           "details": {
             "representation": "schema expression; references unresolved",
@@ -13120,11 +13152,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:184551",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:184946",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 184551,
-          "end": 184685,
+          "start": 184946,
+          "end": 185080,
           "fingerprint": "bd1f02243e055d2a",
           "details": {
             "expression": "reply"
@@ -13134,11 +13166,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:200899",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:201198",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 200899,
-          "end": 200925,
+          "start": 201198,
+          "end": 201224,
           "fingerprint": "acc4c78130b7f20d",
           "details": {
             "expression": "reply"
@@ -13148,11 +13180,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:305422",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:305285",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 305422,
-          "end": 305576,
+          "start": 305285,
+          "end": 305439,
           "fingerprint": "36d7885648c55d47",
           "details": {
             "expression": "reply"
@@ -13162,11 +13194,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:306090",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:305953",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 306090,
-          "end": 306197,
+          "start": 305953,
+          "end": 306060,
           "fingerprint": "01b3bc02043d871d",
           "details": {
             "expression": "reply"
@@ -13176,11 +13208,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:306801",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:306664",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 306801,
-          "end": 306840,
+          "start": 306664,
+          "end": 306703,
           "fingerprint": "e0d6fe0d01a107ed",
           "details": {
             "expression": "reply"
@@ -13190,11 +13222,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:307574",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:307437",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 307574,
-          "end": 307634,
+          "start": 307437,
+          "end": 307497,
           "fingerprint": "0df6d3d67c249b1b",
           "details": {
             "expression": "reply"
@@ -13204,11 +13236,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:308357",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:308220",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 308357,
-          "end": 308491,
+          "start": 308220,
+          "end": 308354,
           "fingerprint": "bd1f02243e055d2a",
           "details": {
             "expression": "reply"
@@ -13218,11 +13250,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:309634",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:309497",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 309634,
-          "end": 309967,
+          "start": 309497,
+          "end": 309830,
           "fingerprint": "f4af2fc7bec670b6",
           "details": {
             "expression": "reply"
@@ -13232,11 +13264,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:310049",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:309912",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 310049,
-          "end": 310259,
+          "start": 309912,
+          "end": 310122,
           "fingerprint": "0b7a7c47b81f3f5e",
           "details": {
             "expression": "reply"
@@ -13246,11 +13278,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:311481",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:311344",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 311481,
-          "end": 311520,
+          "start": 311344,
+          "end": 311383,
           "fingerprint": "e0d6fe0d01a107ed",
           "details": {
             "expression": "reply"
@@ -13260,11 +13292,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:311695",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:311558",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 311695,
-          "end": 311753,
+          "start": 311558,
+          "end": 311616,
           "fingerprint": "52bd5b9678e3e2a1",
           "details": {
             "expression": "reply"
@@ -13274,11 +13306,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:313337",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:313200",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 313337,
-          "end": 313471,
+          "start": 313200,
+          "end": 313334,
           "fingerprint": "bd1f02243e055d2a",
           "details": {
             "expression": "reply"
@@ -13288,11 +13320,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:317028",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:316891",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 317028,
-          "end": 317109,
+          "start": 316891,
+          "end": 316972,
           "fingerprint": "62970d9368d85e8e",
           "details": {
             "expression": "reply"
@@ -13302,11 +13334,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:317562",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:317425",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 317562,
-          "end": 317677,
+          "start": 317425,
+          "end": 317540,
           "fingerprint": "8ee1391a0092da12",
           "details": {
             "expression": "reply"
@@ -13316,11 +13348,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:318172",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:318035",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 318172,
-          "end": 318244,
+          "start": 318035,
+          "end": 318107,
           "fingerprint": "d51c04d366b2590f",
           "details": {
             "expression": "reply"
@@ -13330,11 +13362,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:319382",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:319245",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 319382,
-          "end": 319516,
+          "start": 319245,
+          "end": 319379,
           "fingerprint": "bd1f02243e055d2a",
           "details": {
             "expression": "reply"
@@ -13344,11 +13376,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:321157",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:321020",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 321157,
-          "end": 321218,
+          "start": 321020,
+          "end": 321081,
           "fingerprint": "cbf530e82459b545",
           "details": {
             "expression": "reply"
@@ -13358,11 +13390,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:321431",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:321294",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 321431,
-          "end": 321470,
+          "start": 321294,
+          "end": 321333,
           "fingerprint": "e0d6fe0d01a107ed",
           "details": {
             "expression": "reply"
@@ -13372,11 +13404,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:322212",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:322075",
           "kind": "sse_event",
           "name": "<dynamic>",
-          "start": 322212,
-          "end": 322273,
+          "start": 322075,
+          "end": 322136,
           "fingerprint": "cbf530e82459b545",
           "details": {
             "expression": "reply"
@@ -13386,11 +13418,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:71460",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:71336",
           "kind": "sse_event",
           "name": "request",
-          "start": 71460,
-          "end": 71469,
+          "start": 71336,
+          "end": 71345,
           "fingerprint": "4fe66436351e00f0",
           "details": {
             "declaration": "StreamEvent"
@@ -13400,11 +13432,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:71802",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:71678",
           "kind": "sse_event",
           "name": "token",
-          "start": 71802,
-          "end": 71809,
+          "start": 71678,
+          "end": 71685,
           "fingerprint": "1d8c77f1e6a17490",
           "details": {
             "declaration": "StreamEvent"
@@ -13414,11 +13446,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:71841",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:71717",
           "kind": "sse_event",
           "name": "thinking",
-          "start": 71841,
-          "end": 71851,
+          "start": 71717,
+          "end": 71727,
           "fingerprint": "85609dda35b08acd",
           "details": {
             "declaration": "StreamEvent"
@@ -13428,11 +13460,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:71883",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:71759",
           "kind": "sse_event",
           "name": "tool_call_delta",
-          "start": 71883,
-          "end": 71900,
+          "start": 71759,
+          "end": 71776,
           "fingerprint": "71fcbbddd2d81a49",
           "details": {
             "declaration": "StreamEvent"
@@ -13442,11 +13474,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:71989",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:71865",
           "kind": "sse_event",
           "name": "tool_start",
-          "start": 71989,
-          "end": 72001,
+          "start": 71865,
+          "end": 71877,
           "fingerprint": "83437e4b83bcc5e2",
           "details": {
             "declaration": "StreamEvent"
@@ -13456,11 +13488,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72087",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:71963",
           "kind": "sse_event",
           "name": "tool_output",
-          "start": 72087,
-          "end": 72100,
+          "start": 71963,
+          "end": 71976,
           "fingerprint": "ac2035f22fabf545",
           "details": {
             "declaration": "StreamEvent"
@@ -13470,11 +13502,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72149",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72025",
           "kind": "sse_event",
           "name": "tool_result",
-          "start": 72149,
-          "end": 72162,
+          "start": 72025,
+          "end": 72038,
           "fingerprint": "9adb3bb10e33e549",
           "details": {
             "declaration": "StreamEvent"
@@ -13484,11 +13516,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72279",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72155",
           "kind": "sse_event",
           "name": "approval_required",
-          "start": 72279,
-          "end": 72298,
+          "start": 72155,
+          "end": 72174,
           "fingerprint": "9e7c7098da911fec",
           "details": {
             "declaration": "StreamEvent"
@@ -13498,11 +13530,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72379",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72255",
           "kind": "sse_event",
           "name": "todo_list",
-          "start": 72379,
-          "end": 72390,
+          "start": 72255,
+          "end": 72266,
           "fingerprint": "0c17866a47c6e850",
           "details": {
             "declaration": "StreamEvent"
@@ -13512,11 +13544,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72436",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72312",
           "kind": "sse_event",
           "name": "not-started",
-          "start": 72436,
-          "end": 72449,
+          "start": 72312,
+          "end": 72325,
           "fingerprint": "c34fec9f8b52e5d4",
           "details": {
             "declaration": "StreamEvent"
@@ -13526,11 +13558,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72452",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72328",
           "kind": "sse_event",
           "name": "in-progress",
-          "start": 72452,
-          "end": 72465,
+          "start": 72328,
+          "end": 72341,
           "fingerprint": "9993e9f1f58820a0",
           "details": {
             "declaration": "StreamEvent"
@@ -13540,11 +13572,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72468",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72344",
           "kind": "sse_event",
           "name": "completed",
-          "start": 72468,
-          "end": 72479,
+          "start": 72344,
+          "end": 72355,
           "fingerprint": "db9e427ab6a28a50",
           "details": {
             "declaration": "StreamEvent"
@@ -13554,11 +13586,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72498",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72374",
           "kind": "sse_event",
           "name": "context_usage",
-          "start": 72498,
-          "end": 72513,
+          "start": 72374,
+          "end": 72389,
           "fingerprint": "aeae167efaae468a",
           "details": {
             "declaration": "StreamEvent"
@@ -13568,11 +13600,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72660",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72536",
           "kind": "sse_event",
           "name": "done",
-          "start": 72660,
-          "end": 72666,
+          "start": 72536,
+          "end": 72542,
           "fingerprint": "c91fc1bea45abd69",
           "details": {
             "declaration": "StreamEvent"
@@ -13582,11 +13614,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#sse_event:72748",
+          "id": "packages/gateway/src/routes/chat.ts#sse_event:72624",
           "kind": "sse_event",
           "name": "error",
-          "start": 72748,
-          "end": 72755,
+          "start": 72624,
+          "end": 72631,
           "fingerprint": "a7f784296eaa8289",
           "details": {
             "declaration": "StreamEvent"
@@ -13596,11 +13628,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:112754",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:112630",
           "kind": "ws_event",
           "name": "chat.created",
-          "start": 112754,
-          "end": 112774,
+          "start": 112630,
+          "end": 112650,
           "fingerprint": "ef86ac412897eb7b",
           "details": {
             "expression": "\"chat.created\"",
@@ -13611,11 +13643,41 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:126634",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:114242",
+          "kind": "ws_event",
+          "name": "chat.created",
+          "start": 114242,
+          "end": 114262,
+          "fingerprint": "ef86ac412897eb7b",
+          "details": {
+            "expression": "\"chat.created\"",
+            "resolution": "event/discriminant candidate; transport unresolved"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:115309",
+          "kind": "ws_event",
+          "name": "chat.archived",
+          "start": 115309,
+          "end": 115330,
+          "fingerprint": "7dc3def31c3dacc3",
+          "details": {
+            "expression": "\"chat.archived\"",
+            "resolution": "event/discriminant candidate; transport unresolved"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:127577",
           "kind": "ws_event",
           "name": "error",
-          "start": 126634,
-          "end": 126647,
+          "start": 127577,
+          "end": 127590,
           "fingerprint": "f023c6e84696f5df",
           "details": {
             "expression": "\"error\"",
@@ -13626,11 +13688,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:132238",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:133181",
           "kind": "ws_event",
           "name": "ui.state-sync",
-          "start": 132238,
-          "end": 132259,
+          "start": 133181,
+          "end": 133202,
           "fingerprint": "2a4d3460603e74a8",
           "details": {
             "expression": "\"ui.state-sync\"",
@@ -13641,11 +13703,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:152432",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:153239",
           "kind": "ws_event",
           "name": "chat.updated",
-          "start": 152432,
-          "end": 152452,
+          "start": 153239,
+          "end": 153259,
           "fingerprint": "b36b842c6b5c2436",
           "details": {
             "expression": "\"chat.updated\"",
@@ -13656,11 +13718,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:176823",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:177218",
           "kind": "ws_event",
           "name": "done",
-          "start": 176823,
-          "end": 176835,
+          "start": 177218,
+          "end": 177230,
           "fingerprint": "76cae01c74b9f933",
           "details": {
             "expression": "\"done\"",
@@ -13671,11 +13733,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:191201",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:191500",
           "kind": "ws_event",
           "name": "text",
-          "start": 191201,
-          "end": 191213,
+          "start": 191500,
+          "end": 191512,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -13686,11 +13748,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:191470",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:191769",
           "kind": "ws_event",
           "name": "image_url",
-          "start": 191470,
-          "end": 191487,
+          "start": 191769,
+          "end": 191786,
           "fingerprint": "aa498e751509c028",
           "details": {
             "expression": "\"image_url\"",
@@ -13701,11 +13763,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:191847",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:192146",
           "kind": "ws_event",
           "name": "text",
-          "start": 191847,
-          "end": 191859,
+          "start": 192146,
+          "end": 192158,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -13716,11 +13778,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:201390",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:201689",
           "kind": "ws_event",
           "name": "session.streaming",
-          "start": 201390,
-          "end": 201415,
+          "start": 201689,
+          "end": 201714,
           "fingerprint": "83e561cdf9c8cec3",
           "details": {
             "expression": "\"session.streaming\"",
@@ -13731,11 +13793,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:204739",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:205038",
           "kind": "ws_event",
           "name": "request",
-          "start": 204739,
-          "end": 204754,
+          "start": 205038,
+          "end": 205053,
           "fingerprint": "ebe2d454d3a0f0fe",
           "details": {
             "expression": "\"request\"",
@@ -13746,11 +13808,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:219283",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:219146",
           "kind": "ws_event",
           "name": "session_info",
-          "start": 219283,
-          "end": 219303,
+          "start": 219146,
+          "end": 219166,
           "fingerprint": "79209568aa8f15c0",
           "details": {
             "expression": "\"session_info\"",
@@ -13761,11 +13823,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:221368",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:221231",
           "kind": "ws_event",
           "name": "text",
-          "start": 221368,
-          "end": 221380,
+          "start": 221231,
+          "end": 221243,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -13776,11 +13838,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:221738",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:221601",
           "kind": "ws_event",
           "name": "toolGroup",
-          "start": 221738,
-          "end": 221755,
+          "start": 221601,
+          "end": 221618,
           "fingerprint": "34e537b511ad252e",
           "details": {
             "expression": "\"toolGroup\"",
@@ -13791,11 +13853,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:223394",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:223257",
           "kind": "ws_event",
           "name": "token",
-          "start": 223394,
-          "end": 223407,
+          "start": 223257,
+          "end": 223270,
           "fingerprint": "21fcfd4ec75eecca",
           "details": {
             "expression": "\"token\"",
@@ -13806,11 +13868,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:223488",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:223351",
           "kind": "ws_event",
           "name": "token",
-          "start": 223488,
-          "end": 223501,
+          "start": 223351,
+          "end": 223364,
           "fingerprint": "21fcfd4ec75eecca",
           "details": {
             "expression": "\"token\"",
@@ -13821,11 +13883,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:225020",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:224883",
           "kind": "ws_event",
           "name": "thinking",
-          "start": 225020,
-          "end": 225036,
+          "start": 224883,
+          "end": 224899,
           "fingerprint": "96f19567beaf2787",
           "details": {
             "expression": "\"thinking\"",
@@ -13836,11 +13898,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:225117",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:224980",
           "kind": "ws_event",
           "name": "thinking",
-          "start": 225117,
-          "end": 225133,
+          "start": 224980,
+          "end": 224996,
           "fingerprint": "96f19567beaf2787",
           "details": {
             "expression": "\"thinking\"",
@@ -13851,11 +13913,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:226921",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:226784",
           "kind": "ws_event",
           "name": "tool_start",
-          "start": 226921,
-          "end": 226939,
+          "start": 226784,
+          "end": 226802,
           "fingerprint": "efb6edf453419d80",
           "details": {
             "expression": "\"tool_start\"",
@@ -13866,11 +13928,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:227085",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:226948",
           "kind": "ws_event",
           "name": "tool_start",
-          "start": 227085,
-          "end": 227103,
+          "start": 226948,
+          "end": 226966,
           "fingerprint": "efb6edf453419d80",
           "details": {
             "expression": "\"tool_start\"",
@@ -13881,11 +13943,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:227770",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:227633",
           "kind": "ws_event",
           "name": "tool_output",
-          "start": 227770,
-          "end": 227789,
+          "start": 227633,
+          "end": 227652,
           "fingerprint": "94792e36121ac74b",
           "details": {
             "expression": "\"tool_output\"",
@@ -13896,11 +13958,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:228578",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:228441",
           "kind": "ws_event",
           "name": "tool_result",
-          "start": 228578,
-          "end": 228597,
+          "start": 228441,
+          "end": 228460,
           "fingerprint": "c5f1daea89f0ccf3",
           "details": {
             "expression": "\"tool_result\"",
@@ -13911,11 +13973,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:228787",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:228650",
           "kind": "ws_event",
           "name": "tool_result",
-          "start": 228787,
-          "end": 228806,
+          "start": 228650,
+          "end": 228669,
           "fingerprint": "c5f1daea89f0ccf3",
           "details": {
             "expression": "\"tool_result\"",
@@ -13926,11 +13988,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:229287",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:229150",
           "kind": "ws_event",
           "name": "todo_list",
-          "start": 229287,
-          "end": 229304,
+          "start": 229150,
+          "end": 229167,
           "fingerprint": "c30ef01fa24af776",
           "details": {
             "expression": "\"todo_list\"",
@@ -13941,11 +14003,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:229739",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:229602",
           "kind": "ws_event",
           "name": "ui.state-sync",
-          "start": 229739,
-          "end": 229760,
+          "start": 229602,
+          "end": 229623,
           "fingerprint": "2a4d3460603e74a8",
           "details": {
             "expression": "\"ui.state-sync\"",
@@ -13956,11 +14018,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:230332",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:230195",
           "kind": "ws_event",
           "name": "file_changed",
-          "start": 230332,
-          "end": 230352,
+          "start": 230195,
+          "end": 230215,
           "fingerprint": "2afe88cf6fbfa8bc",
           "details": {
             "expression": "\"file_changed\"",
@@ -13971,11 +14033,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:230714",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:230577",
           "kind": "ws_event",
           "name": "ui.state-sync",
-          "start": 230714,
-          "end": 230735,
+          "start": 230577,
+          "end": 230598,
           "fingerprint": "2a4d3460603e74a8",
           "details": {
             "expression": "\"ui.state-sync\"",
@@ -13986,11 +14048,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:231964",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:231827",
           "kind": "ws_event",
           "name": "approval_required",
-          "start": 231964,
-          "end": 231989,
+          "start": 231827,
+          "end": 231852,
           "fingerprint": "966ab829e638f3ea",
           "details": {
             "expression": "\"approval_required\"",
@@ -14001,11 +14063,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:232927",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:232790",
           "kind": "ws_event",
           "name": "token",
-          "start": 232927,
-          "end": 232940,
+          "start": 232790,
+          "end": 232803,
           "fingerprint": "21fcfd4ec75eecca",
           "details": {
             "expression": "\"token\"",
@@ -14016,11 +14078,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:233025",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:232888",
           "kind": "ws_event",
           "name": "token",
-          "start": 233025,
-          "end": 233038,
+          "start": 232888,
+          "end": 232901,
           "fingerprint": "21fcfd4ec75eecca",
           "details": {
             "expression": "\"token\"",
@@ -14031,11 +14093,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:233383",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:233246",
           "kind": "ws_event",
           "name": "error",
-          "start": 233383,
-          "end": 233396,
+          "start": 233246,
+          "end": 233259,
           "fingerprint": "f023c6e84696f5df",
           "details": {
             "expression": "\"error\"",
@@ -14046,11 +14108,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:233476",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:233339",
           "kind": "ws_event",
           "name": "error",
-          "start": 233476,
-          "end": 233489,
+          "start": 233339,
+          "end": 233352,
           "fingerprint": "f023c6e84696f5df",
           "details": {
             "expression": "\"error\"",
@@ -14061,11 +14123,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:236293",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:236156",
           "kind": "ws_event",
           "name": "steering",
-          "start": 236293,
-          "end": 236309,
+          "start": 236156,
+          "end": 236172,
           "fingerprint": "17654abbc560264a",
           "details": {
             "expression": "\"steering\"",
@@ -14076,11 +14138,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:248952",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:248815",
           "kind": "ws_event",
           "name": "context_usage",
-          "start": 248952,
-          "end": 248973,
+          "start": 248815,
+          "end": 248836,
           "fingerprint": "77c5eb6ae773c2d0",
           "details": {
             "expression": "\"context_usage\"",
@@ -14091,11 +14153,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:255689",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:255552",
           "kind": "ws_event",
           "name": "ui.state-sync",
-          "start": 255689,
-          "end": 255710,
+          "start": 255552,
+          "end": 255573,
           "fingerprint": "2a4d3460603e74a8",
           "details": {
             "expression": "\"ui.state-sync\"",
@@ -14106,11 +14168,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:256124",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:255987",
           "kind": "ws_event",
           "name": "ui.state-sync",
-          "start": 256124,
-          "end": 256145,
+          "start": 255987,
+          "end": 256008,
           "fingerprint": "2a4d3460603e74a8",
           "details": {
             "expression": "\"ui.state-sync\"",
@@ -14121,11 +14183,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:263291",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:263154",
           "kind": "ws_event",
           "name": "toolGroup",
-          "start": 263291,
-          "end": 263308,
+          "start": 263154,
+          "end": 263171,
           "fingerprint": "34e537b511ad252e",
           "details": {
             "expression": "\"toolGroup\"",
@@ -14136,11 +14198,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:267708",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:267571",
           "kind": "ws_event",
           "name": "error",
-          "start": 267708,
-          "end": 267721,
+          "start": 267571,
+          "end": 267584,
           "fingerprint": "f023c6e84696f5df",
           "details": {
             "expression": "\"error\"",
@@ -14151,11 +14213,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:268907",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:268770",
           "kind": "ws_event",
           "name": "error",
-          "start": 268907,
-          "end": 268920,
+          "start": 268770,
+          "end": 268783,
           "fingerprint": "f023c6e84696f5df",
           "details": {
             "expression": "\"error\"",
@@ -14166,11 +14228,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:269654",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:269517",
           "kind": "ws_event",
           "name": "error",
-          "start": 269654,
-          "end": 269667,
+          "start": 269517,
+          "end": 269530,
           "fingerprint": "f023c6e84696f5df",
           "details": {
             "expression": "\"error\"",
@@ -14181,11 +14243,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:269760",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:269623",
           "kind": "ws_event",
           "name": "done",
-          "start": 269760,
-          "end": 269772,
+          "start": 269623,
+          "end": 269635,
           "fingerprint": "76cae01c74b9f933",
           "details": {
             "expression": "\"done\"",
@@ -14196,11 +14258,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:269802",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:269665",
           "kind": "ws_event",
           "name": "error",
-          "start": 269802,
-          "end": 269815,
+          "start": 269665,
+          "end": 269678,
           "fingerprint": "f023c6e84696f5df",
           "details": {
             "expression": "\"error\"",
@@ -14211,11 +14273,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:274392",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:274255",
           "kind": "ws_event",
           "name": "session.streaming",
-          "start": 274392,
-          "end": 274417,
+          "start": 274255,
+          "end": 274280,
           "fingerprint": "83e561cdf9c8cec3",
           "details": {
             "expression": "\"session.streaming\"",
@@ -14226,11 +14288,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:306137",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:306000",
           "kind": "ws_event",
           "name": "snapshot",
-          "start": 306137,
-          "end": 306153,
+          "start": 306000,
+          "end": 306016,
           "fingerprint": "3d2074fac7630af7",
           "details": {
             "expression": "\"snapshot\"",
@@ -14241,11 +14303,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:307244",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:307107",
           "kind": "ws_event",
           "name": "token",
-          "start": 307244,
-          "end": 307257,
+          "start": 307107,
+          "end": 307120,
           "fingerprint": "21fcfd4ec75eecca",
           "details": {
             "expression": "\"token\"",
@@ -14256,11 +14318,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:307361",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:307224",
           "kind": "ws_event",
           "name": "request",
-          "start": 307361,
-          "end": 307376,
+          "start": 307224,
+          "end": 307239,
           "fingerprint": "ebe2d454d3a0f0fe",
           "details": {
             "expression": "\"request\"",
@@ -14271,11 +14333,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:307523",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:307386",
           "kind": "ws_event",
           "name": "done",
-          "start": 307523,
-          "end": 307535,
+          "start": 307386,
+          "end": 307398,
           "fingerprint": "76cae01c74b9f933",
           "details": {
             "expression": "\"done\"",
@@ -14286,11 +14348,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:309695",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:309558",
           "kind": "ws_event",
           "name": "snapshot",
-          "start": 309695,
-          "end": 309711,
+          "start": 309558,
+          "end": 309574,
           "fingerprint": "3d2074fac7630af7",
           "details": {
             "expression": "\"snapshot\"",
@@ -14301,11 +14363,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:310104",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:309967",
           "kind": "ws_event",
           "name": "done",
-          "start": 310104,
-          "end": 310116,
+          "start": 309967,
+          "end": 309979,
           "fingerprint": "76cae01c74b9f933",
           "details": {
             "expression": "\"done\"",
@@ -14316,11 +14378,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:317609",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:317472",
           "kind": "ws_event",
           "name": "heartbeat",
-          "start": 317609,
-          "end": 317626,
+          "start": 317472,
+          "end": 317489,
           "fingerprint": "7d950d4b4f0e2fbd",
           "details": {
             "expression": "\"heartbeat\"",
@@ -14331,11 +14393,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:321011",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:320874",
           "kind": "ws_event",
           "name": "trajectory_event",
-          "start": 321011,
-          "end": 321035,
+          "start": 320874,
+          "end": 320898,
           "fingerprint": "679e8315855fed31",
           "details": {
             "expression": "\"trajectory_event\"",
@@ -14346,11 +14408,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:322065",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:321928",
           "kind": "ws_event",
           "name": "trajectory_event",
-          "start": 322065,
-          "end": 322089,
+          "start": 321928,
+          "end": 321952,
           "fingerprint": "679e8315855fed31",
           "details": {
             "expression": "\"trajectory_event\"",
@@ -14361,11 +14423,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:332008",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:331871",
           "kind": "ws_event",
           "name": "plan_action_start",
-          "start": 332008,
-          "end": 332033,
+          "start": 331871,
+          "end": 331896,
           "fingerprint": "aaf2c8802d4113e2",
           "details": {
             "expression": "\"plan_action_start\"",
@@ -14376,11 +14438,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:332137",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:332000",
           "kind": "ws_event",
           "name": "tool_start",
-          "start": 332137,
-          "end": 332155,
+          "start": 332000,
+          "end": 332018,
           "fingerprint": "efb6edf453419d80",
           "details": {
             "expression": "\"tool_start\"",
@@ -14391,11 +14453,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:332468",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:332331",
           "kind": "ws_event",
           "name": "plan_action_output",
-          "start": 332468,
-          "end": 332494,
+          "start": 332331,
+          "end": 332357,
           "fingerprint": "9f494d6e3b7c7f45",
           "details": {
             "expression": "\"plan_action_output\"",
@@ -14406,11 +14468,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:332891",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:332754",
           "kind": "ws_event",
           "name": "plan_action_result",
-          "start": 332891,
-          "end": 332917,
+          "start": 332754,
+          "end": 332780,
           "fingerprint": "8e04532d1a046f49",
           "details": {
             "expression": "\"plan_action_result\"",
@@ -14421,11 +14483,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:333131",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:332994",
           "kind": "ws_event",
           "name": "tool_result",
-          "start": 333131,
-          "end": 333150,
+          "start": 332994,
+          "end": 333013,
           "fingerprint": "c5f1daea89f0ccf3",
           "details": {
             "expression": "\"tool_result\"",
@@ -14436,11 +14498,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:334010",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:333873",
           "kind": "ws_event",
           "name": "plan_action_result",
-          "start": 334010,
-          "end": 334036,
+          "start": 333873,
+          "end": 333899,
           "fingerprint": "8e04532d1a046f49",
           "details": {
             "expression": "\"plan_action_result\"",
@@ -14451,11 +14513,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:334524",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:334387",
           "kind": "ws_event",
           "name": "plan_execution_complete",
-          "start": 334524,
-          "end": 334555,
+          "start": 334387,
+          "end": 334418,
           "fingerprint": "833ef2d57b50450d",
           "details": {
             "expression": "\"plan_execution_complete\"",
@@ -14466,11 +14528,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:38386",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:38262",
           "kind": "ws_event",
           "name": "text",
-          "start": 38386,
-          "end": 38398,
+          "start": 38262,
+          "end": 38274,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -14481,11 +14543,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:38543",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:38419",
           "kind": "ws_event",
           "name": "file",
-          "start": 38543,
-          "end": 38555,
+          "start": 38419,
+          "end": 38431,
           "fingerprint": "61b98201318f4bf1",
           "details": {
             "expression": "\"file\"",
@@ -14496,11 +14558,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:38922",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:38798",
           "kind": "ws_event",
           "name": "project",
-          "start": 38922,
-          "end": 38937,
+          "start": 38798,
+          "end": 38813,
           "fingerprint": "dd3f80267dae4232",
           "details": {
             "expression": "\"project\"",
@@ -14511,11 +14573,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:39214",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:39090",
           "kind": "ws_event",
           "name": "terminal",
-          "start": 39214,
-          "end": 39230,
+          "start": 39090,
+          "end": 39106,
           "fingerprint": "61cec2f958a4db8b",
           "details": {
             "expression": "\"terminal\"",
@@ -14526,11 +14588,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:39807",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:39683",
           "kind": "ws_event",
           "name": "chat",
-          "start": 39807,
-          "end": 39819,
+          "start": 39683,
+          "end": 39695,
           "fingerprint": "97315003dad92831",
           "details": {
             "expression": "\"chat\"",
@@ -14541,11 +14603,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:40090",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:39966",
           "kind": "ws_event",
           "name": "skill",
-          "start": 40090,
-          "end": 40103,
+          "start": 39966,
+          "end": 39979,
           "fingerprint": "c2a388c4365309ba",
           "details": {
             "expression": "\"skill\"",
@@ -14556,11 +14618,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:40442",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:40318",
           "kind": "ws_event",
           "name": "image",
-          "start": 40442,
-          "end": 40455,
+          "start": 40318,
+          "end": 40331,
           "fingerprint": "4121b890ce8bbc8a",
           "details": {
             "expression": "\"image\"",
@@ -14571,11 +14633,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:40837",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:40713",
           "kind": "ws_event",
           "name": "attachment",
-          "start": 40837,
-          "end": 40855,
+          "start": 40713,
+          "end": 40731,
           "fingerprint": "409f3e7ec2be2e40",
           "details": {
             "expression": "\"attachment\"",
@@ -14586,11 +14648,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:54826",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:54702",
           "kind": "ws_event",
           "name": "text",
-          "start": 54826,
-          "end": 54838,
+          "start": 54702,
+          "end": 54714,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -14601,11 +14663,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:54898",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:54774",
           "kind": "ws_event",
           "name": "text",
-          "start": 54898,
-          "end": 54910,
+          "start": 54774,
+          "end": 54786,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -14616,11 +14678,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:55277",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:55153",
           "kind": "ws_event",
           "name": "thinking",
-          "start": 55277,
-          "end": 55293,
+          "start": 55153,
+          "end": 55169,
           "fingerprint": "96f19567beaf2787",
           "details": {
             "expression": "\"thinking\"",
@@ -14631,11 +14693,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:55353",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:55229",
           "kind": "ws_event",
           "name": "thinking",
-          "start": 55353,
-          "end": 55369,
+          "start": 55229,
+          "end": 55245,
           "fingerprint": "96f19567beaf2787",
           "details": {
             "expression": "\"thinking\"",
@@ -14646,11 +14708,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:55779",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:55655",
           "kind": "ws_event",
           "name": "toolGroup",
-          "start": 55779,
-          "end": 55796,
+          "start": 55655,
+          "end": 55672,
           "fingerprint": "34e537b511ad252e",
           "details": {
             "expression": "\"toolGroup\"",
@@ -14661,11 +14723,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:55868",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:55744",
           "kind": "ws_event",
           "name": "toolGroup",
-          "start": 55868,
-          "end": 55885,
+          "start": 55744,
+          "end": 55761,
           "fingerprint": "34e537b511ad252e",
           "details": {
             "expression": "\"toolGroup\"",
@@ -14676,11 +14738,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:57145",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:57021",
           "kind": "ws_event",
           "name": "text",
-          "start": 57145,
-          "end": 57157,
+          "start": 57021,
+          "end": 57033,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -14691,11 +14753,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:57227",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:57103",
           "kind": "ws_event",
           "name": "text",
-          "start": 57227,
-          "end": 57239,
+          "start": 57103,
+          "end": 57115,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -14706,11 +14768,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:58440",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:58316",
           "kind": "ws_event",
           "name": "text",
-          "start": 58440,
-          "end": 58452,
+          "start": 58316,
+          "end": 58328,
           "fingerprint": "a2fc51d02dbfca56",
           "details": {
             "expression": "\"text\"",
@@ -14721,11 +14783,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:59102",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:58978",
           "kind": "ws_event",
           "name": "thinking",
-          "start": 59102,
-          "end": 59118,
+          "start": 58978,
+          "end": 58994,
           "fingerprint": "96f19567beaf2787",
           "details": {
             "expression": "\"thinking\"",
@@ -14736,11 +14798,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:59190",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:59066",
           "kind": "ws_event",
           "name": "thinking",
-          "start": 59190,
-          "end": 59206,
+          "start": 59066,
+          "end": 59082,
           "fingerprint": "96f19567beaf2787",
           "details": {
             "expression": "\"thinking\"",
@@ -14751,11 +14813,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:59547",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:59423",
           "kind": "ws_event",
           "name": "steering",
-          "start": 59547,
-          "end": 59563,
+          "start": 59423,
+          "end": 59439,
           "fingerprint": "17654abbc560264a",
           "details": {
             "expression": "\"steering\"",
@@ -14766,11 +14828,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:60234",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:60110",
           "kind": "ws_event",
           "name": "error",
-          "start": 60234,
-          "end": 60247,
+          "start": 60110,
+          "end": 60123,
           "fingerprint": "f023c6e84696f5df",
           "details": {
             "expression": "\"error\"",
@@ -14781,11 +14843,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:61822",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:61698",
           "kind": "ws_event",
           "name": "toolGroup",
-          "start": 61822,
-          "end": 61839,
+          "start": 61698,
+          "end": 61715,
           "fingerprint": "34e537b511ad252e",
           "details": {
             "expression": "\"toolGroup\"",
@@ -14796,11 +14858,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:61920",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:61796",
           "kind": "ws_event",
           "name": "toolGroup",
-          "start": 61920,
-          "end": 61937,
+          "start": 61796,
+          "end": 61813,
           "fingerprint": "34e537b511ad252e",
           "details": {
             "expression": "\"toolGroup\"",
@@ -14811,11 +14873,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:63181",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:63057",
           "kind": "ws_event",
           "name": "toolGroup",
-          "start": 63181,
-          "end": 63198,
+          "start": 63057,
+          "end": 63074,
           "fingerprint": "34e537b511ad252e",
           "details": {
             "expression": "\"toolGroup\"",
@@ -14826,11 +14888,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/chat.ts#ws_event:63279",
+          "id": "packages/gateway/src/routes/chat.ts#ws_event:63155",
           "kind": "ws_event",
           "name": "toolGroup",
-          "start": 63279,
-          "end": 63296,
+          "start": 63155,
+          "end": 63172,
           "fingerprint": "34e537b511ad252e",
           "details": {
             "expression": "\"toolGroup\"",
@@ -17077,29 +17139,31 @@
     },
     {
       "path": "packages/gateway/src/routes/meeting-recordings.ts",
-      "fingerprint": "091a65a6872dc2e3",
+      "fingerprint": "1ca93d72f5853e65",
       "migration_owner": "R04-http",
       "status": "pending",
       "required_test_ids": [],
       "gap": "Workstream owner only; individual assignee and exact behavioral Rust test IDs/branch coverage pending. Static test imports are not evidence.",
       "interface_ids": [
-        "packages/gateway/src/routes/meeting-recordings.ts#bridge:2324",
+        "packages/gateway/src/routes/meeting-recordings.ts#bridge:2819",
         "packages/gateway/src/routes/meeting-recordings.ts#dependency:0",
         "packages/gateway/src/routes/meeting-recordings.ts#dependency:64",
         "packages/gateway/src/routes/meeting-recordings.ts#dependency:89",
-        "packages/gateway/src/routes/meeting-recordings.ts#schema:1166",
-        "packages/gateway/src/routes/meeting-recordings.ts#schema:666",
-        "packages/gateway/src/routes/meeting-recordings.ts#schema:919"
+        "packages/gateway/src/routes/meeting-recordings.ts#schema:1294",
+        "packages/gateway/src/routes/meeting-recordings.ts#schema:1445",
+        "packages/gateway/src/routes/meeting-recordings.ts#schema:1635",
+        "packages/gateway/src/routes/meeting-recordings.ts#schema:728",
+        "packages/gateway/src/routes/meeting-recordings.ts#schema:981"
       ],
-      "claims_fingerprint": "3e54c5577f6342e2",
+      "claims_fingerprint": "1385bd70b707d80b",
       "claims": [
         {
-          "id": "packages/gateway/src/routes/meeting-recordings.ts#bridge:2324",
+          "id": "packages/gateway/src/routes/meeting-recordings.ts#bridge:2819",
           "kind": "bridge",
           "name": "app.register",
-          "start": 2324,
-          "end": 6562,
-          "fingerprint": "1c25a788f501f42a",
+          "start": 2819,
+          "end": 9024,
+          "fingerprint": "603b1088a1c53aaf",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
           },
@@ -17140,8 +17204,8 @@
           "kind": "dependency",
           "name": "@jait/shared",
           "start": 89,
-          "end": 179,
-          "fingerprint": "5ea02a90538095da",
+          "end": 241,
+          "fingerprint": "ff3ac3e2385d540e",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
           },
@@ -17150,11 +17214,41 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/meeting-recordings.ts#schema:1166",
+          "id": "packages/gateway/src/routes/meeting-recordings.ts#schema:1294",
+          "kind": "schema",
+          "name": "reviewSchema",
+          "start": 1294,
+          "end": 1437,
+          "fingerprint": "8358f3509c69d336",
+          "details": {
+            "representation": "schema expression; references unresolved",
+            "definition": "z.object({ autoSave: z.boolean().optional(), complete: z.boolean(), transcript: z.string().max(MEETING_LIVE_DRAFT_MAX_LENGTH) })"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/routes/meeting-recordings.ts#schema:1445",
+          "kind": "schema",
+          "name": "previewSchema",
+          "start": 1445,
+          "end": 1627,
+          "fingerprint": "e83a857e7f2db9f1",
+          "details": {
+            "representation": "schema expression; references unresolved",
+            "definition": "z.object({\n  audio: z.string().min(4).max(Math.ceil(MEETING_UPLOAD_CHUNK / 3) * 4).regex(/^[A-Za-z0-9+/]+={0,2}$/),\n  mimeType: z.enum([\"audio/wav\", \"audio/aac\"]),\n})"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/routes/meeting-recordings.ts#schema:1635",
           "kind": "schema",
           "name": "chunkSchema",
-          "start": 1166,
-          "end": 1356,
+          "start": 1635,
+          "end": 1825,
           "fingerprint": "8f22850ee089740a",
           "details": {
             "representation": "schema expression; references unresolved",
@@ -17165,11 +17259,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/meeting-recordings.ts#schema:666",
+          "id": "packages/gateway/src/routes/meeting-recordings.ts#schema:728",
           "kind": "schema",
           "name": "settingsSchema",
-          "start": 666,
-          "end": 878,
+          "start": 728,
+          "end": 940,
           "fingerprint": "14ec8b1ed3e0e759",
           "details": {
             "representation": "schema expression; references unresolved",
@@ -17180,11 +17274,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/meeting-recordings.ts#schema:919",
+          "id": "packages/gateway/src/routes/meeting-recordings.ts#schema:981",
           "kind": "schema",
           "name": "createSchema",
-          "start": 919,
-          "end": 1158,
+          "start": 981,
+          "end": 1220,
           "fingerprint": "a50eb21f615977e9",
           "details": {
             "representation": "schema expression; references unresolved",
@@ -27176,7 +27270,7 @@
     },
     {
       "path": "packages/gateway/src/services/background-command-monitor.ts",
-      "fingerprint": "1c434d125d845f3c",
+      "fingerprint": "5b3d114f370ea6fd",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -33070,7 +33164,7 @@
     },
     {
       "path": "packages/gateway/src/services/sessions.ts",
-      "fingerprint": "65ceabca8c3d41d6",
+      "fingerprint": "f53b05c3a7aeaead",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -44935,7 +45029,7 @@
     },
     {
       "path": "packages/gateway/src/tools/sandbox-background-terminal.ts",
-      "fingerprint": "c49d24867dc12c92",
+      "fingerprint": "8e3e50cc69af9042",
       "migration_owner": "R06-execution",
       "status": "pending",
       "required_test_ids": [],
@@ -46341,7 +46435,7 @@
     },
     {
       "path": "packages/gateway/src/tools/terminal-tools.ts",
-      "fingerprint": "6545b39f051378e9",
+      "fingerprint": "6271e0794a399970",
       "migration_owner": "R06-execution",
       "status": "pending",
       "required_test_ids": [],
@@ -46353,9 +46447,9 @@
         "packages/gateway/src/tools/terminal-tools.ts#dependency:1960",
         "packages/gateway/src/tools/terminal-tools.ts#platform:61638",
         "packages/gateway/src/tools/terminal-tools.ts#tool:56910",
-        "packages/gateway/src/tools/terminal-tools.ts#tool:85123"
+        "packages/gateway/src/tools/terminal-tools.ts#tool:85444"
       ],
-      "claims_fingerprint": "87ba68c2269c951f",
+      "claims_fingerprint": "4afcbd229ca46c53",
       "claims": [
         {
           "id": "packages/gateway/src/tools/terminal-tools.ts#dependency:1142",
@@ -46432,8 +46526,8 @@
           "kind": "tool",
           "name": "terminal.run",
           "start": 56910,
-          "end": 82834,
-          "fingerprint": "afde59fc6e2bb7c0",
+          "end": 83155,
+          "fingerprint": "af36fce9e49a9cf9",
           "details": {
             "name_expression": "\"terminal.run\"",
             "schema": "{\n      type: \"object\",\n      properties: {\n        command: { type: \"string\", description: \"The shell command to execute\" },\n        nodeId: { type: \"string\", description: \"Run on this connected device instead of the project's machine (e.g. a Windows PC). Use computer.targets to discover device ids; \\\"gateway\\\" forces the gateway itself.\" },\n        terminalId: { type: \"string\", description: \"Reuse a specific terminal (omit to auto-select or create)\" },\n        timeout: { type: \"number\", description: \"Execution deadline in ms: default 3600000, maximum 86400000. Expiry stops the execution. This is separate from yieldTimeMs; 0 or negative uses the default.\" },\n        yieldTimeMs: { type: \"number\", description: \"Initial wait in ms before returning a running execution: default 10000, maximum 30000. Zero yields immediately. The process continues until completion, cancellation, or timeout.\" },\n        isBackground: { type: \"boolean\", description: \"If true, return after startup output settles (up to 5 seconds). Useful for servers and watchers. Finite commands also yield automatically after yieldTimeMs. Completion resumes the agent automatically; inspect progress or cancel with terminal.execution.\" },\n        sandbox: { type: \"boolean\", description: \"Run inside Docker sandbox container\" },\n        sandboxMountMode: { type: \"string\", description: \"Sandbox mount mode: none, read-only, read-write\" },\n        elevated: { type: \"boolean\", description: \"Run with elevated (administrator) privileges. Linux/macOS use sudo in the terminal and prompt the user for the password; Windows shows UAC. Always requires user approval.\" },\n        username: { type: \"string\", description: \"Windows only, with elevated:true: administrator account username. When omitted on Windows, the native UAC dialog is shown instead.\" },\n        reason: { type: \"string\", description: \"With elevated:true: short human-readable reason shown in the password prompt.\" },\n      },\n      required: [\"command\"],\n    }"
@@ -46443,11 +46537,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/tools/terminal-tools.ts#tool:85123",
+          "id": "packages/gateway/src/tools/terminal-tools.ts#tool:85444",
           "kind": "tool",
           "name": "terminal.stream",
-          "start": 85123,
-          "end": 86378,
+          "start": 85444,
+          "end": 86699,
           "fingerprint": "6e26facc9178c6d2",
           "details": {
             "name_expression": "\"terminal.stream\"",
@@ -48298,7 +48392,7 @@
     },
     {
       "path": "packages/shared/package.json",
-      "fingerprint": "e730f0e226ffd929",
+      "fingerprint": "865f33aeec88660a",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -48306,7 +48400,7 @@
       "interface_ids": [
         "packages/shared/package.json#dependency:zod"
       ],
-      "claims_fingerprint": "e9e7306d911a7634",
+      "claims_fingerprint": "740433fba12090ba",
       "claims": [
         {
           "id": "packages/shared/package.json#dependency:zod",
@@ -48314,7 +48408,7 @@
           "name": "zod",
           "start": 0,
           "end": 1187,
-          "fingerprint": "e730f0e226ffd929",
+          "fingerprint": "865f33aeec88660a",
           "details": {
             "version": "^3.25.76"
           },
@@ -49379,25 +49473,42 @@
     },
     {
       "path": "packages/shared/src/meeting-recording.ts",
-      "fingerprint": "4c1cbdba846e909a",
+      "fingerprint": "fabc9b86345f08e8",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
       "gap": "Workstream owner only; individual assignee and exact behavioral Rust test IDs/branch coverage pending. Static test imports are not evidence.",
       "interface_ids": [
-        "packages/shared/src/meeting-recording.ts#schema:141",
-        "packages/shared/src/meeting-recording.ts#schema:298",
-        "packages/shared/src/meeting-recording.ts#schema:409",
-        "packages/shared/src/meeting-recording.ts#schema:518"
+        "packages/shared/src/meeting-recording.ts#schema:1003",
+        "packages/shared/src/meeting-recording.ts#schema:338",
+        "packages/shared/src/meeting-recording.ts#schema:495",
+        "packages/shared/src/meeting-recording.ts#schema:606",
+        "packages/shared/src/meeting-recording.ts#schema:729",
+        "packages/shared/src/meeting-recording.ts#schema:927"
       ],
-      "claims_fingerprint": "79d25de731e85ab4",
+      "claims_fingerprint": "46a5d62095f4713c",
       "claims": [
         {
-          "id": "packages/shared/src/meeting-recording.ts#schema:141",
+          "id": "packages/shared/src/meeting-recording.ts#schema:1003",
+          "kind": "schema",
+          "name": "MeetingTranscriptReview",
+          "start": 1003,
+          "end": 1369,
+          "fingerprint": "56d5f2d9b74c9db4",
+          "details": {
+            "representation": "TypeScript contract declaration, not JSON Schema",
+            "definition": "export interface MeetingTranscriptReview {\n  /** Save to Obsidian after transcription without waiting for manual review. */\n  autoSave?: boolean;\n  /** True when the live draft covers the recording and can be reviewed directly. */\n  complete: boolean;\n  /** The full live draft, or just the user's live edits when batch recovery is needed. */\n  transcript: string;\n}"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/shared/src/meeting-recording.ts#schema:338",
           "kind": "schema",
           "name": "MeetingSettings",
-          "start": 141,
-          "end": 296,
+          "start": 338,
+          "end": 493,
           "fingerprint": "56d79ab6219a9631",
           "details": {
             "representation": "TypeScript contract declaration, not JSON Schema",
@@ -49408,11 +49519,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/shared/src/meeting-recording.ts#schema:298",
+          "id": "packages/shared/src/meeting-recording.ts#schema:495",
           "kind": "schema",
           "name": "MeetingSetup",
-          "start": 298,
-          "end": 407,
+          "start": 495,
+          "end": 604,
           "fingerprint": "7cb0c57b8b1a472b",
           "details": {
             "representation": "TypeScript contract declaration, not JSON Schema",
@@ -49423,30 +49534,45 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/shared/src/meeting-recording.ts#schema:409",
+          "id": "packages/shared/src/meeting-recording.ts#schema:606",
           "kind": "schema",
           "name": "MeetingStage",
-          "start": 409,
-          "end": 516,
-          "fingerprint": "af964b64e2c1a691",
+          "start": 606,
+          "end": 727,
+          "fingerprint": "55e7a84218b93319",
           "details": {
             "representation": "TypeScript contract declaration, not JSON Schema",
-            "definition": "export type MeetingStage = 'uploading' | 'transcribing' | 'summarizing' | 'saving' | 'complete' | 'failed';"
+            "definition": "export type MeetingStage = 'uploading' | 'transcribing' | 'reviewing' | 'summarizing' | 'saving' | 'complete' | 'failed';"
           },
           "status": "pending",
           "required_test_ids": [],
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/shared/src/meeting-recording.ts#schema:518",
+          "id": "packages/shared/src/meeting-recording.ts#schema:729",
           "kind": "schema",
           "name": "MeetingJob",
-          "start": 518,
-          "end": 691,
-          "fingerprint": "68b92576e362eb2d",
+          "start": 729,
+          "end": 925,
+          "fingerprint": "c1a731f86eb7341a",
           "details": {
             "representation": "TypeScript contract declaration, not JSON Schema",
-            "definition": "export interface MeetingJob {\n  id: string;\n  stage: MeetingStage;\n  uploadedBytes: number;\n  startedAt: string;\n  notePath?: string;\n  noteUrl?: string;\n  error?: string;\n}"
+            "definition": "export interface MeetingJob {\n  id: string;\n  stage: MeetingStage;\n  uploadedBytes: number;\n  startedAt: string;\n  transcript?: string;\n  notePath?: string;\n  noteUrl?: string;\n  error?: string;\n}"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/shared/src/meeting-recording.ts#schema:927",
+          "kind": "schema",
+          "name": "MeetingSpeechSegment",
+          "start": 927,
+          "end": 1001,
+          "fingerprint": "c3ccb64bad457517",
+          "details": {
+            "representation": "TypeScript contract declaration, not JSON Schema",
+            "definition": "export interface MeetingSpeechSegment {\n  start: number;\n  text: string;\n}"
           },
           "status": "pending",
           "required_test_ids": [],

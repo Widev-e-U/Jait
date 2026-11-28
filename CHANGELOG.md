@@ -4,6 +4,16 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.987](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.987) — 2026-11-28
+
+- test(gateway-rust): check expanded meeting job action routes — 4e2e6179
+- test: verify recorder scrolling and inventory meeting API routes — a2225101
+- feat: stream meeting transcripts and save to Obsidian on stop — f47d0283
+- test(gateway-rust): preserve expanded API inventory and skills evidence — 571895c7
+- fix(gateway-rust): expand literal loop actions in API inventory — 218ffbad
+- fix(gateway-rust): match provider account rename contract — d1c9c991
+- chore(gateway-rust): refresh API inventory references — cb47f8c3
+
 ## [v0.1.986](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.986) — 2026-11-28
 
 - fix(web): default mobile device names to dome — 9b85688b
