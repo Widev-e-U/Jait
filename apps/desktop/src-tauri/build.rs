@@ -8,6 +8,8 @@ fn main() {
         // "not allowed. Plugin not found" once any capability exists.
         tauri_build::AppManifest::new().commands(&[
             "desktop_ipc",
+            "desktop_meeting_playback",
+            "desktop_open_meeting_note",
             "desktop_gateway_status",
             "desktop_gateway_configure",
             "desktop_gateway_restart_app",

@@ -47,6 +47,8 @@ interface JaitDesktop {
   removeGatewayEventListener: () => void
   getPathForFile: (file: File) => string
   platform: 'desktop'
+  meetingPlayback?: (action: 'start' | 'read' | 'stop') => Promise<string>
+  openMeetingNote?: (noteUrl: string) => Promise<void>
   /** Native process.platform value exposed synchronously by desktop shells. */
   nativePlatform?: 'win32' | 'darwin' | 'linux'
   windowMinimize: () => Promise<void>

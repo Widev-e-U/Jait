@@ -1,3 +1,4 @@
+import { MeetingRecordingControl } from '@/components/meetings/MeetingRecordingControl'
 import { BarChart3, LogIn, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, Network, type LucideIcon } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 
@@ -204,6 +205,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         {items.length > 0 && <OverflowSidebarNavigation label="Workspace tools" moreLabel="More workspace tools" items={items} collapsed={collapsed} renderItem={renderItem} visibleCount={toolsAllocation.visibleCount} />}
       </div>
       <div className="flex shrink-0 flex-col gap-1 border-t pt-2">
+        <MeetingRecordingControl compact={collapsed} />
         {account?.updateControl?.(collapsed)}
         {bottomItems.map(renderItem)}
         {account?.agentControl?.(collapsed)}

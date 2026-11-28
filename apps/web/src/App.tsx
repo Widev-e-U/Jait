@@ -1,3 +1,4 @@
+import { MeetingRecordingContext, useMeetingRecording } from '@/hooks/useMeetingRecording'
 import { handleMessengerNotification } from '@/lib/messenger/notification-actions'
 import { applyPendingApprovalEvent } from '@/lib/pending-approvals'
 import { applyPendingQuestionEvent, pendingQuestionSessionIds } from '@/lib/pending-questions'
@@ -513,6 +514,7 @@ function App() {
     updateSettings,
     clearSessionArchive
   } = useAuth()
+  const meetingRecording = useMeetingRecording(isAuthenticated ? user?.id : undefined, appPlatform)
 
   const authForm = useAuthForm({
     login,
@@ -5270,6 +5272,7 @@ function App() {
   }
 
   return (
+    <MeetingRecordingContext.Provider value={meetingRecording}>
     <ScreenShareProvider value={screenShare}>
     <UnreadChatCountContext.Provider value={unreadChatCount}>
     <TooltipProvider>
@@ -6108,6 +6111,7 @@ function App() {
     </TooltipProvider>
     </UnreadChatCountContext.Provider>
     </ScreenShareProvider>
+    </MeetingRecordingContext.Provider>
   )
 }
 

@@ -35,3 +35,5 @@ export type { ModelUsage, UsageSummary } from "./model-usage.js";
 export * from "./chat-loop.js";
 export * from "./session-unread.js";
 export * from "./browser-workflows.js";
+
+export * from "./meeting-recording.js";

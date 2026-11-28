@@ -460,6 +460,11 @@
     min-width: 2.5rem;
   }
 
+  /* Image references flow with the surrounding message text. */
+  button[data-image-reference] {
+    min-width: 0;
+  }
+
   .ui-inline-action,
   .ui-inline-action-danger {
     min-height: 2.5rem;

@@ -1791,4 +1791,20 @@ export const migrations: Migration[] = [
       db.exec("ALTER TABLE messages ADD COLUMN author_user_id TEXT");
     },
   },
+  {
+    id: 82, name: "meeting_recordings",
+    run(db) {
+      db.exec(`CREATE TABLE meeting_recordings (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, started_at TEXT NOT NULL,
+        stage TEXT NOT NULL, mime_type TEXT NOT NULL, total_bytes INTEGER NOT NULL,
+        uploaded_bytes INTEGER NOT NULL DEFAULT 0, transcript TEXT, summary TEXT,
+        note_path TEXT, note_url TEXT, error TEXT, created_at TEXT NOT NULL
+      )`);
+      db.exec("CREATE UNIQUE INDEX meeting_owner_pending ON meeting_recordings(user_id) WHERE stage <> 'complete'");
+      db.exec(`CREATE TABLE meeting_recording_chunks (
+        recording_id TEXT NOT NULL REFERENCES meeting_recordings(id) ON DELETE CASCADE,
+        byte_offset INTEGER NOT NULL, audio BLOB NOT NULL, PRIMARY KEY (recording_id, byte_offset)
+      )`);
+    },
+  },
 ];

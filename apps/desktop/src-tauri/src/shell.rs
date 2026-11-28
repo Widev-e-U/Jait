@@ -50,6 +50,25 @@ fn receive_notification_args(app: &AppHandle, args: &[String]) -> bool {
     false
 }
 
+#[tauri::command]
+fn desktop_meeting_playback(
+    action: crate::meeting_audio::PlaybackAction,
+    state: State<'_, crate::meeting_audio::MeetingPlayback>,
+) -> Result<String, String> {
+    state.handle(action)
+}
+
+#[tauri::command]
+fn desktop_open_meeting_note(app: AppHandle, note_url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = url::Url::parse(&note_url).map_err(|_| "Invalid Obsidian note link.")?;
+    if url.scheme() != "obsidian" || url.host_str() != Some("open") {
+        return Err("Invalid Obsidian note link.".into());
+    }
+    app.opener().open_url(url.as_str(), None::<&str>)
+        .map_err(|_| "Obsidian could not open the note on this device.".into())
+}
+
 /// Command channels the webview may reach. Mirrors the preload shim's
 /// `invoke` map 1:1 — anything else is rejected before glue dispatch.
 const ALLOWED_CHANNELS: &[&str] = &[
@@ -641,7 +660,10 @@ pub fn run() {
                 }
             }
         })
+        .manage(crate::meeting_audio::MeetingPlayback::default())
         .invoke_handler(tauri::generate_handler![
+            desktop_meeting_playback,
+            desktop_open_meeting_note,
             desktop_ipc,
             desktop_gateway_status,
             desktop_gateway_configure,

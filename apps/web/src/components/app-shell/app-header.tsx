@@ -1,3 +1,4 @@
+import { MeetingRecordingControl } from '@/components/meetings/MeetingRecordingControl'
 import type React from 'react'
 import { useState } from 'react'
 import {
@@ -157,6 +158,7 @@ export function AppHeader(props: AppHeaderProps) {
             </span>
             <VoiceMicButtonMobile {...voiceControlProps} compactWithAgents={isMobile && Boolean(agentControl)} layoutPending={agentSlotLoading} />
             {isMobile && agentControl}
+            {isMobile && <MeetingRecordingControl mobile />}
           </div>
 
           {/* Center: voice controls when voice active */}

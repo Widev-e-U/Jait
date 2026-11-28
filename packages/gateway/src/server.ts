@@ -27,6 +27,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import { registerChatRoutes, getPersonaChatRuntime, haltPersonaChatRuns } from "./routes/chat.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerMeetingRecordingRoutes } from "./routes/meeting-recordings.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerBrowserDevToolsRoutes } from "./routes/browser-devtools.js";
 import { signPreviewToken, verifyPreviewToken } from "./security/preview-token.js";
@@ -314,6 +315,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   });
   if (deps.userService) {
     registerAuthRoutes(app, config, deps.userService, deps.toolRegistry);
+  }
+  if (deps.userService && deps.userSecretService && deps.sqlite) {
+    registerMeetingRecordingRoutes(app, config.jwtSecret, deps.userService, deps.userSecretService, deps.sqlite);
   }
   // Owner-wide autonomous-execution kill switch. Created before the routes that
   // consult it so every dispatch path shares one instance (and one durable row).
