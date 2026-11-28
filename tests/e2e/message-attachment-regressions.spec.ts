@@ -68,6 +68,24 @@ test('image viewport and portal controls never start message editing', async ({ 
   await expect(sent.getByRole('button', { name: 'Cancel editing message' })).toBeVisible()
 })
 
+test.describe('inline image references on touchscreens', () => {
+  test.use({ hasTouch: true })
+
+  test('fit the label and still open the image', async ({ page }) => {
+    await openFixture(page, 390)
+    const sent = page.getByTestId('sent')
+    const reference = sent.getByRole('button', { name: 'View image reference 1: first.png', exact: true })
+    const label = reference.getByText('[1]', { exact: true })
+    await expect(label).toBeVisible()
+    const buttonWidth = (await reference.boundingBox())!.width
+    const labelWidth = (await label.boundingBox())!.width
+    expect(buttonWidth - labelWidth).toBeLessThanOrEqual(8)
+    await sent.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/', 'mobile-inline-image-reference.png') })
+    await reference.tap()
+    await expect(page.getByRole('dialog')).toBeVisible()
+  })
+})
+
 for (const width of [390, 1280]) {
   test(`user message controls stay clear of message text at ${width}px`, async ({ page }) => {
     await openFixture(page, width)

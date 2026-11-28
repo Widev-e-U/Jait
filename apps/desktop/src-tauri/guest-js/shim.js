@@ -521,6 +521,9 @@
     // detectPlatform() keys off presence of window.jaitDesktop itself)
     platform: 'desktop',
     nativePlatform: BOOT.platform || null,
+    meetingPlayback: BOOT.platform === 'win32' ? function (action) { return invoke('desktop_meeting_playback', { action: action }); } : undefined,
+    meetingWindow: function (action, message) { return invoke('desktop_meeting_window', { action: action, message: message }); },
+    openMeetingNote: function (noteUrl) { return invoke('desktop_open_meeting_note', { noteUrl: noteUrl }); },
     deviceId: BOOT.deviceID || BOOT.deviceId || null,
     // the legacy desktop shell / the preload shim expose the gateway URL synchronously so
     // the web app can hit the gateway without awaiting getInfo() first.

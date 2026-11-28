@@ -375,6 +375,24 @@
           "markdownDescription": "Enables the desktop_ipc command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_meeting_playback command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-meeting-playback",
+          "markdownDescription": "Enables the desktop_meeting_playback command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_meeting_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-meeting-window",
+          "markdownDescription": "Enables the desktop_meeting_window command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_open_meeting_note command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-open-meeting-note",
+          "markdownDescription": "Enables the desktop_open_meeting_note command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_pick_directory_dialog command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-pick-directory-dialog",
@@ -469,6 +487,24 @@
           "type": "string",
           "const": "deny-desktop-ipc",
           "markdownDescription": "Denies the desktop_ipc command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_meeting_playback command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-meeting-playback",
+          "markdownDescription": "Denies the desktop_meeting_playback command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_meeting_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-meeting-window",
+          "markdownDescription": "Denies the desktop_meeting_window command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_open_meeting_note command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-open-meeting-note",
+          "markdownDescription": "Denies the desktop_open_meeting_note command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_pick_directory_dialog command without any pre-configured scope.",

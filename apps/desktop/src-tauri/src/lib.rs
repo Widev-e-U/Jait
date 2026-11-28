@@ -29,6 +29,9 @@ pub mod updater;
 pub mod hosting;
 
 #[cfg(feature = "shell")]
+mod meeting_audio;
+
+#[cfg(feature = "shell")]
 #[macro_use]
 pub mod shell;
 

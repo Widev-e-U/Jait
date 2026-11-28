@@ -4,7 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { observeConversationRect } from '@/lib/conversation-viewport'
 import { ArrowRight, ChevronUp, Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
-import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
+import { ConversationMessageRail, getMessageRailPreview } from './conversation-message-rail'
 import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
 import { cn } from '@/lib/utils'
 import { getChatTranscriptColumnClassName } from './message-edit-layout'
@@ -65,12 +65,7 @@ interface ConversationProps {
    * the moment it lands.
    */
   scrollToMessageId?: string | null
-  /**
-   * Show a VSCode/Rider-style content-preview minimap on the right edge
-   * (desktop only). Each text line of the conversation is drawn as one thin
-   * line — blue for user turns, muted for agent turns — so the rail reads like
-   * a shrunken preview of the transcript. Clicking or dragging it scrolls.
-   */
+  /** Show navigation ticks for user messages in wide chat panels. */
   showMinimap?: boolean
   /** Message row that must paint above neighboring virtualized rows while editing. */
   elevatedMessageId?: string | null
@@ -98,7 +93,7 @@ const BOTTOM_SETTLE_EPSILON_PX = 1
 const BOTTOM_SETTLE_STABLE_FRAMES = 3
 /** Ignore the message the viewport is already parked on when jumping upward. */
 const PREVIOUS_MESSAGE_EPSILON_PX = 8
-/** Breathing room between the floating scroll controls and the minimap rail. */
+/** Breathing room between the floating scroll controls and the message rail. */
 const FLOATING_CONTROL_GAP_PX = 12
 const DEFAULT_ITEM_HEIGHT = 120
 /** Clear the floating project/context controls when a mobile turn is aligned. */
@@ -115,8 +110,6 @@ const BOTTOM_SYNC_INTERVAL_MS = 500
 const BOTTOM_SYNC_DELTA_PX = 1
 const TOUCH_DETACH_THRESHOLD_PX = 4
 const ESTIMATE_TEXT_LIMIT = 12_000
-/** Stable identity so an absent `messageContents` doesn't rebuild the minimap. */
-const EMPTY_MESSAGE_CONTENTS: string[] = []
 export const INITIAL_CONVERSATION_SCROLL_OFFSET = Number.MAX_SAFE_INTEGER
 
 export function positionConversationAtBottom(
@@ -448,23 +441,13 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
 
 export function Conversation({ variant = 'assistant', sessionId, authToken, children, className, mobile = false, loading, isStreaming, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false, elevatedMessageId, onLatestContentViewed }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  // The scroll container may not exist yet on first mount (history still
-  // loading renders the skeleton branch), and a plain ref object is not
-  // reactive — the minimap used to mount, see `null`, and never set up its
-  // size/scroll observers until a remount (e.g. a mobile→desktop resize)
-  // happened. Mirror the ref into state so dependents re-observe the moment
-  // the element appears.
+  // The scroll container mounts after the loading skeleton.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const attachScrollElement = useCallback((el: HTMLDivElement | null) => {
     scrollRef.current = el
     setScrollElement(el)
   }, [])
   const sizerRef = useRef<HTMLDivElement | null>(null)
-  // Distance from the top of the scroll container to the top of the virtual
-  // sizer (top padding + the "load earlier messages" button). The minimap's
-  // document spans live in sizer coordinates, so this is what converts a
-  // resolved document offset back into a real `scrollTop`.
-  const [sizerOffset, setSizerOffset] = useState(0)
   const childItems = useMemo(() => Children.toArray(children), [children])
   const firstChildKey = useMemo(() => {
     const firstChild = childItems[0]
@@ -472,9 +455,8 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     return firstChild.key == null ? null : String(firstChild.key)
   }, [childItems])
   const hasContent = childItems.length > 0
-  // Per-child role for the minimap, index-aligned with childItems. Anything
-  // without an explicit 'user' role (e.g. the streaming queue) reads as agent.
-  const minimapRoles = useMemo<Array<'user' | 'agent'>>(
+  // Per-child roles for user-message navigation, index-aligned with childItems.
+  const messageRoles = useMemo<Array<'user' | 'agent'>>(
     () =>
       (messageEstimateInputs ?? []).map((m) =>
         m && isUserTurn(m)
@@ -484,8 +466,17 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     [messageEstimateInputs],
   )
   // Mirrored so the scroll callbacks that consult roles stay identity-stable.
-  const minimapRolesRef = useRef(minimapRoles)
-  minimapRolesRef.current = minimapRoles
+  const messageRolesRef = useRef(messageRoles)
+  messageRolesRef.current = messageRoles
+  const messageRailEntries = useMemo(() => {
+    if (!showMinimap) return []
+    return childItems.flatMap((child, index) => {
+      if (messageRoles[index] !== 'user') return []
+      const key = typeof child === 'object' && child !== null && 'key' in child ? child.key : null
+      return [{ key: key == null ? index : String(key), index, preview: getMessageRailPreview(messageContents?.[index]) }]
+    })
+  }, [showMinimap, messageRoles, messageContents, childItems])
+  const hasMessageRail = !loading && messageRailEntries.length > 0
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [canJumpUp, setCanJumpUp] = useState(false)
   const [previousUserMessageIndex, setPreviousUserMessageIndex] = useState<number | null>(null)
@@ -556,8 +547,8 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   const touchStartYRef = useRef<number | null>(null)
   const initialRevealFrameRef = useRef<number | null>(null)
   const initialRevealTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  // Pending re-anchor after a minimap scrub (see detachFromBottom).
-  const scrubAnchorFrameRef = useRef<number | null>(null)
+  // Pending re-anchor after a jump (see detachFromBottom).
+  const jumpAnchorFrameRef = useRef<number | null>(null)
   // In-flight "chase the end of the list" frame (see scrollToBottom).
   const bottomSettleFrameRef = useRef<number | null>(null)
   // Set briefly after a click inside the conversation (e.g. expanding a tool
@@ -599,7 +590,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
       }),
     )
     if (!anchor) {
-      // Nothing on screen to anchor to — right after a jump (a minimap scrub)
+      // Nothing on screen to anchor to — right after a jump
       // the rendered window still belongs to the old position. Drop the anchor
       // instead of keeping the stale one, which would otherwise pull the view
       // back to where the user just scrolled away from on the next reflow.
@@ -633,19 +624,14 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   // Track inner container width for pretext layout calculations.
   const innerRef = useRef<HTMLDivElement | null>(null)
   const containerWidthRef = useRef(600)
-  // Reactive mirror of the container width so the minimap can wrap preview lines
-  // at the same column width the real prose wraps at.
-  const [containerWidth, setContainerWidth] = useState(600)
 
   useEffect(() => {
     const el = innerRef.current
     if (!el) return
     containerWidthRef.current = el.clientWidth
-    setContainerWidth(el.clientWidth)
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         containerWidthRef.current = entry.contentRect.width
-        setContainerWidth(entry.contentRect.width)
       }
     })
     ro.observe(el)
@@ -660,10 +646,6 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   const messageEstimateInputsRef = useRef(messageEstimateInputs)
   messageEstimateInputsRef.current = messageEstimateInputs
 
-  // Shared height estimate for the virtualizer and the minimap's flat line
-  // model, so lines of messages that have not rendered yet (history far above
-  // the viewport) are placed on the rail at the same scale the virtualizer
-  // expects them to occupy.
   const estimateItemSize = useCallback(
     (index: number) => {
       const inputs = messageEstimateInputsRef.current
@@ -710,7 +692,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   const findPreviousUserMessage = useCallback(() => {
     const el = scrollRef.current
     if (!el) return null
-    const roles = minimapRolesRef.current
+    const roles = messageRolesRef.current
     const measurements = virtualizerRef.current.measurementsCache
     const items = measurements.length > 0 ? measurements : virtualizerRef.current.getVirtualItems()
     return findPreviousMessageIndex(
@@ -1101,14 +1083,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     bottomSettleFrameRef.current = requestAnimationFrame(step)
   }, [updateBottomState])
 
-  // The minimap moves the container by writing `scrollTop` directly, which no
-  // wheel/touch handler ever sees — so `updateBottomState` used to read the
-  // resulting scroll event as "not detached" and re-arm stick-to-bottom, and
-  // the next height sync (streaming, the ResizeObserver, or the bottom-sync
-  // poll) immediately yanked the view back to the end of the transcript.
-  // Treat a scrub as exactly the same intent as scrolling by hand: detach, and
-  // anchor on whatever the scrub landed on. Called *after* the scroll position
-  // is written, so the anchor is captured at the new position.
+  // Manual jumps and tool-card toggles take over from stream following.
   const detachFromBottom = useCallback(() => {
     detachedRef.current = true
     if (bottomSettleFrameRef.current !== null) {
@@ -1120,12 +1095,12 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
       setStickToBottom(false)
     }
     captureScrollAnchor()
-    // A scrub can jump far enough that the virtualizer has not rendered the
+    // A jump can go far enough that the virtualizer has not rendered the
     // destination yet, so the capture above finds nothing to anchor to. Try
     // again once the new window has been laid out.
-    if (scrubAnchorFrameRef.current !== null) cancelAnimationFrame(scrubAnchorFrameRef.current)
-    scrubAnchorFrameRef.current = requestAnimationFrame(() => {
-      scrubAnchorFrameRef.current = null
+    if (jumpAnchorFrameRef.current !== null) cancelAnimationFrame(jumpAnchorFrameRef.current)
+    jumpAnchorFrameRef.current = requestAnimationFrame(() => {
+      jumpAnchorFrameRef.current = null
       captureScrollAnchor()
     })
   }, [captureScrollAnchor])
@@ -1189,9 +1164,10 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     setPendingEditJumpIndex(null)
   }, [childItems, elevatedMessageId, pendingEditJumpIndex])
 
-  const handleMinimapScrub = useCallback(() => {
+  const jumpToUserMessage = useCallback((index: number) => {
     setPreviousMessagePreviewSuppressed(false)
     detachFromBottom()
+    virtualizerRef.current.scrollToIndex(index, { align: 'center', behavior: 'auto' })
   }, [detachFromBottom])
 
   // When a new user message lands, reserve one viewport below its top edge.
@@ -1357,8 +1333,8 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
       if (initialRevealFrameRef.current !== null) {
         cancelAnimationFrame(initialRevealFrameRef.current)
       }
-      if (scrubAnchorFrameRef.current !== null) {
-        cancelAnimationFrame(scrubAnchorFrameRef.current)
+      if (jumpAnchorFrameRef.current !== null) {
+        cancelAnimationFrame(jumpAnchorFrameRef.current)
       }
       if (bottomSettleFrameRef.current !== null) {
         cancelAnimationFrame(bottomSettleFrameRef.current)
@@ -1422,32 +1398,6 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     return () => observer.disconnect()
   }, [variant, initialScrollReady, topAnchoredMessageId, restoreScrollAnchor, scrollToBottom, updateBottomState])
 
-  // Track how far the virtual sizer sits below the top of the scroll *content*.
-  // The minimap's document spans are in sizer coordinates, so this offset is
-  // what turns a resolved document position into a real `scrollTop`.
-  //
-  // `getBoundingClientRect` is in viewport coordinates, so the raw difference
-  // between the two rects is the sizer's position on screen — which is hugely
-  // negative whenever the transcript is scrolled down (and the conversation
-  // opens scrolled to the bottom). Adding `scrollTop` converts it back into a
-  // position inside the scrollable content, which is the only frame the spans
-  // are expressed in. Without this the minimap resolved every scrub through a
-  // multi-thousand-pixel offset and clamped to the top or bottom of the chat.
-  //
-  // The offset only changes when something above the sizer appears or
-  // disappears — the "load earlier messages" button and the loading banner —
-  // so it is recomputed on mount and whenever either toggles.
-  useLayoutEffect(() => {
-    const sizerEl = sizerRef.current
-    const scrollEl = scrollRef.current
-    if (!sizerEl || !scrollEl) return
-    setSizerOffset(
-      sizerEl.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop,
-    )
-  }, [hasMore, loading, hasContent, initialScrollReady])
-
-  // Park the floating controls just left of the minimap rail rather than on top
-  // of it — a click meant for a button would otherwise scrub the transcript.
   const browser = useMemo(() => variant === 'assistant' ? findConversationBrowser(messageEstimateInputs ?? [], sessionId) : null, [variant, messageEstimateInputs, sessionId])
   // A screen share is only shown in the chat that owns it; shares owned by other
   // conversations (or gateway-wide shares) never render here.
@@ -1460,8 +1410,6 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
       {screenShare && sessionId && (
         <ChatScreenShareView key={screenShare.sessionId} chatId={sessionId} authToken={authToken} />
       )}
-      {/* The minimap and transcript share one row below the browser. Its full
-          height must not consume the transcript's space in the outer column. */}
       <div className="chat-conversation-viewport relative flex min-h-0 flex-1 overflow-hidden" data-conversation-viewport>
         {loading && !hasContent ? (
           <ConversationPositioningSkeleton label={loadingLabel} />
@@ -1583,8 +1531,8 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
           <TooltipHint content="Scroll to latest message">
           <ConversationScrollButton
             aria-label="Scroll to latest message"
-            className={cn('chat-scroll-latest left-auto bottom-5 translate-x-0', showMinimap && 'chat-scroll-latest-with-minimap')}
-            style={{ '--scroll-control-gap': `${FLOATING_CONTROL_GAP_PX}px`, '--minimap-rail-width': `${MINIMAP_RAIL_WIDTH_PX}px` } as CSSProperties}
+            className={cn('chat-scroll-latest left-auto bottom-5 translate-x-0', hasMessageRail && 'chat-scroll-latest-with-rail')}
+            style={{ '--scroll-control-gap': `${FLOATING_CONTROL_GAP_PX}px` } as CSSProperties}
             onClick={() => {
               detachedRef.current = false
               setStickToBottom(true)
@@ -1599,19 +1547,8 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
           </TooltipHint>
         )}
 
-        {showMinimap && (
-          <div className="chat-conversation-minimap">
-          <ConversationMinimap
-            virtualizer={virtualizer}
-            scrollElement={scrollElement}
-            sizerOffset={sizerOffset}
-            roles={minimapRoles}
-            texts={messageContents ?? EMPTY_MESSAGE_CONTENTS}
-            messageInputs={messageEstimateInputs ?? []}
-            textWidth={containerWidth}
-            onScrub={handleMinimapScrub}
-          />
-          </div>
+        {hasMessageRail && initialScrollReady && (
+          <ConversationMessageRail entries={messageRailEntries} onJump={jumpToUserMessage} />
         )}
       </div>
     </AIConversation>

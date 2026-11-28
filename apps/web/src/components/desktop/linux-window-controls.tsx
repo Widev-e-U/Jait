@@ -7,8 +7,8 @@ export interface LinuxWindowControlsProps {
 
 /**
  * Compact caption buttons for frameless desktop platforms. Linux uses native
- * window-manager decorations; Tauri Windows uses WinCaptionButtons with
- * native titleBarOverlay metrics. Marked `no-drag` for shells that honor the
+ * window-manager decorations and Tauri Windows uses WinCaptionButtons.
+ * Marked `no-drag` for shells that honor the
  * Electron-compatible CSS property.
  */
 export function LinuxWindowControls({ isMaximized }: LinuxWindowControlsProps) {

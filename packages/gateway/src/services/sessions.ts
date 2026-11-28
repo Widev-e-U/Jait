@@ -26,7 +26,7 @@ export interface SessionForkLiveSnapshot {
 export interface ForkSessionParams {
   userId: string;
   liveSnapshot?: SessionForkLiveSnapshot;
-  purpose?: { kind: "manual" } | { kind: "background-command"; terminalId: string; executionId: string };
+  purpose?: { kind: "manual" };
 }
 
 export class SessionService {
@@ -87,11 +87,9 @@ export class SessionService {
       forkedAt,
     };
 
-    const sourceMessages = this.db.select().from(messages).where(eq(messages.sessionId, source.id));
-    const sourceRows = purpose.kind === "background-command"
-      ? sourceMessages.orderBy(desc(messages.createdAt), desc(messages.id)).limit(40).all().reverse()
-      : sourceMessages.orderBy(messages.createdAt, messages.id).all();
-    const prefix = purpose.kind === "background-command" ? "Background terminal" : purpose.kind === "manual" ? "Fork" : "Question";
+    const sourceRows = this.db.select().from(messages).where(eq(messages.sessionId, source.id))
+      .orderBy(messages.createdAt, messages.id).all();
+    const prefix = purpose.kind === "manual" ? "Fork" : "Question";
 
     // A streaming assistant checkpoint belongs to the in-flight parent turn.
     // Replace it with the exact live accumulator captured at fork time so the

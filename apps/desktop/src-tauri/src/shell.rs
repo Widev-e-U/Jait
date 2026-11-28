@@ -50,6 +50,127 @@ fn receive_notification_args(app: &AppHandle, args: &[String]) -> bool {
     false
 }
 
+#[tauri::command]
+fn desktop_meeting_playback(
+    action: crate::meeting_audio::PlaybackAction,
+    state: State<'_, crate::meeting_audio::MeetingPlayback>,
+) -> Result<String, String> {
+    state.handle(action)
+}
+
+#[tauri::command]
+fn desktop_open_meeting_note(app: AppHandle, note_url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = url::Url::parse(&note_url).map_err(|_| "Invalid Obsidian note link.")?;
+    if url.scheme() != "obsidian" || url.host_str() != Some("open") {
+        return Err("Invalid Obsidian note link.".into());
+    }
+    app.opener().open_url(url.as_str(), None::<&str>)
+        .map_err(|_| "Obsidian could not open the note on this device.".into())
+}
+
+const MEETING_WINDOW: &str = "meeting-recorder";
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum MeetingWindowAction {
+    Prepare,
+    Show,
+    Hide,
+    Message,
+}
+
+const MEETING_WINDOW_BRIDGE: &str = r#"
+window.jaitMeetingWindow = Object.freeze({
+  startDrag: () => window.__TAURI_INTERNALS__.invoke('window_start_drag'),
+  send: message => window.__TAURI_INTERNALS__.invoke('desktop_meeting_window', { action: 'message', message })
+});
+"#;
+
+#[tauri::command]
+async fn desktop_meeting_window(
+    app: AppHandle,
+    window: Window,
+    action: MeetingWindowAction,
+    message: Option<Value>,
+) -> Result<(), String> {
+    let label = window.label();
+    if matches!(action, MeetingWindowAction::Message) {
+        let message = message.ok_or("Missing meeting window message.")?;
+        let kind = message.get("type").and_then(Value::as_str);
+        let target = match (label, kind) {
+            ("main", Some("connect" | "reset" | "state")) => MEETING_WINDOW,
+            (MEETING_WINDOW, Some("ready" | "action")) => "main",
+            _ => return Err("Invalid meeting window message.".into()),
+        };
+        if let Some(peer) = app.get_webview_window(target) {
+            // Serialize the payload as a JSON string (including any transcript
+            // text). The evaluated code only dispatches this fixed DOM event.
+            let payload = serde_json::to_string(&message.to_string())
+                .map_err(|error| error.to_string())?;
+            peer.eval(format!(
+                "window.dispatchEvent(new CustomEvent('jait:meeting-window', {{ detail: JSON.parse({payload}) }}));"
+            ))
+            .map_err(|error| error.to_string())?;
+        }
+        return Ok(());
+    }
+    if label != "main" {
+        return Err("Only the main window can manage the meeting recorder.".into());
+    }
+    let existing = app.get_webview_window(MEETING_WINDOW);
+    match action {
+        MeetingWindowAction::Prepare => {
+            if existing.is_some() {
+                return Ok(());
+            }
+            let target = web_url(&gateway_url());
+            let external = match &target {
+                WebviewUrl::External(url) => Some(url.clone()),
+                _ => None,
+            };
+            WebviewWindowBuilder::new(&app, MEETING_WINDOW, target)
+                .title("Meeting recorder")
+                .inner_size(620.0, 480.0)
+                .min_inner_size(350.0, 300.0)
+                .center()
+                .visible(false)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .maximizable(false)
+                .minimizable(false)
+                .closable(false)
+                .disable_drag_drop_handler()
+                .on_navigation(move |url| match &external {
+                    Some(entry) => url == entry,
+                    None => matches!(
+                        (url.scheme(), url.host_str()),
+                        ("tauri", Some("localhost")) | ("http" | "https", Some("tauri.localhost"))
+                    ) && url.port().is_none() && matches!(url.path(), "/" | "/index.html"),
+                })
+                .initialization_script(MEETING_WINDOW_BRIDGE)
+                .build()
+                .map_err(|error| error.to_string())?;
+            Ok(())
+        }
+        MeetingWindowAction::Show => {
+            if let Some(meeting) = existing {
+                meeting.show().map_err(|error| error.to_string())?;
+                meeting.set_focus().map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        }
+        MeetingWindowAction::Hide => {
+            if let Some(meeting) = existing {
+                meeting.hide().map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        }
+        MeetingWindowAction::Message => unreachable!(),
+    }
+}
+
 /// Command channels the webview may reach. Mirrors the preload shim's
 /// `invoke` map 1:1 — anything else is rejected before glue dispatch.
 const ALLOWED_CHANNELS: &[&str] = &[
@@ -641,7 +762,11 @@ pub fn run() {
                 }
             }
         })
+        .manage(crate::meeting_audio::MeetingPlayback::default())
         .invoke_handler(tauri::generate_handler![
+            desktop_meeting_playback,
+            desktop_open_meeting_note,
+            desktop_meeting_window,
             desktop_ipc,
             desktop_gateway_status,
             desktop_gateway_configure,

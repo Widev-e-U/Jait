@@ -4,17 +4,13 @@ import { NotificationToaster } from '@/components/ui/notification-toaster'
 import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
 import { HotkeysProvider } from '@/components/hotkeys'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { MeetingRecordingWindow } from '@/components/meetings/MeetingRecordingWindow'
 import { AuthProvider } from '@/hooks/useAuth'
 import { installVersionWatchdog } from '@/lib/version-watchdog'
 import App from './App'
 import { MessengerProvider } from '@/components/messenger/messenger-provider'
 import { detectPlatform, initDeviceId } from '@/lib/device-id'
 import './index.css'
-
-// Auto-reload when a new bundle is deployed, so a long-lived tab never keeps
-// running stale code (e.g. an old bundle that surfaced React #185).
-installGatewayFetchAuth()
-installVersionWatchdog()
 
 // Note: this app intentionally does NOT wrap the tree in <React.StrictMode>.
 // StrictMode double-invokes effects on every mount (mount -> cleanup -> mount),
@@ -43,9 +39,13 @@ function renderApp() {
   )
 }
 
-// Resolve the phone's native identity before any hooks can stamp a node ID.
-if (detectPlatform() === 'capacitor') {
-  void initDeviceId().catch(() => {}).finally(renderApp)
+if (window.jaitMeetingWindow) {
+  ReactDOM.createRoot(document.getElementById('root')!).render(<MeetingRecordingWindow {...window.jaitMeetingWindow} />)
 } else {
-  renderApp()
+  installGatewayFetchAuth()
+  // Auto-reload when a new bundle is deployed.
+  installVersionWatchdog()
+  // Resolve the phone's native identity before any hooks can stamp a node ID.
+  if (detectPlatform() === 'capacitor') void initDeviceId().catch(() => {}).finally(renderApp)
+  else renderApp()
 }

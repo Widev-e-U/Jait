@@ -29,7 +29,7 @@ describe("chat loop automatic continuation", () => {
   let state: SessionStateService;
   let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
   let publish: ReturnType<typeof vi.spyOn>;
-  let readMessages: () => Array<{ role: string; content: string }>;
+  let readMessages: (id?: string) => Array<{ role: string; content: string }>;
   let sessions: SessionService;
   let userId: string;
 
@@ -91,7 +91,7 @@ describe("chat loop automatic continuation", () => {
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
-    readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
+    readMessages = (id = sessionId) => db.select().from(messages).where(eq(messages.sessionId, id)).all();
     await app.ready();
   });
   afterEach(async () => {
@@ -124,13 +124,13 @@ describe("chat loop automatic continuation", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it("forks a watched execution once and resumes a dependent checkpoint when it settles", async () => {
+  it("keeps a terminal watcher isolated and resumes the main loop with its result", async () => {
     const execution = { terminalId: "test-terminal", executionId: "test-execution" };
     let finishCommand!: () => void;
     const exitPromise = new Promise<{ exitCode: number; output: string }>(resolve => {
       finishCommand = () => resolve({ exitCode: 0, output: "Fixture build passed" });
     });
-    const findBranches = () => sessions.list("active", userId).filter(session => session.id !== sessionId);
+    const activeWatchers = () => sessions.list("active", userId).filter(session => session.id !== sessionId);
     onTurn = () => {
       if (!JSON.stringify(calls.at(-1)).includes("Next message to yourself:")) return;
       const loop = loops.get(sessionId)!;
@@ -147,12 +147,12 @@ describe("chat loop automatic continuation", () => {
     loops.goal(sessionId, "Finish build", ["Verification"], userId);
     await vi.waitFor(() => expect(loops.get(sessionId)?.iteration).toBe(2), { timeout: 5000 });
     expect(calls).toHaveLength(2);
-    expect(findBranches()).toHaveLength(1);
-    const [branch] = findBranches();
-    expect(JSON.parse(branch!.metadata!)).toMatchObject({ branch: { kind: "background-command", parentSessionId: sessionId, ...execution } });
-    expect(loops.get(branch!.id)).toBeNull();
+    expect(activeWatchers()).toHaveLength(1);
+    const watcher = activeWatchers()[0]!;
+    expect(JSON.parse(watcher.metadata!)).toEqual({ backgroundExecution: { parentSessionId: sessionId, ...execution } });
+    expect(readMessages(watcher.id)).toEqual([expect.objectContaining({ role: "system", content: expect.stringContaining("Watching terminal test-terminal") })]);
     expect(sessionWaits.list(sessionId)).toMatchObject([{ kind: "background", blocking: false }]);
-    expect(sessionWaits.list(branch!.id)).toMatchObject([{ kind: "background", blocking: true }]);
+    expect(sessionWaits.list(watcher.id)).toMatchObject([{ kind: "background", blocking: true }]);
     await new Promise(resolve => setTimeout(resolve, 350));
     expect(calls).toHaveLength(2);
     finishCommand();
@@ -160,12 +160,34 @@ describe("chat loop automatic continuation", () => {
     const parentTurns = calls.filter(call => JSON.stringify(call).includes("Next message to yourself:"));
     expect(parentTurns).toHaveLength(3);
     expect(JSON.stringify(parentTurns.at(-1))).toContain("Background terminal result");
-    expect(findBranches()).toHaveLength(1);
-    expect(sessionWaits.list(branch!.id)).toEqual([]);
+    expect(activeWatchers()).toEqual([]);
+    expect(sessions.getById(watcher.id, userId)?.status).toBe("archived");
+    expect(sessionWaits.list(watcher.id)).toEqual([]);
     expect(readMessages()).toContainEqual(expect.objectContaining({ role: "system", content: expect.stringContaining("(exit 0)") }));
-    const forkTurns = calls.filter(call => JSON.stringify(call).includes("This fork reports the outcome"));
-    expect(forkTurns).toHaveLength(1);
-    expect(JSON.stringify(forkTurns[0])).toContain("Fixture build passed");
+    expect(JSON.stringify(parentTurns.at(-1))).toContain("Fixture build passed");
+    expect(calls).toHaveLength(3);
+  });
+
+  it("wakes a normal idle chat once after a yielded command finishes", async () => {
+    const execution = { terminalId: "test-terminal", executionId: "test-execution" };
+    let finishCommand!: () => void;
+    const exitPromise = new Promise<{ exitCode: number; output: string }>(resolve => {
+      finishCommand = () => resolve({ exitCode: 1, output: "Fixture build failed" });
+    });
+    backgroundCommandMonitor.trackExternal({ ...execution, sessionId, command: "test build", startedAt: Date.now(), exitPromise });
+    backgroundCommandMonitor.announceYield(sessionId, execution.executionId);
+    backgroundCommandMonitor.announceYield(sessionId, execution.executionId);
+    const watchers = sessions.list("active", userId).filter(session => session.id !== sessionId);
+    expect(watchers).toHaveLength(1);
+    expect(calls).toHaveLength(0);
+    finishCommand();
+    await vi.waitFor(() => expect(readMessages()).toContainEqual(expect.objectContaining({ role: "assistant", content: "Progress recorded" })));
+    const completionTurns = calls.filter(call => JSON.stringify(call).includes("[system-notification: background command finished]"));
+    expect(completionTurns).toHaveLength(1);
+    expect(JSON.stringify(completionTurns[0])).toContain("Fixture build failed");
+    expect(JSON.stringify(completionTurns[0])).toContain("Execution: test-execution");
+    expect(readMessages().filter(message => message.role === "system")).toHaveLength(1);
+    expect(sessions.getById(watchers[0]!.id, userId)?.status).toBe("archived");
   });
 
   it("restores a running loop after gateway startup without an open browser", async () => {

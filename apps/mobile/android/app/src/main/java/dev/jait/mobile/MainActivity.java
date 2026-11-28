@@ -23,6 +23,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AgentOverlayPlugin.class);
         registerPlugin(DeviceCalendarPlugin.class);
         registerPlugin(PermissionsPlugin.class);
+        registerPlugin(MeetingRecorderPlugin.class);
         registerSplashDismissal();
         super.onCreate(savedInstanceState);
         showAnimatedSplash();

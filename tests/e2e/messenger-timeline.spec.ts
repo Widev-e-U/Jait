@@ -73,7 +73,7 @@ test('Messenger opens at the bottom and animates only live messages', async ({ p
   expect(await animations()).not.toContain('Reduced motion message')
 })
 
-test('Messenger shows one sender and time per consecutive group', async ({ page }) => {
+test('Messenger groups consecutive messages and keeps their actions accessible', async ({ page, hasTouch }) => {
   const roomId = '!room:test'
   const timestamp = new Date(2026, 10, 27, 10, 30).getTime()
   const message = (id: string, body: string, offset: number, sender = 'Riley') => ({
@@ -103,8 +103,25 @@ test('Messenger shows one sender and time per consecutive group', async ({ page 
   await expect(log.getByText('Riley', { exact: true })).toHaveCount(2)
   await expect(log.locator('[data-day-divider]')).toHaveCount(1)
   await expect(row('$own-second').locator('time')).toHaveCount(0)
-  await page.screenshot({ path: resolve(shotsDir, 'messenger-grouped-messages.png') })
-  const options = row('$second').getByRole('button', { name: 'Message options' })
+  const messageOptions = (id: string) => row(id).getByRole('button', { name: 'Message options' })
+  const followUp = row('$second').getByText(messages[1].body, { exact: true })
+  const options = messageOptions('$second')
+  await expect(messageOptions('$first')).toHaveCSS('opacity', '1')
+  await expect(options).toHaveCSS('opacity', '0')
+  await expect(messageOptions('$own-second')).toHaveCSS('opacity', '0')
+  await page.screenshot({ path: resolve(shotsDir, hasTouch ? 'messenger-grouped-messages-touch.png' : 'messenger-grouped-messages.png') })
+  if (hasTouch) {
+    await expect(options).toHaveCSS('pointer-events', 'none')
+    await followUp.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, clientX: 100, clientY: 200 })
+    await expect(page.getByRole('button', { name: 'Forward', exact: true })).toBeVisible()
+    await followUp.dispatchEvent('pointerup', { pointerType: 'touch' })
+    await page.keyboard.press('Escape')
+  } else {
+    await followUp.hover()
+    await expect(options).toHaveCSS('opacity', '1')
+    await page.mouse.move(0, 0)
+    await expect(options).toHaveCSS('opacity', '0')
+  }
   await options.focus()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('menuitem', { name: 'Forward' })).toBeVisible()

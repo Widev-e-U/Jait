@@ -62,15 +62,15 @@ describe("canUseGatewayProviderForProject", () => {
 
 describe("resolveChatProviderNode", () => {
   it("keeps project and explicitly selected personal devices ahead of incidental remote surfaces", () => {
-    expect(resolveChatProviderNode("gateway", undefined, "windows-node")).toBe("gateway");
-    expect(resolveChatProviderNode("linux-node", undefined, "windows-node")).toBe("linux-node");
-    expect(resolveChatProviderNode(undefined, "gateway", "windows-node")).toBe("gateway");
-    expect(resolveChatProviderNode(undefined, "linux-node", "windows-node")).toBe("linux-node");
+    expect(resolveChatProviderNode("gateway", undefined)).toBe("gateway");
+    expect(resolveChatProviderNode("linux-node", undefined)).toBe("linux-node");
+    expect(resolveChatProviderNode(undefined, "gateway")).toBe("gateway");
+    expect(resolveChatProviderNode(undefined, "linux-node")).toBe("linux-node");
   });
 
-  it("preserves the remote surface fallback for sessions without an owner", () => {
-    expect(resolveChatProviderNode(undefined, undefined, "windows-node")).toBe("windows-node");
-    expect(resolveChatProviderNode(undefined, undefined, undefined)).toBeUndefined();
+  it("keeps a chat without an owner on the gateway (no drift to a remote surface node)", () => {
+    expect(resolveChatProviderNode(undefined, undefined)).toBe("gateway");
+    expect(resolveChatProviderNode("", "  ")).toBe("gateway");
   });
 });
 
@@ -1578,6 +1578,51 @@ it("keeps a gateway project on the gateway when Windows surfaces are attached", 
     expect(prewarm.json().reason).not.toBe("remote-project");
     expect(provider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: process.cwd() }));
     const response = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "hello", provider: "codex" } });
+    expect(response.body).toContain('"type":"done"');
+    expect(provider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: process.cwd() }));
+    expect(remoteStart).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+    sqlite.close();
+    remoteStart.mockRestore();
+  }
+});
+
+it("keeps a project-less chat with no pinned node on the gateway when Windows surfaces are attached", async () => {
+  const { SurfaceRegistry } = await import("../surfaces/registry.js");
+  const { FileSystemSurfaceFactory } = await import("../surfaces/filesystem.js");
+  const { RemoteTerminalSurface } = await import("../surfaces/remote-terminal.js");
+  const { RemoteFileSystemSurface } = await import("../surfaces/remote-filesystem.js");
+  const { RemoteCliProvider } = await import("../providers/remote-cli-provider.js");
+  const { db, sqlite } = await openDatabase(":memory:");
+  migrateDatabase(sqlite);
+  const userService = new UserService(db);
+  const user = userService.createUser("unpinned-chat-owner", "password123");
+  const sessionService = new SessionService(db);
+  const session = sessionService.create({ userId: user.id });
+  const node = { id: "windows-node", name: "Windows desktop", platform: "windows", clientId: "connected", providers: ["codex"] };
+  const ws = {
+    getFsNodes: () => [node], findNodeByDeviceId: () => node,
+    broadcast: vi.fn(), broadcastToUser: vi.fn(), registerGatewayFsNode: vi.fn(),
+    proxyTerminalOp: vi.fn(async () => ({ pid: 1, shell: "powershell" })),
+  } as unknown as import("../ws.js").WsControlPlane;
+  const surfaces = new SurfaceRegistry();
+  surfaces.register(new FileSystemSurfaceFactory());
+  const terminal = new RemoteTerminalSurface("windows-terminal", ws, node.id);
+  await terminal.start({ sessionId: session.id, projectRoot: "C:\\Users\\jakob" });
+  surfaces.registerInstance(terminal.id, terminal);
+  const remoteFiles = new RemoteFileSystemSurface("windows-files", ws);
+  await remoteFiles.start({ sessionId: session.id, projectRoot: "C:\\Users\\jakob", nodeId: node.id });
+  surfaces.registerInstance(remoteFiles.id, remoteFiles);
+  const provider = new MockChatProvider();
+  const registry = new ProviderRegistry();
+  registry.register(provider);
+  const remoteStart = vi.spyOn(RemoteCliProvider.prototype, "startSession");
+  const app = await createServer(testConfig, { db, sqlite, sessionService, userService, surfaceRegistry: surfaces, ws, providerRegistry: registry, audit: new AuditWriter(db) });
+  try {
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const response = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "continue", provider: "codex" } });
     expect(response.body).toContain('"type":"done"');
     expect(provider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: process.cwd() }));
     expect(remoteStart).not.toHaveBeenCalled();

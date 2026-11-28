@@ -14,6 +14,51 @@ bun run vitest run packages/gateway/src/services/orchestration/orchestrator-work
 
 It analyzes a fixture repository, runs two independent writers concurrently, verifies their artifacts (and one command gate), then runs a join task against the integrated results. It uses real Git worktrees and the workflow scheduler, with a scripted worker and a stand-in for the consent-aware executor. It makes no paid model calls and does not exercise consent prompts or a deployed gateway. Scratch repositories are created under `.jait/artifacts` and removed after the test.
 
+## TypeScript-to-Rust plan template
+
+Use this payload with `plan.create` in a repository containing `src/parser.ts`, `src/formatter.ts` and a Rust crate under `rust/`. Adapt the paths and test command to your repository. The example assumes the crate already exposes both modules and has parity tests under `rust/tests`. Review the task scopes and command before approving the draft in the Plan view, then start a run with two workers.
+
+```json
+{
+  "title": "Port parser and formatter to Rust",
+  "tasks": [
+    {
+      "id": "analyze",
+      "title": "Summarize existing behavior and test coverage",
+      "description": "Read the TypeScript modules and existing parity tests. Record the observable behavior and uncovered cases in the report for both writers.",
+      "resources": { "reads": ["src/parser.ts", "src/formatter.ts", "rust/tests"] },
+      "verification": [{ "id": "tests", "label": "Parity fixture exists", "check": { "kind": "artifact", "path": "rust/tests/parity.rs" } }]
+    },
+    {
+      "id": "parser",
+      "title": "Port the parser",
+      "description": "Use the analysis report to port src/parser.ts to rust/src/parser.rs while preserving its observable behavior.",
+      "dependsOn": ["analyze"],
+      "resources": { "reads": ["src/parser.ts"], "writes": ["rust/src/parser.rs"], "protects": ["rust/tests", "rust/Cargo.toml"] },
+      "verification": [{ "id": "parser-file", "label": "Rust parser exists", "check": { "kind": "artifact", "path": "rust/src/parser.rs" } }]
+    },
+    {
+      "id": "formatter",
+      "title": "Port the formatter",
+      "description": "Use the analysis report to port src/formatter.ts to rust/src/formatter.rs while preserving its observable behavior.",
+      "dependsOn": ["analyze"],
+      "resources": { "reads": ["src/formatter.ts"], "writes": ["rust/src/formatter.rs"], "protects": ["rust/tests", "rust/Cargo.toml"] },
+      "verification": [{ "id": "formatter-file", "label": "Rust formatter exists", "check": { "kind": "artifact", "path": "rust/src/formatter.rs" } }]
+    },
+    {
+      "id": "verify",
+      "title": "Verify the integrated ports",
+      "description": "Review both reports and the integrated files. Summarize the combined result and any remaining gaps.",
+      "dependsOn": ["parser", "formatter"],
+      "resources": { "reads": ["rust"] },
+      "verification": [{ "id": "parity", "label": "Rust parity tests", "check": { "kind": "command", "command": "cargo test --locked --manifest-path rust/Cargo.toml" } }]
+    }
+  ]
+}
+```
+
+The last task runs the parity check against the combined work on the run's review branch. Review that branch and the gate result before incorporating the port into your own branch.
+
 ## Components
 
 | Module (`packages/gateway/src/services/orchestration/`) | Role |
@@ -249,7 +294,7 @@ Every tool is scoped to the calling owner. A refusal from the service comes back
 
 ## Not built yet
 
-- **Workflow templates** (migration, feature, research). The engine is generic and needs none of them.
+- **Built-in template catalogue.** The migration example above can be adapted for other plans.
 - **Automatic worktree cleanup.** Worktrees are retained for review.
 - **Post-integration verification.** Gates run in the writer's workspace before integration. To check combined changes before downstream work advances, include an approved task that depends on all relevant writers, declares a read of `.` and runs the combined checks as its gates. Those checks run after the writers have already merged into the review branch; they do not prevent publication to that branch. Commands run through the existing consent path and are not automatically replayed.
 - **Worker prompts in the starting chat.** Worker prompts are answered in the plan's Runs section, through the consent and mobile routes, and from phone notifications. The chat that started the run does not list them.

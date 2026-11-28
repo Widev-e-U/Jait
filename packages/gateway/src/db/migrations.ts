@@ -1791,4 +1791,50 @@ export const migrations: Migration[] = [
       db.exec("ALTER TABLE messages ADD COLUMN author_user_id TEXT");
     },
   },
+  {
+    id: 82, name: "meeting_recordings",
+    run(db) {
+      db.exec(`CREATE TABLE meeting_recordings (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, started_at TEXT NOT NULL,
+        stage TEXT NOT NULL, mime_type TEXT NOT NULL, total_bytes INTEGER NOT NULL,
+        uploaded_bytes INTEGER NOT NULL DEFAULT 0, transcript TEXT, summary TEXT,
+        note_path TEXT, note_url TEXT, error TEXT, created_at TEXT NOT NULL
+      )`);
+      db.exec("CREATE UNIQUE INDEX meeting_owner_pending ON meeting_recordings(user_id) WHERE stage <> 'complete'");
+      db.exec(`CREATE TABLE meeting_recording_chunks (
+        recording_id TEXT NOT NULL REFERENCES meeting_recordings(id) ON DELETE CASCADE,
+        byte_offset INTEGER NOT NULL, audio BLOB NOT NULL, PRIMARY KEY (recording_id, byte_offset)
+      )`);
+    },
+  },
+  {
+    id: 83, name: "archive_completed_terminal_forks",
+    run(db) {
+      // Legacy watcher forks posted a receipt to the parent but stayed active.
+      // Require that receipt before archiving so unresolved executions stay visible.
+      db.exec(`UPDATE sessions AS watcher SET status = 'archived'
+        WHERE watcher.status = 'active'
+          AND json_valid(watcher.metadata)
+          AND json_extract(watcher.metadata, '$.branch.kind') = 'background-command'
+          AND EXISTS (
+            SELECT 1 FROM messages AS receipt
+            WHERE receipt.session_id = json_extract(watcher.metadata, '$.branch.parentSessionId')
+              AND receipt.role = 'system'
+              AND receipt.content LIKE 'Background terminal result · %'
+              AND substr(receipt.content, -length(' · chat ' || watcher.id || '.')) = ' · chat ' || watcher.id || '.'
+          )`);
+    },
+  },
+  {
+    id: 84, name: "meeting_transcript_review",
+    run(db) {
+      db.exec("ALTER TABLE meeting_recordings ADD COLUMN live_edits TEXT");
+    },
+  },
+  {
+    id: 85, name: "meeting_auto_save",
+    run(db) {
+      db.exec("ALTER TABLE meeting_recordings ADD COLUMN auto_save INTEGER NOT NULL DEFAULT 0");
+    },
+  },
 ];

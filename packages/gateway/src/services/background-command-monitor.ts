@@ -170,6 +170,7 @@ type BackgroundExecutionDelegate = (execution: { terminalId: string; executionId
 
 class BackgroundCommandMonitor {
   private handler: BackgroundCompletionHandler | undefined;
+  private onYield: ((sessionId: string, executionId: string) => void) | undefined;
   private readonly active = new Set<ActiveWatcher>();
   private readonly history = new Map<string, { sessionId: string; snapshot: TerminalExecutionSnapshot }>();
 
@@ -219,9 +220,20 @@ class BackgroundCommandMonitor {
     };
   }
 
-  delegateExecutions(sessionId: string, create: BackgroundExecutionDelegate): void {
+  setYieldHandler(handler: NonNullable<BackgroundCommandMonitor["onYield"]>): () => void {
+    this.onYield = handler;
+    return () => {
+      if (this.onYield === handler) this.onYield = undefined;
+    };
+  }
+
+  announceYield(sessionId: string, executionId: string): void {
+    this.onYield?.(sessionId, executionId);
+  }
+
+  delegateExecutions(sessionId: string, create: BackgroundExecutionDelegate, executionId?: string): void {
     for (const entry of this.active) {
-      if (entry.sessionId === sessionId && !entry.onSettled) {
+      if (entry.sessionId === sessionId && !entry.onSettled && (executionId === undefined || entry.executionId === executionId)) {
         entry.onSettled = create({ terminalId: entry.terminalId, executionId: entry.executionId });
       }
     }
@@ -479,6 +491,7 @@ class BackgroundCommandMonitor {
     for (const entry of [...this.active]) entry.cancel();
     this.active.clear();
     this.handler = undefined;
+    this.onYield = undefined;
     this.history.clear();
   }
 }

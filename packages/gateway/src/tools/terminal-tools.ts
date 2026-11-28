@@ -1633,10 +1633,11 @@ export function createTerminalRunTool(
                 outputEndOffset: getTerminalOutputOffset(surface), timedOut: startupCompletion.timedOut ?? false, isBackground: false, watched: false },
             };
           }
+          if (watched) backgroundCommandMonitor.announceYield(context.sessionId, context.actionId);
           return {
             ok: true,
             message: watched
-              ? `Command is running in terminal ${terminalId}. Output below is a startup snapshot, not completion. Continue independent work; if you need its result, end your turn and completion will resume you automatically. Do not poll or rerun the command.`
+              ? `Command is running in terminal ${terminalId}. Output below is a startup snapshot, not completion. Check for independent work now and keep going if any remains. If every next step depends on this result, end your turn and completion will resume you automatically. Do not poll or rerun the command.`
               : `Command is running in terminal ${terminalId}, but could not be watched. No automatic completion notification will be sent.`,
             data: {
               output: startupOutput,
@@ -1776,9 +1777,10 @@ export function createTerminalRunTool(
         const uiTerminalOutputAnsi = truncateTerminalAnsiEcho(terminalOutputAnsi);
 
         if (movedToBackground) {
+          backgroundCommandMonitor.announceYield(context.sessionId, context.actionId);
           return {
             ok: true,
-            message: `Command is still running after the ${yieldTimeMs}ms initial wait. Continue independent work or await automatic completion. Use terminal.execution with terminalId and executionId to inspect progress or cancel; do not rerun it.`
+            message: `Command is still running after the ${yieldTimeMs}ms initial wait. Check for independent work now and keep going if any remains. If every next step depends on this result, yield for automatic completion. Use terminal.execution with terminalId and executionId to inspect progress or cancel; do not rerun it.`
               + (floodNote ? ` [${floodNote}]` : ""),
             data: { output: modelOutput, terminalOutput: modelTerminalOutput, terminalOutputAnsi: uiTerminalOutputAnsi,
               exitCode: null, timedOut: false, yielded: true, executionId: context.actionId, outputStats: outputStats ?? undefined,

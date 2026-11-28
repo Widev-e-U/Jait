@@ -46,6 +46,7 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 # src-tauri/src/shell/login_item.rs) — writes go through
 # tauri-plugin-autostart; we only need to read the existing Run value.
 winreg = "0.55"
+wasapi = { version = "0.27", optional = true }
 windows = { version = "0.61", features = ["Data_Xml_Dom", "UI_Notifications"], optional = true }
 
 # Standalone crate (deliberately outside apps/desktop workspace so
@@ -56,6 +57,6 @@ default = []
 # `shell` pulls in the full Tauri runtime (needs platform webview dev
 # headers); plain `cargo test` compiles the tauri-free glue + core so
 # machines without webkit2gtk still build/test everything else.
-shell = ["dep:windows", "dep:tauri-plugin-deep-link", "dep:tauri", "dep:tauri-build", "dep:tauri-plugin-opener", "dep:tauri-plugin-clipboard-manager", "dep:tauri-plugin-dialog", "dep:tauri-plugin-notification", "dep:tauri-plugin-os", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-autostart", "dep:tauri-plugin-updater"]
+shell = ["dep:windows", "dep:wasapi", "dep:tauri-plugin-deep-link", "dep:tauri", "dep:tauri-build", "dep:tauri-plugin-opener", "dep:tauri-plugin-clipboard-manager", "dep:tauri-plugin-dialog", "dep:tauri-plugin-notification", "dep:tauri-plugin-os", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-autostart", "dep:tauri-plugin-updater"]
 # `frontend` wires tauri.conf.json frontendDist to the real renderer build.
 frontend = []

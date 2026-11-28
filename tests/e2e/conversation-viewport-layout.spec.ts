@@ -2,22 +2,22 @@ import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
 for (const browser of [false, true]) {
-  test(`desktop minimap shares the transcript height${browser ? ' with the browser panel floating above it' : ''}`, async ({ page }) => {
+  test(`desktop message rail shares the transcript height${browser ? ' with the browser panel floating above it' : ''}`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.route('**/api/preview/session/viewport-fixture', route => route.fulfill({ json: { session: null } }))
     const fixture = path.resolve(__dirname, 'fixtures/conversation-stream-completion.html')
     await page.goto(`/@fs${fixture}?minimap${browser ? '&browser' : ''}`)
     const scroll = page.locator('[data-conversation-scroll]')
-    const minimap = page.getByRole('slider', { name: 'Conversation minimap' })
+    const messageRail = page.getByRole('navigation', { name: 'Jump to user message' })
     await expect(scroll).toBeVisible()
-    await expect(minimap).toBeVisible()
+    await expect(messageRail).toBeVisible()
     const assertLayout = async () => {
       await expect.poll(() => scroll.evaluate(el => el.clientHeight)).toBeGreaterThan(350)
       const viewport = (await scroll.boundingBox())!
-      const rail = (await minimap.boundingBox())!
+      const rail = (await messageRail.boundingBox())!
       expect(Math.abs(rail.y - viewport.y)).toBeLessThan(1)
       expect(Math.abs(rail.height - viewport.height)).toBeLessThan(1)
-      expect(rail.x).toBeGreaterThanOrEqual(viewport.x + viewport.width - 1)
+      expect(Math.abs(rail.x + rail.width - viewport.x - viewport.width)).toBeLessThan(1)
       if (browser) {
         const panel = (await page.getByRole('region', { name: 'Chat browser' }).boundingBox())!
         // The panel floats above the transcript, so it may not claim a row in

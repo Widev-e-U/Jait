@@ -23,13 +23,14 @@ describe('AppHeader manager model control', () => {
     expect(headerSource).toContain('data-tauri-drag-region={hasCustomTitleBar || undefined}')
   })
 
-  it('keeps a transparent drag strip when the desktop header is hidden', () => {
+  it('keeps the desktop drag area separate from the window controls', () => {
     const appSource = readFileSync(
       fileURLToPath(new URL('../../App.tsx', import.meta.url)),
       'utf8',
     )
 
     expect(appSource).toContain("desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux'")
+    expect(appSource).toContain('data-desktop-titlebar')
     expect(appSource).toContain('data-tauri-drag-region')
     expect(appSource).toContain("WebkitAppRegion: 'drag'")
     expect(appSource.indexOf('data-tauri-drag-region')).toBeLessThan(appSource.indexOf('<WinCaptionButtons isMaximized={isMaximized} />'))

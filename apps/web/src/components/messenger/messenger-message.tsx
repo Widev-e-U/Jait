@@ -283,6 +283,11 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
   const showTimestamp = !albumTile && groupStart
   const showSenderName = showTimestamp && (!message.own || channel)
   const showHeader = showTimestamp || message.edited || message.pending || message.failed
+  const optionsVisibility = !albumTile && !groupStart
+    ? 'pointer-events-none opacity-0 [@media(hover:hover)]:group-hover/message:pointer-events-auto [@media(hover:hover)]:group-hover/message:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100'
+    : albumTile && !showHeader
+      ? 'bg-background/80 disabled:opacity-40 [@media(hover:hover)]:opacity-0 group-hover/message:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100'
+      : 'disabled:opacity-40'
   /** Direct chats get a gutter; only the bubble that opens a run fills it. */
   const showAvatar = !albumTile && !channel && !message.own
   const corner = channel
@@ -399,9 +404,8 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         <div className="flex flex-wrap items-center justify-end gap-x-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" disabled={unavailable} aria-label="Message options" className={'rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40 '
-                + (!showHeader && albumTile ? 'bg-background/80 ' : '')
-                + (!showHeader ? '[@media(hover:hover)]:opacity-0 group-hover/message:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100' : '')}><ChevronDown className="h-3.5 w-3.5" /></button>
+              <button type="button" disabled={unavailable} aria-label="Message options" className={'rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground '
+                + (optionsVisibility)}><ChevronDown className="h-3.5 w-3.5" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onCloseAutoFocus={event => { if (replyingFromMenu.current) { event.preventDefault(); replyingFromMenu.current = false } }}><DropdownMenuItem onSelect={() => void run(() => navigator.clipboard.writeText(message.body))}>Copy text</DropdownMenuItem>
               {onReply && !message.own && !message.unableToDecrypt && <DropdownMenuItem onSelect={() => { replyingFromMenu.current = true; onReply(message) }}><Reply className="mr-2 h-4 w-4" />Reply</DropdownMenuItem>}

@@ -1,0 +1,11 @@
+{
+  "$schema": "gen/schemas/desktop-schema.json",
+  "identifier": "meeting-recorder",
+  "description": "Drag the detached meeting recorder",
+  "windows": ["meeting-recorder"],
+  "local": true,
+  "remote": {
+    "urls": ["http://localhost:*/*", "http://127.0.0.1:*/*"]
+  },
+  "permissions": ["allow-window-start-drag", "allow-desktop-meeting-window"]
+}

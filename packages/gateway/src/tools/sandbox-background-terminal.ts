@@ -73,9 +73,10 @@ export async function runSandboxBackgroundTerminal(
     await execution.stop();
     return { ok: false, message: "Background command limit reached; sandbox command stopped", data };
   }
+  backgroundCommandMonitor.announceYield(context.sessionId, context.actionId);
   return {
     ok: true,
-    message: "Sandbox command is running. Output is partial, not completion. Continue independent work; completion will resume you automatically. Use terminal.execution to inspect progress or cancel. Do not rerun the command.",
+    message: "Sandbox command is running. Output is partial, not completion. Check for independent work and keep going if any remains. If every next step depends on this result, yield for automatic completion. Use terminal.execution to inspect progress or cancel. Do not rerun the command.",
     data: { ...data, output: execution.output, exitCode: null, timedOut: false, isBackground: true, watched },
   };
 }

@@ -47,6 +47,9 @@ interface JaitDesktop {
   removeGatewayEventListener: () => void
   getPathForFile: (file: File) => string
   platform: 'desktop'
+  meetingPlayback?: (action: 'start' | 'read' | 'stop') => Promise<string>
+  meetingWindow?: (action: 'prepare' | 'show' | 'hide' | 'message', message?: unknown) => Promise<void>
+  openMeetingNote?: (noteUrl: string) => Promise<void>
   /** Native process.platform value exposed synchronously by desktop shells. */
   nativePlatform?: 'win32' | 'darwin' | 'linux'
   windowMinimize: () => Promise<void>
@@ -74,6 +77,7 @@ interface JaitDesktop {
 
 declare global {
   interface Window {
+  jaitMeetingWindow?: { startDrag: () => Promise<void>; send: (message: unknown) => Promise<void> }
     jaitDesktop?: JaitDesktop
     Capacitor?: unknown
     __JAIT_DESKTOP_BOOT__?: {

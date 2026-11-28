@@ -1,3 +1,4 @@
+import { MeetingRecordingControl } from '@/components/meetings/MeetingRecordingControl'
 import type React from 'react'
 import { useState } from 'react'
 import {
@@ -141,11 +142,7 @@ export function AppHeader(props: AppHeaderProps) {
               data-tauri-drag-region={hasCustomTitleBar || undefined}
               style={isDesktop ? {
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
-                // Reserve the right edge for the caption-button strip: the
-                // native titleBarOverlay on Desktop Windows, the custom
-                // WinCaptionButtons on the Tauri Windows shell (3 × 47 px
-                // native-metric buttons, see below).
-                paddingRight: (!isMobile && desktopPlatform === 'win32' && desktopRuntime === 'tauri') ? 140 : undefined,
+                paddingRight: !isMobile && hasCustomTitleBar && desktopPlatform === 'win32' ? 138 : undefined,
               } as React.CSSProperties : undefined}
             >
           {/* Left: Logo + mobile mic */}
@@ -157,6 +154,7 @@ export function AppHeader(props: AppHeaderProps) {
             </span>
             <VoiceMicButtonMobile {...voiceControlProps} compactWithAgents={isMobile && Boolean(agentControl)} layoutPending={agentSlotLoading} />
             {isMobile && agentControl}
+            {isMobile && <MeetingRecordingControl mobile />}
           </div>
 
           {/* Center: voice controls when voice active */}
@@ -376,7 +374,9 @@ export function AppHeader(props: AppHeaderProps) {
               <LinuxWindowControls isMaximized={isMaximized} />
             )}
             {isDesktop && !isMobile && hasCustomTitleBar && desktopPlatform === 'win32' && (
-              <WinCaptionButtons isMaximized={isMaximized} />
+              <div className="absolute inset-y-0 right-0">
+                <WinCaptionButtons isMaximized={isMaximized} />
+              </div>
             )}
           </div>
             </header>

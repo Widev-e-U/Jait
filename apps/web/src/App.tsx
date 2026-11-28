@@ -1,3 +1,5 @@
+import { MeetingRecordingSurface } from '@/components/meetings/MeetingRecordingWindow'
+import { MeetingRecordingContext, useMeetingRecording } from '@/hooks/useMeetingRecording'
 import { handleMessengerNotification } from '@/lib/messenger/notification-actions'
 import { applyPendingApprovalEvent } from '@/lib/pending-approvals'
 import { applyPendingQuestionEvent, pendingQuestionSessionIds } from '@/lib/pending-questions'
@@ -513,6 +515,7 @@ function App() {
     updateSettings,
     clearSessionArchive
   } = useAuth()
+  const meetingRecording = useMeetingRecording(isAuthenticated ? user?.id : undefined, appPlatform)
 
   const authForm = useAuthForm({
     login,
@@ -1974,9 +1977,12 @@ function App() {
     const restoredChatProvider = typeof cp === 'string' && cp.trim()
       ? ( cp as ProviderId)
       : chatProvider
-    if (restoredChatProvider !== chatProvider) {
-      setChatProvider(restoredChatProvider)
-    }
+    // Apply the chat's own saved provider unconditionally (a no-op when equal).
+    // Comparing against `chatProvider` here could skip the restore when an
+    // earlier effect in the same switch had already replaced it with the
+    // global default, and the sync effect would then persist that default
+    // onto this chat.
+    setChatProvider(restoredChatProvider)
 
     const sessionReasoningEffort = Object.prototype.hasOwnProperty.call(state, 'chat.reasoningEffort')
       ? normalizeSessionReasoningEffort(state['chat.reasoningEffort'])
@@ -3521,6 +3527,11 @@ function App() {
   // localStorage value before the real server settings arrive.
   useEffect(() => {
     if (authLoading) return
+    // A chat without a project owns its provider through its session state.
+    // Once that chat has hydrated, a later change to the global default (made
+    // in another chat) must not switch it; the default only seeds a chat that
+    // is just opening (the full-state push then restores its saved pick).
+    if (!activeProjectId && activeSessionIdRef.current && wsFullStateReceivedRef.current) return
     const cachedProjectProvider = readProjectProviderSelection(activeProjectId)
     const provider = cachedProjectProvider ?? settings.chat_provider
     if (provider && provider !== chatProvider) {
@@ -5270,9 +5281,11 @@ function App() {
   }
 
   return (
+    <MeetingRecordingContext.Provider value={meetingRecording}>
     <ScreenShareProvider value={screenShare}>
     <UnreadChatCountContext.Provider value={unreadChatCount}>
     <TooltipProvider>
+      <MeetingRecordingSurface />
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
         {showNodePermissionsGate && deviceNameSetup && <DeviceNameDialog {...deviceNameSetup} onSubmit={submitDeviceName} />}
         {showNodePermissionsGate && !deviceNameSetup && <NodePermissionsGate token={token} onFirstRunComplete={() => setNodePermissionSetupReady(true)} onOpenNodeSettings={(nodeId) => {
@@ -5298,28 +5311,29 @@ function App() {
         )}
         {!requiresAuthGate && (
           <>
-            {/* Overlay the top edge so content fills the window and header buttons stay clickable. */}
             {!isMobile && desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux' && (
-              <div
-                className="absolute inset-x-0 top-0 z-40 h-4 select-none bg-transparent"
-                data-tauri-drag-region
-                onMouseDown={(event) => {
-                  if (event.button !== 0) return
-                  // Use our injected bridge directly; CSS app-region and the
-                  // attribute alone do not initiate dragging in this webview.
-                  // Stop bubbling to avoid also invoking Tauri's document handler.
-                  event.preventDefault()
-                  event.stopPropagation()
-                  void window.jaitDesktop?.windowStartDrag().catch((error: unknown) => {
-                    console.error('Failed to start window drag', error)
-                  })
-                }}
-                style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-              />
-            )}
-            {!isMobile && desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux' && (
-              <div className="absolute right-0 top-0 z-50 bg-transparent" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-                {desktopPlatform === 'win32' ? <WinCaptionButtons isMaximized={isMaximized} /> : <LinuxWindowControls isMaximized={isMaximized} />}
+              <div data-desktop-titlebar className="relative z-40 flex h-11 shrink-0 border-b border-border/50 bg-background">
+                <div
+                  className="min-w-0 flex-1 select-none"
+                  data-tauri-drag-region
+                  onMouseDown={(event) => {
+                    if (event.button !== 0) return
+                    // Call the bridge directly and avoid invoking Tauri's document handler as well.
+                    event.preventDefault()
+                    event.stopPropagation()
+                    void window.jaitDesktop?.windowStartDrag().catch((error: unknown) => {
+                      console.error('Failed to start window drag', error)
+                    })
+                  }}
+                  style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+                />
+                {desktopPlatform === 'win32' ? (
+                  <WinCaptionButtons isMaximized={isMaximized} />
+                ) : (
+                  <div className="flex items-center px-2">
+                    <LinuxWindowControls isMaximized={isMaximized} />
+                  </div>
+                )}
               </div>
             )}
             {/* Reserve header space before manager banners and toolbars, so their actions remain reachable. */}
@@ -6108,6 +6122,7 @@ function App() {
     </TooltipProvider>
     </UnreadChatCountContext.Provider>
     </ScreenShareProvider>
+    </MeetingRecordingContext.Provider>
   )
 }
 

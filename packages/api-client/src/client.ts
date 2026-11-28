@@ -1,3 +1,4 @@
+import { createMeetingRecordingApi } from "./meeting-recordings.js";
 import type {
   SecurityCheckInput, SecurityCheckRun, SecurityWorkbenchHistory, SecurityEngineStatus, SecurityRemediationPlan, SecurityVerificationResult, SecurityFinding,
   SecurityAssessmentHistory,
@@ -17,6 +18,12 @@ export interface JaitClientConfig {
 }
 
 export class JaitClient {
+  readonly meetingRecordings = createMeetingRecordingApi((path, init) => {
+    const headers = new Headers(init?.headers);
+    if (this.config.token) headers.set("Authorization", `Bearer ${this.config.token}`);
+    return fetch(this.config.baseUrl + path, { ...init, headers, credentials: "include" });
+  });
+
   private config: JaitClientConfig;
   private ws: WebSocket | null = null;
   private eventHandlers = new Map<string, Set<(event: WsEvent) => void>>();

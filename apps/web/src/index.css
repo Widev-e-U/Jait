@@ -460,6 +460,11 @@
     min-width: 2.5rem;
   }
 
+  /* Image references flow with the surrounding message text. */
+  button[data-image-reference] {
+    min-width: 0;
+  }
+
   .ui-inline-action,
   .ui-inline-action-danger {
     min-height: 2.5rem;
@@ -715,13 +720,73 @@ html.is-dragging-row-resize {
   }
 }
 
-/* Keep the minimap outside the centered 896px transcript column. */
-.chat-conversation-viewport { container-type: inline-size; }
-.chat-conversation-minimap { display: none; }
+/* Keep the message rail in the gutter of the centered 896px transcript column. */
+.chat-conversation-viewport {
+  --chat-message-rail-width: 42px;
+  container-type: inline-size;
+}
+.chat-message-rail { display: none; }
 .chat-scroll-latest { right: var(--scroll-control-gap); }
-@container (min-width: 1088px) {
-  .chat-conversation-minimap { display: block; position: absolute; inset: 0 0 0 auto; }
-  .chat-scroll-latest-with-minimap { right: calc(var(--scroll-control-gap) + var(--minimap-rail-width)); }
+@container (min-width: 944px) {
+  .chat-message-rail {
+    position: absolute;
+    inset: 0 0 0 auto;
+    display: flex;
+    align-items: center;
+    width: var(--chat-message-rail-width);
+    padding-block: 16px;
+    pointer-events: none;
+  }
+  .chat-scroll-latest-with-rail { right: calc(var(--scroll-control-gap) + var(--chat-message-rail-width)); }
+}
+.chat-message-rail-scroll {
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+.chat-message-rail-tick {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+  height: 12px;
+  padding-inline: 4px 8px;
+  border-radius: 4px;
+}
+.chat-message-rail-tick > span {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background: hsl(var(--foreground) / 0.4);
+  transition: width 120ms ease-out, background-color 120ms ease-out;
+}
+/* Taper the wave across the two ticks on either side. Hover takes priority over focus. */
+.chat-message-rail-tick:has(+ button + button:hover) > span,
+.chat-message-rail-tick:hover + button + button > span,
+.chat-message-rail-scroll:not(:has(> button:hover)) > button:has(+ button + button:focus-visible) > span,
+.chat-message-rail-scroll:not(:has(> button:hover)) > button:focus-visible + button + button > span {
+  width: 18px;
+  background: hsl(var(--foreground) / 0.55);
+}
+.chat-message-rail-tick:has(+ button:hover) > span,
+.chat-message-rail-tick:hover + button > span,
+.chat-message-rail-scroll:not(:has(> button:hover)) > button:has(+ button:focus-visible) > span,
+.chat-message-rail-scroll:not(:has(> button:hover)) > button:focus-visible + button > span {
+  width: 24px;
+  background: hsl(var(--foreground) / 0.75);
+}
+.chat-message-rail-tick:hover > span,
+.chat-message-rail-scroll:not(:has(> button:hover)) > button:focus-visible > span {
+  width: 30px;
+  background: hsl(var(--foreground));
+}
+.chat-message-rail-tick:focus-visible {
+  outline: 1px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-message-rail-tick > span { transition: none; }
 }
 
 /* Non-interactive provider hints and closing pickers must not cover adjacent controls. */

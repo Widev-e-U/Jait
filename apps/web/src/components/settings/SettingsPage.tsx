@@ -1,3 +1,4 @@
+import { MeetingRecordingSettings } from '@/components/meetings/MeetingRecordingSettings'
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { AccountInvitations } from "./AccountInvitations"
 import { DesktopGatewaySetup } from '@/components/onboarding/DesktopGatewaySetup'
@@ -2331,6 +2332,7 @@ const providerAccountsCard = (
               </div>
             </Card>
           )}
+      {matchesSearch('Meeting recording', 'Parakeet', 'Nemotron', 'Obsidian') && <MeetingRecordingSettings />}
       {filteredApiFields.length > 0 ? (<>
         <p className="text-sm text-muted-foreground">
           Values stored here are user-specific and override environment defaults for your account.

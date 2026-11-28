@@ -29,9 +29,9 @@ for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await openAlignmentFixture(page)
 
-    const minimap = page.getByRole('slider', { name: 'Conversation minimap' })
-    if (viewport.width >= 1088) await expect(minimap).toBeVisible()
-    else await expect(minimap).toBeHidden()
+    const rail = page.getByRole('navigation', { name: 'Jump to user message' })
+    if (viewport.width >= 944) await expect(rail).toBeVisible()
+    else await expect(rail).toBeHidden()
 
     const assistant = await page.locator(MESSAGE_SELECTOR).first().boundingBox()
     const assistantContent = await page.locator('[data-message-from="assistant"] [data-message-from="assistant"]').boundingBox()
@@ -54,12 +54,12 @@ for (const viewport of viewports) {
 }
 
 
-test('scroll to latest remains clickable beside the minimap', async ({ page }) => {
+test('scroll to latest remains clickable beside the message rail', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/src/e2e-fixtures/index.html?long', { waitUntil: 'domcontentloaded' })
   await page.evaluate(() => import('/src/e2e-fixtures/chat-column-alignment.tsx'))
-  const minimap = page.getByRole('slider', { name: 'Conversation minimap' })
-  await expect(minimap).toBeVisible()
+  const rail = page.getByRole('navigation', { name: 'Jump to user message' })
+  await expect(rail).toBeVisible()
   const scroller = page.locator('.chat-conversation-viewport .overflow-y-auto').first()
   await expect(scroller).toBeVisible()
   await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
@@ -68,10 +68,61 @@ test('scroll to latest remains clickable beside the minimap', async ({ page }) =
   const button = page.getByRole('button', { name: 'Scroll to latest message' })
   await expect(button).toBeVisible()
   const buttonBox = await button.boundingBox()
-  const minimapBox = await minimap.boundingBox()
-  expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(minimapBox!.x)
+  const railBox = await rail.boundingBox()
+  expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(railBox!.x)
   await button.click()
   await expect(button).toBeHidden()
+})
+
+test('message rail previews user prompts and jumps across virtualized history', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 820 })
+  await page.goto('/src/e2e-fixtures/index.html?long', { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => import('/src/e2e-fixtures/chat-column-alignment.tsx'))
+
+  const rail = page.getByRole('navigation', { name: 'Jump to user message' })
+  const ticks = rail.getByRole('button')
+  await expect(ticks).toHaveCount(7)
+  const target = ticks.nth(1)
+  const userMessage = page.locator('[data-conversation-scroll]').getByText(/^Prompt 2:/)
+  await expect(userMessage).toHaveCount(0)
+  const tickWidths = () => ticks.locator('span').evaluateAll(lines =>
+    lines.map(line => getComputedStyle(line).width),
+  )
+  const restingWidth = '12px'
+  const outerWidth = '18px'
+  const innerWidth = '24px'
+  const activeWidth = '30px'
+  const restingWidths = Array(7).fill(restingWidth)
+  await expect.poll(tickWidths).toEqual(restingWidths)
+
+  await ticks.nth(3).hover()
+  await expect.poll(tickWidths).toEqual([
+    restingWidth, outerWidth, innerWidth, activeWidth, innerWidth, outerWidth, restingWidth,
+  ])
+  await expect(page.locator('[data-slot="tooltip-content"] > span').first()).toHaveText(/^Prompt 4:/)
+  await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/chat-message-rail-wave.png') })
+
+  await target.hover()
+  await expect.poll(tickWidths).toEqual([
+    innerWidth, activeWidth, innerWidth, outerWidth, restingWidth, restingWidth, restingWidth,
+  ])
+  const preview = page.locator('[data-slot="tooltip-content"] > span').first()
+  await expect(preview).toHaveText(/^Prompt 2:/)
+  await expect(preview).toHaveCSS('text-overflow', 'ellipsis')
+  expect(await preview.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+  await page.mouse.move(10, 10)
+  await expect.poll(tickWidths).toEqual(restingWidths)
+
+  await target.click()
+  await expect(userMessage).toBeInViewport({ ratio: 1 })
+  await page.mouse.move(10, 10)
+  await ticks.last().press('Tab')
+  await ticks.last().focus()
+  await expect.poll(tickWidths).toEqual([
+    restingWidth, restingWidth, restingWidth, restingWidth, outerWidth, innerWidth, activeWidth,
+  ])
+  await ticks.last().press('Enter')
+  await expect(page.locator('[data-conversation-scroll]').getByText('A right aligned user message')).toBeInViewport()
 })
 
 test('streamed wide Markdown stays within the mobile chat column', async ({ page }) => {
