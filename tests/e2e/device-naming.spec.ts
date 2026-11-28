@@ -61,3 +61,54 @@ test('a desktop must save an available name before it can register', async ({ pa
   await expect.poll(() => registeredNames).toEqual(['Office PC', 'Studio PC', 'Studio PC'])
   await expect(dialog).toHaveCount(0)
 })
+
+test('an unnamed mobile device registers as dome using the current gateway address', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.addInitScript(() => {
+    Object.assign(window, { androidBridge: {} })
+  })
+  const attempts: Array<{ name: string; stored: string | null }> = []
+  const gatewayUrl = 'http://127.0.0.1:9321'
+  await page.routeWebSocket(/127\.0\.0\.1:9321.*fixture-token/, (socket) => {
+    socket.onMessage(async raw => {
+      const { type, payload } = JSON.parse(raw.toString())
+      if (type !== 'fs.register-node') return
+      const { id, name } = payload
+      const stored = await page.evaluate(() => localStorage.getItem('jait-device-name'))
+      attempts.push({ name, stored })
+      socket.send(JSON.stringify({
+        type: 'node.registration',
+        payload: attempts.length === 1
+          ? { id, name, ok: false, code: 'DEVICE_NAME_TAKEN' }
+          : { id, name, ok: true },
+      }))
+    })
+  })
+  const openFixture = () => page.evaluate(async () => {
+    document.documentElement.classList.add('dark')
+    await import('/src/e2e-fixtures/device-naming.tsx')
+  })
+  await page.goto(`/src/e2e-fixtures/index.html?gatewayUrl=${encodeURIComponent(gatewayUrl)}`)
+  await openFixture()
+  const dialog = page.getByRole('dialog', { name: 'Name this device' })
+  await expect(dialog.getByRole('alert')).toHaveText('Another device already uses that name. Choose a different name.')
+  expect(attempts).toEqual([{ name: 'dome', stored: null }])
+  await mkdir(shots, { recursive: true })
+  await page.screenshot({ path: path.join(shots, 'mobile-device-name-conflict.png'), animations: 'disabled' })
+
+  await dialog.getByRole('textbox', { name: 'Device name' }).fill('Handy')
+  await dialog.getByRole('button', { name: 'Save device name' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(await page.evaluate(() => localStorage.getItem('jait-device-name'))).toBe('Handy')
+
+  await page.reload()
+  await openFixture()
+  await expect.poll(() => attempts.map(attempt => attempt.name)).toEqual(['dome', 'Handy', 'Handy'])
+  await expect(dialog).toHaveCount(0)
+
+  await page.evaluate(() => localStorage.removeItem('jait-device-name'))
+  await page.reload()
+  await openFixture()
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('jait-device-name'))).toBe('dome')
+  await expect(dialog).toHaveCount(0)
+})

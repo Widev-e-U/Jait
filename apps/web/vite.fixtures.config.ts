@@ -9,6 +9,7 @@ export default defineConfig({
   optimizeDeps: {
     ...base.optimizeDeps,
     entries: [
+      'src/e2e-fixtures/device-naming.tsx',
       'src/e2e-fixtures/chat-column-alignment.tsx',
       'src/e2e-fixtures/chat-loop.tsx',
       'src/e2e-fixtures/email-workspace.tsx',
