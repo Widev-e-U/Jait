@@ -2604,6 +2604,16 @@
           "name": "update_check_reads_registry_version_through_the_binary"
         }
       ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/skills/:id",
+      "tests": [
+        {
+          "file": "tests/binary_skills_discovery.rs",
+          "name": "skill_toggle_updates_the_discovered_registry_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": [
@@ -2954,6 +2964,17 @@
         {
           "file": "tests/binary_project_repository_assignment.rs",
           "name": "failed_project_assignment_does_not_reconcile_repository"
+        }
+      ]
+    }
+  ],
+  "services": [
+    {
+      "name": "scheduler",
+      "tests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
         }
       ]
     }

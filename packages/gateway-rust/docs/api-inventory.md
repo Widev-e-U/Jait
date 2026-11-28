@@ -2,20 +2,20 @@
 
 rustStatus is the parity value: native-tested (a reviewed black-box test is mapped and exists), native-untested (a Rust router or handler reference exists but no mapped test), or missing (no verified native implementation: unmounted, fail-closed, incomplete, or absent). Detail keeps the source status. Mounted-incomplete routes serve a subset but lack production collaborators; mounted-fail-closed routes refuse the unavailable effect. Neither counts as native.
 
-HTTP routes are read with the TypeScript compiler API from every Node gateway source (tooling/routes-inventory.mjs). Every route call and registration must be listed in its reviewed tables, so an unlisted one fails generation; prefixes come from register calls and mounts, and a computed path must expand from literal evidence in its file. Background services are read the same way (tooling/services-inventory.mjs). Rust routes are still a lexical scan of axum .route calls, so a Rust status is a lead until the composed binary serves the route and a mapped black-box test covers it. Client paths are lexical; every request call whose path is not literal /api text in the web, CLI, desktop and API-client sources is reviewed in tooling/client-inventory.mjs. WS messages are read with the TypeScript compiler API (tooling/ws-inventory.mjs), and their client side is lexical. nativeTestedPct counts the HTTP routes and WS messages mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot. Services have no mapping mechanism yet, so none count as native-tested.
+HTTP routes are read with the TypeScript compiler API from every Node gateway source (tooling/routes-inventory.mjs). Every route call and registration must be listed in its reviewed tables, so an unlisted one fails generation; prefixes come from register calls and mounts, and a computed path must expand from literal evidence in its file. Background services are read the same way (tooling/services-inventory.mjs). Rust routes are still a lexical scan of axum .route calls, so a Rust status is a lead until the composed binary serves the route and a mapped black-box test covers it. Client paths are lexical; every request call whose path is not literal /api text in the web, CLI, desktop and API-client sources is reviewed in tooling/client-inventory.mjs. WS messages are read with the TypeScript compiler API (tooling/ws-inventory.mjs), and their client side is lexical. nativeTestedPct counts the HTTP routes, WS messages and services mapped in tooling/binary-test-evidence.json, divided by all HTTP, WS and service entries. The manifest requires manually reviewed tests that exercise the production binary over HTTP or WS and have passed; a source path match alone never counts. A mapped test is limited evidence, not full behavioral parity or proof that it still passes on the current snapshot.
 
 ```json
 {
   "httpTotal": 454,
   "mounted-fail-closed": 121,
-  "native-tested": 254,
+  "native-tested": 255,
   "missing": 34,
   "mounted-incomplete": 12,
-  "native-untested": 33,
+  "native-untested": 32,
   "nativeRouteReferencePct": 63.2,
-  "nativeTested": 287,
+  "nativeTested": 289,
   "nativeTestedDenominator": 627,
-  "nativeTestedPct": 45.77,
+  "nativeTestedPct": 46.09,
   "wsTotal": 152,
   "wsInbound": 44,
   "wsOutboundCandidates": 108,
@@ -27,10 +27,10 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "clientNonLiteralRequestCalls": 76,
   "clientReviewedRequestSites": 71,
   "backgroundServices": 21,
-  "backgroundServicesMissing": 21,
+  "backgroundServicesMissing": 20,
   "httpRustStatus": {
-    "native-tested": 254,
-    "native-untested": 33,
+    "native-tested": 255,
+    "native-untested": 32,
     "missing": 167
   },
   "wsRustStatus": {
@@ -39,9 +39,9 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
     "missing": 77
   },
   "serviceRustStatus": {
-    "native-tested": 0,
+    "native-tested": 1,
     "native-untested": 0,
-    "missing": 21
+    "missing": 20
   }
 }
 ```
@@ -276,7 +276,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | PATCH | `/api/sessions/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/share` | native-tested | native-tested | `tests/binary_project_membership.rs::project_membership_is_owner_managed_and_revocable` | routes/sessions.ts |
 | PATCH | `/api/sessions/:id/state` | native-tested | native-tested | `tests/binary_thread_turns.rs::patched_queue_starts_when_idle_and_a_stale_snapshot_never_sends_it_twice` | routes/sessions.ts |
-| PATCH | `/api/skills/:id` | native-untested | native-untested |  | routes/skills.ts |
+| PATCH | `/api/skills/:id` | native-tested | native-tested | `tests/binary_skills_discovery.rs::skill_toggle_updates_the_discovered_registry_through_the_binary` | routes/skills.ts |
 | PATCH | `/api/threads/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
 | PATCH | `/api/voice/state/:sessionId` | native-tested | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | routes/voice.ts |
 | POST | `/api/agent-control/halt` | missing | mounted-fail-closed |  | routes/agent-control.ts |
@@ -505,13 +505,13 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 
 ## Background services (reviewed)
 
-Every background site in the Node gateway source is listed in tooling/services-inventory.mjs: the composition-root starts in index.ts and server.ts, each setInterval, each self re-arming timer and each literal loop. A site that is per request or per tool call is listed under reviewed timers, not as a service. A keyword hit in Rust source does not show the service is wired into the composed binary, so every service stays missing until a test-backed entry exists.
+Every background site in the Node gateway source is listed in tooling/services-inventory.mjs: the composition-root starts in index.ts and server.ts, each setInterval, each self re-arming timer and each literal loop. A site that is per request or per tool call is listed under reviewed timers, not as a service. Reviewed Rust composition points establish that a service runs. A mapped test must observe the service in the production binary. Keyword hints carry no coverage credit.
 
 - `primaryLink` (service) — missing; Rust keyword hint present; Node: index.ts:177 primaryLink.start, index.ts:1592 primaryLink.start
 - `threadRestartRecovery` (boot-task) — missing; Rust keyword hint present; Node: index.ts:211 threadService.queueRestartRecovery
 - `emailInboxRefresh` (service) — missing; Rust keyword hint present; Node: index.ts:230 emailService.startInboxRefresh, services/email/service.ts:73 setInterval
 - `projectWatcher` (service) — missing; Rust keyword hint present; Node: index.ts:379 projectWatcher.watch
-- `scheduler` (service) — missing; Rust keyword hint present; Node: index.ts:876 scheduler.start, scheduler/service.ts:280 setInterval
+- `scheduler` (service) — native-tested; Rust keyword hint present; Node: index.ts:876 scheduler.start, scheduler/service.ts:280 setInterval; Rust: runtime/application.rs; tests: tests/binary_jobs_routes.rs::jobs_routes_through_the_binary
 - `threadReviewSync` (service) — missing; Rust keyword hint present; Node: index.ts:877 threadReviewSync.start, services/thread-review-sync.ts:37 setInterval
 - `wsHub` (service) — missing; Rust keyword hint present; Node: index.ts:1543 ws.start, ws.ts:273 setInterval
 - `databaseRetention` (service) — missing; Rust keyword hint present; Node: index.ts:1565 databaseRetention.start, services/database-retention.ts:623 setTimeout

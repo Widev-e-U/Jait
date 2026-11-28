@@ -13,10 +13,10 @@ test('inventory does not turn path references into tested parity claims', () => 
   const summary = JSON.parse(execFileSync(process.execPath, [join(here, 'api-inventory.mjs')], { encoding: 'utf8' }));
   const inventory = JSON.parse(readFileSync(join(here, '..', 'docs', 'api-inventory.json'), 'utf8'));
   assert.deepEqual(inventory.summary, summary, 'regenerate the checked-in inventory');
-  assert.equal(summary.nativeTested, [...inventory.http, ...inventory.ws].filter((entry) => entry.status === 'native-tested').length);
+  assert.equal(summary.nativeTested, [...inventory.http, ...inventory.ws, ...inventory.services].filter((entry) => entry.status === 'native-tested').length);
   assert.equal(summary.nativeTestedDenominator, inventory.http.length + inventory.ws.length + inventory.services.length);
   assert.equal(summary.nativeTestedPct, +(100 * summary.nativeTested / summary.nativeTestedDenominator).toFixed(2));
-  assert.ok([...inventory.http, ...inventory.ws].every((entry) => Array.isArray(entry.binaryTests)));
+  assert.ok([...inventory.http, ...inventory.ws, ...inventory.services].every((entry) => Array.isArray(entry.binaryTests)));
   assert.ok(inventory.http.some((route) => route.status === 'native-untested' && route.testPathReference));
   assert.ok(inventory.http.filter((route) => route.status === 'native-tested').every((route) => route.binaryTests.length > 0));
   assert.ok(inventory.http.some((route) => route.status === 'mounted-fail-closed'));
@@ -89,8 +89,8 @@ test('WebSocket scan records direction and references as lexical candidates', ()
 test('only explicit valid binary-test mappings contribute to the percentage', () => {
   const http = [{ method: 'GET', path: '/one', status: 'native-untested' }, { method: 'POST', path: '/two', status: 'missing' }];
   const ws = [{ direction: 'client-to-server-candidate', type: 'subscribe', rustReference: true }];
-  const manifest = { version: 1, http: [{ method: 'GET', path: '/one', tests: [{ file: 'tests/binary.rs', name: 'requests_one' }] }], ws: [] };
-  const result = applyBinaryEvidence(http, ws, manifest, () => '#[tokio::test]\nasync fn requests_one() {}');
+  const manifest = { version: 1, http: [{ method: 'GET', path: '/one', tests: [{ file: 'tests/binary.rs', name: 'requests_one' }] }], ws: [], services: [] };
+  const result = applyBinaryEvidence(http, ws, [], manifest, () => '#[tokio::test]\nasync fn requests_one() {}');
   assert.deepEqual(result, { tested: 1, total: 3, nativeTestedPct: 33.33 });
   assert.equal(http[0].status, 'native-tested');
   assert.deepEqual(ws[0].binaryTests, []);
@@ -99,7 +99,7 @@ test('only explicit valid binary-test mappings contribute to the percentage', ()
 test('manifest rejects unknown, duplicate, unmounted, and missing test references', () => {
   const route = () => [{ method: 'GET', path: '/one', status: 'native-untested' }];
   const mapping = { method: 'GET', path: '/one', tests: [{ file: 'tests/binary.rs', name: 'requests_one' }] };
-  const run = (http, mappings, source = '#[test]\nfn requests_one() {}') => applyBinaryEvidence(http, [], { version: 1, http: mappings, ws: [] }, () => source);
+  const run = (http, mappings, source = '#[test]\nfn requests_one() {}') => applyBinaryEvidence(http, [], [], { version: 1, http: mappings, ws: [], services: [] }, () => source);
   assert.throws(() => run(route(), [{ ...mapping, path: '/unknown' }]), /Unknown/);
   assert.throws(() => run(route(), [mapping, mapping]), /duplicate/);
   assert.throws(() => run([{ ...route()[0], status: 'mounted-fail-closed' }], [mapping]), /non-native/);
@@ -110,17 +110,36 @@ test('manifest rejects unknown, duplicate, unmounted, and missing test reference
 
 test('directional WebSocket mappings are counted separately', () => {
   const ws = [{ direction: 'client-to-server-candidate', type: 'event' }, { direction: 'server-to-client-candidate', type: 'event' }];
-  const manifest = { version: 1, http: [], ws: [{ direction: 'server-to-client-candidate', type: 'event', tests: [{ file: 'tests/ws.rs', name: 'receives_event' }] }] };
-  const result = applyBinaryEvidence([], ws, manifest, () => '#[test]\nfn receives_event() {}');
+  const manifest = { version: 1, http: [], ws: [{ direction: 'server-to-client-candidate', type: 'event', tests: [{ file: 'tests/ws.rs', name: 'receives_event' }] }], services: [] };
+  const result = applyBinaryEvidence([], ws, [], manifest, () => '#[test]\nfn receives_event() {}');
   assert.equal(result.nativeTestedPct, 50);
   assert.equal(ws[0].binaryTests.length, 0);
   assert.equal(ws[1].status, 'native-tested');
 });
 
 
+test('counts only mounted services with valid production-binary evidence', () => {
+  const mapping = { name: 'scheduler', tests: [{ file: 'tests/jobs.rs', name: 'runs_a_due_job' }] };
+  const run = (services, records) => applyBinaryEvidence(
+    [], [], services, { version: 1, http: [], ws: [], services: records },
+    () => '#[test]\nfn runs_a_due_job() {}',
+  );
+  const services = [
+    { name: 'scheduler', status: 'native-untested' },
+    { name: 'janitor', status: 'missing' },
+  ];
+  assert.throws(() => run(services, [{ ...mapping, name: 'unknown' }]), /Unknown/);
+  assert.throws(() => run(services, [{ ...mapping, name: 'janitor' }]), /non-native/);
+  assert.deepEqual(run(services, []), { tested: 0, total: 2, nativeTestedPct: 0 });
+  assert.deepEqual(run(services, [mapping]), { tested: 1, total: 2, nativeTestedPct: 50 });
+  assert.deepEqual(services[0].binaryTests, mapping.tests);
+  assert.equal(services[0].status, 'native-tested');
+  assert.equal(services[1].status, 'missing');
+});
+
 test('commented, ignored and string-contained tests do not count as evidence', () => {
   const mapping = { method: 'GET', path: '/one', tests: [{ file: 'tests/binary.rs', name: 'requests_one' }] };
-  const check = (source) => applyBinaryEvidence([{ method: 'GET', path: '/one', status: 'native-untested' }], [], { version: 1, http: [mapping], ws: [] }, () => source);
+  const check = (source) => applyBinaryEvidence([{ method: 'GET', path: '/one', status: 'native-untested' }], [], [], { version: 1, http: [mapping], ws: [], services: [] }, () => source);
   for (const source of [
     '// #[test]\n// fn requests_one() {}',
     '/* nested /* comment */\n#[test]\nfn requests_one() {} */',

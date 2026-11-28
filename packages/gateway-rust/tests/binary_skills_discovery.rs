@@ -33,7 +33,7 @@ async fn ignores_symlinked_sibling_components() {
     check_discovery("skills-symlink").await;
 }
 
-async fn check_discovery(layout: &str) {
+fn start_gateway(layout: &str) -> Gateway {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../.jait/artifacts/binary-skills-tests")
         .join(uuid::Uuid::new_v4().to_string());
@@ -102,11 +102,14 @@ async fn check_discovery(layout: &str) {
         }
     };
     assert!(address.starts_with("127.0.0.1:"));
-    let gateway = Gateway {
+    Gateway {
         child,
         root,
         base: format!("http://{address}"),
-    };
+    }
+}
+
+async fn authenticated_client(gateway: &Gateway) -> (reqwest::Client, String) {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -122,6 +125,12 @@ async fn check_discovery(layout: &str) {
         .as_str()
         .unwrap()
         .to_owned();
+    (client, token)
+}
+
+async fn check_discovery(layout: &str) {
+    let gateway = start_gateway(layout);
+    let (client, token) = authenticated_client(&gateway).await;
     let response = client
         .get(format!("{}/api/skills", gateway.base))
         .bearer_auth(token)
@@ -143,4 +152,70 @@ async fn check_discovery(layout: &str) {
         assert_eq!(skill["name"], "Project skill");
         assert_eq!(skill["source"], "project");
     }
+}
+
+#[tokio::test]
+async fn skill_toggle_updates_the_discovered_registry_through_the_binary() {
+    let gateway = start_gateway("directory");
+    let (client, token) = authenticated_client(&gateway).await;
+    let skill_url = format!("{}/api/skills/example", gateway.base);
+    let unauthorized = client
+        .patch(&skill_url)
+        .json(&json!({"enabled": false}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), 401);
+
+    let read_skill = || async {
+        let response = client
+            .get(format!("{}/api/skills", gateway.base))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        response
+            .json::<Vec<Value>>()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|skill| skill["id"] == "example")
+            .unwrap()
+    };
+    let initial = read_skill().await;
+    assert_eq!(initial["enabled"], true);
+
+    for (body, enabled) in [
+        (json!({"enabled": false}), false),
+        (json!({"enabled": "true"}), false),
+        (json!({"enabled": true}), true),
+    ] {
+        let response = client
+            .patch(&skill_url)
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let updated = response.json::<Value>().await.unwrap();
+        let mut expected = initial.clone();
+        expected["enabled"] = json!(enabled);
+        assert_eq!(updated, expected);
+        assert_eq!(read_skill().await, expected);
+    }
+
+    let missing = client
+        .patch(format!("{}/api/skills/unknown", gateway.base))
+        .bearer_auth(&token)
+        .json(&json!({"enabled": false}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    assert_eq!(
+        missing.json::<Value>().await.unwrap(),
+        json!({"error": "Skill not found"})
+    );
 }

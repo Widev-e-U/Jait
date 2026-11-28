@@ -50,8 +50,8 @@ function hasEnabledTest(source, name) {
   return false;
 }
 
-export function applyBinaryEvidence(http, ws, manifest, readTest) {
-  if (!manifest || manifest.version !== 1 || !Array.isArray(manifest.http) || !Array.isArray(manifest.ws)) {
+export function applyBinaryEvidence(http, ws, services, manifest, readTest) {
+  if (!manifest || manifest.version !== 1 || !Array.isArray(manifest.http) || !Array.isArray(manifest.ws) || !Array.isArray(manifest.services)) {
     throw new Error('Invalid binary-test evidence manifest');
   }
   const assign = (items, evidence, keyOf, eligible) => {
@@ -79,7 +79,8 @@ export function applyBinaryEvidence(http, ws, manifest, readTest) {
   };
   assign(http, manifest.http, (entry) => `${entry.method} ${entry.path}`, (entry) => entry.status === 'native-untested');
   assign(ws, manifest.ws, (entry) => `${entry.direction} ${entry.type}`, () => true);
-  const total = http.length + ws.length;
-  const tested = [...http, ...ws].filter((entry) => entry.status === 'native-tested').length;
+  assign(services, manifest.services, (entry) => entry.name, (entry) => entry.status === 'native-untested');
+  const total = http.length + ws.length + services.length;
+  const tested = [...http, ...ws, ...services].filter((entry) => entry.status === 'native-tested').length;
   return { tested, total, nativeTestedPct: total ? +(100 * tested / total).toFixed(2) : 0 };
 }

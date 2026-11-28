@@ -2,14 +2,14 @@
   "summary": {
     "httpTotal": 454,
     "mounted-fail-closed": 121,
-    "native-tested": 254,
+    "native-tested": 255,
     "missing": 34,
     "mounted-incomplete": 12,
-    "native-untested": 33,
+    "native-untested": 32,
     "nativeRouteReferencePct": 63.2,
-    "nativeTested": 287,
+    "nativeTested": 289,
     "nativeTestedDenominator": 627,
-    "nativeTestedPct": 45.77,
+    "nativeTestedPct": 46.09,
     "wsTotal": 152,
     "wsInbound": 44,
     "wsOutboundCandidates": 108,
@@ -21,10 +21,10 @@
     "clientNonLiteralRequestCalls": 76,
     "clientReviewedRequestSites": 71,
     "backgroundServices": 21,
-    "backgroundServicesMissing": 21,
+    "backgroundServicesMissing": 20,
     "httpRustStatus": {
-      "native-tested": 254,
-      "native-untested": 33,
+      "native-tested": 255,
+      "native-untested": 32,
       "missing": 167
     },
     "wsRustStatus": {
@@ -33,9 +33,9 @@
       "missing": 77
     },
     "serviceRustStatus": {
-      "native-tested": 0,
+      "native-tested": 1,
       "native-untested": 0,
-      "missing": 21
+      "missing": 20
     }
   },
   "http": [
@@ -3519,11 +3519,16 @@
       "nodeFiles": [
         "routes/skills.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/skills.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_skills_discovery.rs",
+          "name": "skill_toggle_updates_the_discovered_registry_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",
@@ -8211,6 +8216,8 @@
         "index.ts:1592 primaryLink.start"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8220,6 +8227,8 @@
         "index.ts:211 threadService.queueRestartRecovery"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8230,6 +8239,8 @@
         "services/email/service.ts:73 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8239,6 +8250,8 @@
         "index.ts:379 projectWatcher.watch"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8249,7 +8262,15 @@
         "scheduler/service.ts:280 setInterval"
       ],
       "rustKeywordHint": true,
-      "rustStatus": "missing"
+      "rustFile": "runtime/application.rs",
+      "status": "native-tested",
+      "binaryTests": [
+        {
+          "file": "tests/binary_jobs_routes.rs",
+          "name": "jobs_routes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "name": "threadReviewSync",
@@ -8259,6 +8280,8 @@
         "services/thread-review-sync.ts:37 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8269,6 +8292,8 @@
         "ws.ts:273 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8279,6 +8304,8 @@
         "services/database-retention.ts:623 setTimeout"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8289,6 +8316,8 @@
         "services/disk-janitor.ts:291 setTimeout"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8299,6 +8328,8 @@
         "providers/jait-provider.ts:194 setInterval"
       ],
       "rustKeywordHint": false,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8308,6 +8339,8 @@
         "index.ts:1580 channelManager.startEnabled"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8317,6 +8350,8 @@
         "index.ts:1597 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8326,6 +8361,8 @@
         "index.ts:1662 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8335,6 +8372,8 @@
         "providers/session-idle.ts:33 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8344,6 +8383,8 @@
         "routes/browser-devtools.ts:36 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8353,6 +8394,8 @@
         "routes/threads.ts:297 setInterval"
       ],
       "rustKeywordHint": false,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8362,6 +8405,8 @@
         "services/bridge-reauth.ts:111 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8371,6 +8416,8 @@
         "services/messenger-service.ts:881 setTimeout"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8380,6 +8427,8 @@
         "services/messenger-service.ts:1488 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8389,6 +8438,8 @@
         "services/orchestration/orchestrator.ts:624 setInterval"
       ],
       "rustKeywordHint": false,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     },
     {
@@ -8398,6 +8449,8 @@
         "services/provider-updates.ts:93 setInterval"
       ],
       "rustKeywordHint": true,
+      "status": "missing",
+      "binaryTests": [],
       "rustStatus": "missing"
     }
   ],
