@@ -2,14 +2,14 @@
   "summary": {
     "httpTotal": 454,
     "mounted-fail-closed": 121,
-    "native-tested": 252,
+    "native-tested": 254,
     "missing": 34,
     "mounted-incomplete": 12,
-    "native-untested": 35,
+    "native-untested": 33,
     "nativeRouteReferencePct": 63.2,
-    "nativeTested": 285,
+    "nativeTested": 287,
     "nativeTestedDenominator": 627,
-    "nativeTestedPct": 45.45,
+    "nativeTestedPct": 45.77,
     "wsTotal": 152,
     "wsInbound": 44,
     "wsOutboundCandidates": 108,
@@ -23,8 +23,8 @@
     "backgroundServices": 21,
     "backgroundServicesMissing": 21,
     "httpRustStatus": {
-      "native-tested": 252,
-      "native-untested": 35,
+      "native-tested": 254,
+      "native-untested": 33,
       "missing": 167
     },
     "wsRustStatus": {
@@ -3034,11 +3034,16 @@
       "nodeFiles": [
         "routes/update.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/update.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "update_check_reads_registry_version_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "GET",
@@ -3383,11 +3388,16 @@
       "nodeFiles": [
         "routes/providers.ts"
       ],
-      "status": "native-untested",
+      "status": "native-tested",
       "testPathReference": true,
       "rustFile": "routes/providers.rs",
-      "binaryTests": [],
-      "rustStatus": "native-untested"
+      "binaryTests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ],
+      "rustStatus": "native-tested"
     },
     {
       "method": "PATCH",

@@ -16,6 +16,10 @@ struct Gateway {
 
 impl Gateway {
     fn start() -> Self {
+        Self::start_with_path(|_| None)
+    }
+
+    fn start_with_path(path: impl FnOnce(&std::path::Path) -> Option<&std::ffi::OsStr>) -> Self {
         let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../.jait/artifacts/binary-misc-routes-tests")
             .join(uuid::Uuid::new_v4().to_string());
@@ -31,6 +35,7 @@ impl Gateway {
             .env("JAIT_RUST_DB", directory.join("gateway.sqlite"))
             .env("JWT_SECRET", "isolated-repos-secret")
             .env("HOOK_SECRET", "isolated-hook-secret")
+            .envs(path(&directory).map(|path| ("PATH", path)))
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
@@ -500,6 +505,58 @@ async fn node_credentials_enforce_ownership_and_revocation_through_binary() {
         )
         .unwrap();
     assert_eq!(count, 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn update_check_reads_registry_version_through_the_binary() {
+    let gateway = Gateway::start_with_path(|directory| {
+        use std::os::unix::fs::PermissionsExt;
+        let npm = directory.join("npm");
+        std::fs::write(
+            &npm,
+            r#"#!/bin/sh
+if [ "$#" -ne 3 ] || [ "$1" != view ] || [ "$2" != @jait/gateway ] || [ "$3" != version ]; then
+    exit 1
+fi
+printf '9999.1.2\n'
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(npm, std::fs::Permissions::from_mode(0o700)).unwrap();
+        Some(directory.as_os_str())
+    });
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let register = client
+        .post(format!("{}/api/auth/register", gateway.base))
+        .json(&json!({"username":"owner", "password":"owner-pass-123"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(register.status(), 200);
+    let owner = register.json::<Value>().await.unwrap();
+    let update_check = format!("{}/api/update/check", gateway.base);
+    let response = client.get(&update_check).send().await.unwrap();
+    assert_eq!(response.status(), 401);
+    let response = client
+        .get(&update_check)
+        .bearer_auth(owner["access_token"].as_str().unwrap())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response.json::<Value>().await.unwrap(),
+        json!({
+            "currentVersion": env!("CARGO_PKG_VERSION"),
+            "latestVersion": "9999.1.2",
+            "hasUpdate": true,
+            "canApply": false,
+        })
+    );
 }
 
 #[tokio::test]

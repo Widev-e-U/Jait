@@ -107,6 +107,8 @@ pub struct ProviderAccountService {
 fn timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
+pub(crate) const ACCOUNT_LABEL_CONFLICT: &str = "An account with this label already exists";
+
 fn label(value: &str) -> Result<String, String> {
     let v = js_trim(value);
     if v.is_empty() {
@@ -447,7 +449,27 @@ impl ProviderAccountService {
         account.label = label(value)?;
         account.updated_at = timestamp();
         let saved = account.clone();
-        self.db.run(move|db|{db.execute("UPDATE provider_accounts SET label=?1,updated_at=?2 WHERE id=?3 AND user_id=?4",params![saved.label,saved.updated_at,id,user])?;Ok(())}).await.map_err(|e|e.to_string())?;
+        let updated = self
+            .db
+            .run(move |db| {
+                match db.execute(
+                    "UPDATE provider_accounts SET label=?1,updated_at=?2 WHERE id=?3 AND user_id=?4",
+                    params![saved.label, saved.updated_at, id, user],
+                ) {
+                    Ok(_) => Ok(true),
+                    Err(rusqlite::Error::SqliteFailure(error, _))
+                        if error.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
+                    {
+                        Ok(false)
+                    }
+                    Err(error) => Err(error.into()),
+                }
+            })
+            .await
+            .map_err(|error| error.to_string())?;
+        if !updated {
+            return Err(ACCOUNT_LABEL_CONFLICT.into());
+        }
         if self
             .registry
             .get_for_user(&account.id, &account.user_id)

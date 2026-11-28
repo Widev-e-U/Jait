@@ -22,7 +22,8 @@ use crate::{
     runtime::blocking::BlockingLane,
     services::{
         provider_accounts::{
-            AccountAdapterFactory, AccountDefinition, AccountLaunch, ProviderAccountService,
+            ACCOUNT_LABEL_CONFLICT, AccountAdapterFactory, AccountDefinition, AccountLaunch,
+            ProviderAccountService,
         },
         provider_usage::ProviderUsageService,
     },
@@ -170,6 +171,12 @@ impl ProviderDirectory for DbProviderDirectory {
             match service.rename(id, user, &label).await {
                 Ok(Some(account)) => Ok(record(account)),
                 Ok(None) => Err(StoreError::NotFound("Provider account not found".into())),
+                Err(message) if message == ACCOUNT_LABEL_CONFLICT => {
+                    Err(StoreError::Conflict(message))
+                }
+                Err(message) if message.starts_with("Account label ") => {
+                    Err(StoreError::Invalid(message))
+                }
                 Err(message) => Err(store_error(message)),
             }
         })

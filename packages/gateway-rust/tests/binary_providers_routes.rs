@@ -181,7 +181,8 @@ async fn provider_routes_through_the_binary() {
         Some(json!({"label":""})),
     )
     .await;
-    assert_eq!(st, 400, "{b}");
+    assert_eq!(st, 404, "{b}");
+    assert_eq!(b, json!({"error": "Provider account not found"}));
     let (st, b) = call(
         M::PATCH,
         "/api/provider-accounts/nope".into(),
@@ -257,7 +258,96 @@ async fn provider_routes_through_the_binary() {
     // Another user sees an empty account list and cannot touch accounts.
     let (st, b) = call(M::GET, "/api/provider-accounts".into(), x.clone(), None).await;
     assert!(st == 200 && b["accounts"] == json!([]), "{b}");
-    let _ = &client;
+
+    // Load a persisted account as an upgrade would, without requiring private
+    // provider launch or starting a provider process.
+    let db = rusqlite::Connection::open(gateway.directory.join("gateway.sqlite")).unwrap();
+    assert_eq!(
+        db.execute(
+            "INSERT INTO provider_accounts (id, user_id, provider_type, label, created_at, updated_at)
+             SELECT 'saved-account', id, 'codex', 'Original', '2026-01-01', '2026-01-01'
+             FROM users WHERE username = 'owner'",
+            [],
+        )
+        .unwrap(),
+        1
+    );
+    assert_eq!(
+        db.execute(
+            "INSERT INTO provider_accounts (id, user_id, provider_type, label, created_at, updated_at)
+             SELECT 'other-account', id, 'codex', 'Taken', '2026-01-01', '2026-01-01'
+             FROM users WHERE username = 'owner'",
+            [],
+        )
+        .unwrap(),
+        1
+    );
+    let account_path = "/api/provider-accounts/saved-account";
+    let (status, _) = call(
+        M::PATCH,
+        account_path.into(),
+        String::new(),
+        Some(json!({"label":"Anonymous"})),
+    )
+    .await;
+    assert_eq!(status, 401);
+    let (status, body) = call(
+        M::PATCH,
+        account_path.into(),
+        x,
+        Some(json!({"label":"Other user's label"})),
+    )
+    .await;
+    assert_eq!(status, 404, "{body}");
+    for (label, status, error) in [
+        ("  ".to_owned(), 400, "Account label is required"),
+        (
+            "🎵".repeat(41),
+            400,
+            "Account label must be 80 characters or fewer",
+        ),
+        (
+            "Taken".to_owned(),
+            409,
+            "An account with this label already exists",
+        ),
+    ] {
+        let (actual_status, body) = call(
+            M::PATCH,
+            account_path.into(),
+            o.clone(),
+            Some(json!({"label": label})),
+        )
+        .await;
+        assert_eq!(actual_status, status, "{body}");
+        assert_eq!(body, json!({"error": error}));
+    }
+    let (status, body) = call(M::GET, "/api/provider-accounts".into(), o.clone(), None).await;
+    assert_eq!(status, 200, "{body}");
+    let saved = |body: Value| {
+        body["accounts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|account| account["id"] == "saved-account")
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(saved(body)["label"], "Original");
+
+    let (status, body) = call(
+        M::PATCH,
+        account_path.into(),
+        o.clone(),
+        Some(json!({"label":"  Renamed account  "})),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["account"]["id"], "saved-account");
+    assert_eq!(body["account"]["label"], "Renamed account");
+    let (status, body) = call(M::GET, "/api/provider-accounts".into(), o, None).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(saved(body)["label"], "Renamed account");
 }
 
 #[tokio::test]

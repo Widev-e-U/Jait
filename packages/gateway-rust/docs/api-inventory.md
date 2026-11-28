@@ -8,14 +8,14 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 {
   "httpTotal": 454,
   "mounted-fail-closed": 121,
-  "native-tested": 252,
+  "native-tested": 254,
   "missing": 34,
   "mounted-incomplete": 12,
-  "native-untested": 35,
+  "native-untested": 33,
   "nativeRouteReferencePct": 63.2,
-  "nativeTested": 285,
+  "nativeTested": 287,
   "nativeTestedDenominator": 627,
-  "nativeTestedPct": 45.45,
+  "nativeTestedPct": 45.77,
   "wsTotal": 152,
   "wsInbound": 44,
   "wsOutboundCandidates": 108,
@@ -29,8 +29,8 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
   "backgroundServices": 21,
   "backgroundServicesMissing": 21,
   "httpRustStatus": {
-    "native-tested": 252,
-    "native-untested": 35,
+    "native-tested": 254,
+    "native-untested": 33,
     "missing": 167
   },
   "wsRustStatus": {
@@ -245,7 +245,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/trust/levels` | native-tested | native-tested | `tests/binary_state_consent.rs::state_trust_and_consent_routes_are_owned_through_the_binary` | routes/trust.ts |
 | GET | `/api/trust/levels/:actionType` | native-tested | native-tested | `tests/binary_move_trust.rs::session_move_trust_and_project_search_through_the_binary` | routes/trust.ts |
 | GET | `/api/update/changelog` | native-untested | native-untested |  | routes/update.ts |
-| GET | `/api/update/check` | native-untested | native-untested |  | routes/update.ts |
+| GET | `/api/update/check` | native-tested | native-tested | `tests/binary_misc_routes.rs::update_check_reads_registry_version_through_the_binary` | routes/update.ts |
 | GET | `/api/update/nodes` | missing | missing |  | routes/update.ts |
 | GET | `/api/user-questions/requests` | native-tested | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/user-questions.ts |
 | GET | `/api/voice-assistant/status` | native-tested | native-tested | `tests/binary_voice_routes.rs::voice_routes_through_the_binary` | server.ts |
@@ -268,7 +268,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | PATCH | `/api/plugins/:id/config` | missing | mounted-fail-closed |  | routes/plugins.ts |
 | PATCH | `/api/projects/:id` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary` | routes/projects.ts |
 | PATCH | `/api/projects/:id/state` | native-tested | native-tested | `tests/binary_project_files.rs::project_files_are_confined_and_owned_through_the_binary` | routes/projects.ts |
-| PATCH | `/api/provider-accounts/:id` | native-untested | native-untested |  | routes/providers.ts |
+| PATCH | `/api/provider-accounts/:id` | native-tested | native-tested | `tests/binary_providers_routes.rs::provider_routes_through_the_binary` | routes/providers.ts |
 | PATCH | `/api/reminders/:id` | native-tested | native-tested | `tests/binary_reminders.rs::reminders_are_isolated_by_owner_through_the_binary` | routes/reminders.ts |
 | PATCH | `/api/repo-proposals/:id` | native-tested | native-tested | `tests/binary_repo_proposals_routes.rs::repository_todos_and_proposal_aliases_are_owner_scoped` | routes/repo-proposals.ts |
 | PATCH | `/api/repos/:id` | native-tested | native-tested | `tests/binary_repos.rs::repository_crud_and_strategy_are_owned_through_the_binary` | routes/repositories.ts |

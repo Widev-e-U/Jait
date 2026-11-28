@@ -2584,6 +2584,26 @@
           "name": "dev_file_and_preview_file_are_scoped_to_owned_projects"
         }
       ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/provider-accounts/:id",
+      "tests": [
+        {
+          "file": "tests/binary_providers_routes.rs",
+          "name": "provider_routes_through_the_binary"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/update/check",
+      "tests": [
+        {
+          "file": "tests/binary_misc_routes.rs",
+          "name": "update_check_reads_registry_version_through_the_binary"
+        }
+      ]
     }
   ],
   "ws": [

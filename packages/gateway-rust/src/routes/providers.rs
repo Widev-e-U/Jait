@@ -615,21 +615,6 @@ pub fn valid_ollama_session(session: Option<&Value>) -> Result<Option<String>, R
     }
 }
 
-/// TS `PATCH /api/provider-accounts/:id` label validation.
-pub fn valid_account_label(label: Option<&Value>) -> Result<String, Response> {
-    let Some(Value::String(label)) = label else {
-        return Err(fail(400, "Missing or empty label"));
-    };
-    let trimmed = js_trim(label);
-    if trimmed.is_empty() {
-        return Err(fail(400, "Missing or empty label"));
-    }
-    if trimmed.chars().count() > 128 {
-        return Err(fail(400, "Label is too long"));
-    }
-    Ok(trimmed.to_string())
-}
-
 /// TS `POST /api/provider-accounts` requires a provider type.
 pub fn valid_account_create(body: &Map<String, Value>) -> Result<(String, String), Response> {
     let provider_type = body
@@ -892,12 +877,9 @@ async fn rename_account(
         Ok(payload) => payload,
         Err(response) => return *response,
     };
-    let label = match valid_account_label(payload.get("label")) {
-        Ok(label) => label,
-        Err(response) => return response,
-    };
-    match directory.rename_account(&id, &user.id, &label).await {
-        Ok(account) => ok_json(account),
+    let label = payload.get("label").and_then(Value::as_str).unwrap_or("");
+    match directory.rename_account(&id, &user.id, label).await {
+        Ok(account) => ok_json(json!({"account": account})),
         Err(error) => error.into_response(),
     }
 }
@@ -1688,23 +1670,6 @@ mod tests {
         );
         let response = valid_ollama_session(Some(&json!({"cookie": "x"}))).expect_err("object");
         assert_eq!(status(&response), 400);
-    }
-
-    #[tokio::test]
-    async fn valid_account_label_rejects_blank_and_trims() {
-        assert_eq!(
-            valid_account_label(Some(&json!("  work account  "))).expect("ok"),
-            "work account"
-        );
-        for value in [json!(""), json!("   "), json!(7)] {
-            let response = valid_account_label(Some(&value)).expect_err("reject");
-            assert_eq!(status(&response), 400);
-        }
-        let long = json!("a".repeat(129));
-        assert_eq!(
-            status(&valid_account_label(Some(&long)).expect_err("reject")),
-            400
-        );
     }
 
     #[tokio::test]
