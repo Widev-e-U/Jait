@@ -53,7 +53,7 @@ export function MeetingRecordingSettings() {
     <Card>
       <CardHeader>
         <CardTitle>Meeting recording</CardTitle>
-        <CardDescription>Record on Jait Desktop or Android. Parakeet transcribes as you record. After you review the transcript, Nemotron summarizes it and Jait saves the note to Obsidian’s Meetings folder.</CardDescription>
+        <CardDescription>Record on Jait Desktop or Android. Parakeet transcribes as you record. When you stop, Nemotron summarizes the transcript and Jait saves the meeting note to Obsidian’s Meetings folder.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">

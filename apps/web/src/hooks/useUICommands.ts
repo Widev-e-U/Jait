@@ -37,8 +37,6 @@ import {
   type SystemNotificationInput,
 } from '@/lib/system-notifications'
 
-const WS_URL = getWsUrl()
-
 /** Maps the build target onto the gateway's `ClientSurface` vocabulary. */
 function clientSurface(): 'desktop' | 'mobile' | 'web' {
   const platform = detectPlatform()
@@ -73,6 +71,7 @@ const DESKTOP_SHARE_CONTROL_TOOLS = ['computer.geometry', 'computer.share.captur
 // ── Device / platform helpers ───────────────────────────────────────
 
 const DEVICE_NAME_SETTING = 'jait-device-name'
+const DEFAULT_MOBILE_DEVICE_NAME = 'dome'
 
 async function loadDeviceName(): Promise<string | null> {
   const desktop = window.jaitDesktop
@@ -783,9 +782,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
     let active = true
     void loadDeviceName().catch(() => null).then((name) => {
       if (!active) return
-      deviceNameRef.current = name
       confirmedDeviceNameRef.current = name
-      if (name) registerDeviceRef.current?.()
+      deviceNameRef.current = name ?? (detectPlatform() === 'capacitor' ? DEFAULT_MOBILE_DEVICE_NAME : null)
+      if (deviceNameRef.current) registerDeviceRef.current?.()
       else setDeviceNameSetup({})
     })
     return () => { active = false }
@@ -849,7 +848,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       // owns the OS notification — an Desktop window and a browser tab on the
       // same machine are two clients but one human.
       const ws = new WebSocket(
-        `${WS_URL}?token=${tokenRef.current ?? 'dev'}&surface=${clientSurface()}`,
+        `${getWsUrl()}?token=${tokenRef.current ?? 'dev'}&surface=${clientSurface()}`,
       )
       wsRef.current = ws
 
