@@ -51,6 +51,7 @@ export const ROUTE_SITES = [
   { key: 'routes/jobs.ts|registerJobRoutes', count: 8 },
   { key: 'routes/maintenance.ts|registerMaintenanceRoutes', count: 3 },
   { key: 'routes/mcp-server.ts|registerMcpRoutes', count: 6 },
+  { key: 'routes/meeting-recordings.ts|registerMeetingRecordingRoutes', count: 10 },
   { key: 'routes/messenger.ts|registerMessengerRoutes', count: 17 },
   { key: 'routes/mobile.ts|registerMobileRoutes', count: 13 },
   { key: 'routes/network.ts|registerNetworkRoutes', count: 10 },
@@ -90,6 +91,7 @@ export const ROUTE_SITES = [
 // plugins are keyed <inline>. serves lists the routes a package plugin serves, for example the built web UI at GET /.
 export const PLUGIN_SITES = [
   { key: 'routes/agent-github-apps.ts|registerAgentGithubAppRoutes|<inline>', count: 1, reason: 'scoped plugin for the GitHub App webhook, registered without a prefix' },
+  { key: 'routes/meeting-recordings.ts|registerMeetingRecordingRoutes|<inline>', count: 1, reason: 'owner-only meeting recording router under its configured API prefix' },
   { key: 'routes/plans.ts|registerPlanRoutes|registerPlanRunRoutes', count: 1, reason: 'plan-run router mounted inside the plan router' },
   { key: 'server.ts|createServer|cors', count: 1, reason: 'CORS headers; the plugin adds no route' },
   { key: 'server.ts|createServer|fastifyCookie', count: 1, reason: 'cookie parsing; the plugin adds no route' },
@@ -117,6 +119,7 @@ export const PLUGIN_SITES = [
   { key: 'server.ts|createServer|registerLiveViewProxyRoutes', count: 1 },
   { key: 'server.ts|createServer|registerMaintenanceRoutes', count: 1 },
   { key: 'server.ts|createServer|registerMcpRoutes', count: 1 },
+  { key: 'server.ts|createServer|registerMeetingRecordingRoutes', count: 1 },
   { key: 'server.ts|createServer|registerMessengerRoutes', count: 1 },
   { key: 'server.ts|createServer|registerMobileRoutes', count: 1 },
   { key: 'server.ts|createServer|registerNetworkRoutes', count: 1 },

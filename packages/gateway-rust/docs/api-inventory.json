@@ -1,31 +1,31 @@
 {
   "summary": {
-    "httpTotal": 454,
+    "httpTotal": 466,
     "mounted-fail-closed": 121,
     "native-tested": 255,
-    "missing": 34,
+    "missing": 46,
     "mounted-incomplete": 12,
     "native-untested": 32,
-    "nativeRouteReferencePct": 63.2,
+    "nativeRouteReferencePct": 61.6,
     "nativeTested": 289,
-    "nativeTestedDenominator": 627,
-    "nativeTestedPct": 46.09,
+    "nativeTestedDenominator": 639,
+    "nativeTestedPct": 45.23,
     "wsTotal": 152,
     "wsInbound": 44,
     "wsOutboundCandidates": 108,
     "wsWithoutDirectionalRustReference": 77,
-    "clientPathCandidates": 263,
-    "clientOnlyRoutes": 5,
+    "clientPathCandidates": 264,
+    "clientOnlyRoutes": 6,
     "rustOnlyRoutes": 18,
-    "clientRequestCalls": 388,
-    "clientNonLiteralRequestCalls": 76,
-    "clientReviewedRequestSites": 71,
+    "clientRequestCalls": 401,
+    "clientNonLiteralRequestCalls": 89,
+    "clientReviewedRequestSites": 74,
     "backgroundServices": 21,
     "backgroundServicesMissing": 20,
     "httpRustStatus": {
       "native-tested": 255,
       "native-untested": 32,
-      "missing": 167
+      "missing": 179
     },
     "wsRustStatus": {
       "native-tested": 33,
@@ -216,6 +216,17 @@
         }
       ],
       "rustStatus": "native-tested"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/meeting-recordings/jobs/:id",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "DELETE",
@@ -1355,6 +1366,28 @@
         }
       ],
       "rustStatus": "native-tested"
+    },
+    {
+      "method": "GET",
+      "path": "/api/meeting-recordings/jobs",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/meeting-recordings/settings",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
     },
     {
       "method": "GET",
@@ -4546,6 +4579,72 @@
     },
     {
       "method": "POST",
+      "path": "/api/meeting-recordings/jobs",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/meeting-recordings/jobs/:id/retry",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/meeting-recordings/jobs/:id/save",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/meeting-recordings/jobs/:id/submit",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/meeting-recordings/preview",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/meeting-recordings/test",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "POST",
       "path": "/api/messenger",
       "nodeFiles": [
         "routes/messenger.ts"
@@ -6681,6 +6780,28 @@
     },
     {
       "method": "PUT",
+      "path": "/api/meeting-recordings/jobs/:id/audio",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/meeting-recordings/settings",
+      "nodeFiles": [
+        "routes/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "PUT",
       "path": "/api/messenger/presence",
       "nodeFiles": [
         "routes/messenger.ts"
@@ -6773,6 +6894,19 @@
       ],
       "status": "missing",
       "testPathReference": true,
+      "binaryTests": [],
+      "rustStatus": "missing"
+    },
+    {
+      "method": "ANY",
+      "path": "/api/meeting-recordings",
+      "clientOnly": true,
+      "nodeFiles": [],
+      "clientFiles": [
+        "packages/api-client/src/meeting-recordings.ts"
+      ],
+      "status": "missing",
+      "testPathReference": false,
       "binaryTests": [],
       "rustStatus": "missing"
     },
@@ -8456,6 +8590,13 @@
   ],
   "reviewedTimers": [
     {
+      "key": "meetings/endpoints.ts|MeetingEndpoints.json",
+      "sites": [
+        "meetings/endpoints.ts:55 while (true)"
+      ],
+      "reason": "per-request response reader with a byte limit and cleanup"
+    },
+    {
       "key": "routes/plan-runs-crash.fixture.ts|(top level)",
       "sites": [
         "routes/plan-runs-crash.fixture.ts:40 setInterval"
@@ -8479,14 +8620,14 @@
     {
       "key": "routes/chat.ts|registerChatRoutes",
       "sites": [
-        "routes/chat.ts:4590 setInterval",
-        "routes/chat.ts:6609 setInterval",
-        "routes/chat.ts:6723 setInterval",
-        "routes/chat.ts:6731 setInterval",
-        "routes/chat.ts:6819 setInterval",
-        "routes/chat.ts:6853 setInterval",
-        "routes/chat.ts:6916 setInterval",
-        "routes/chat.ts:6943 setInterval"
+        "routes/chat.ts:4602 setInterval",
+        "routes/chat.ts:6615 setInterval",
+        "routes/chat.ts:6729 setInterval",
+        "routes/chat.ts:6737 setInterval",
+        "routes/chat.ts:6825 setInterval",
+        "routes/chat.ts:6859 setInterval",
+        "routes/chat.ts:6922 setInterval",
+        "routes/chat.ts:6949 setInterval"
       ],
       "reason": "per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close"
     },
@@ -8595,6 +8736,7 @@
         "DELETE /api/assistants/profiles/:id",
         "DELETE /api/calendar/accounts/:id",
         "DELETE /api/email/accounts/:id",
+        "DELETE /api/meeting-recordings/jobs/:id",
         "DELETE /api/mobile/push-devices/:deviceId",
         "DELETE /api/preview/devtools/:grantId",
         "DELETE /api/security/checks/:id",
@@ -8637,6 +8779,7 @@
         "DELETE /api/assistants/profiles/:id",
         "DELETE /api/calendar/accounts/:id",
         "DELETE /api/email/accounts/:id",
+        "DELETE /api/meeting-recordings/jobs/:id",
         "DELETE /api/mobile/push-devices/:deviceId",
         "DELETE /api/preview/devtools/:grantId",
         "DELETE /api/security/checks/:id",
@@ -9457,6 +9600,14 @@
       "serverRoutes": [
         "GET /api/jobs/providers/available"
       ]
+    },
+    {
+      "path": "/api/meeting-recordings",
+      "files": [
+        "packages/api-client/src/meeting-recordings.ts"
+      ],
+      "serverPathReference": false,
+      "serverRoutes": []
     },
     {
       "path": "/api/messenger",
@@ -11817,6 +11968,16 @@
       "reason": "the web origin's own root document for the build stamp; not a gateway route"
     },
     {
+      "key": "apps/web/src/lib/meeting-recording.ts|(top level)",
+      "count": 1,
+      "reason": "forwards the API client’s /api/meeting-recordings paths to the configured gateway"
+    },
+    {
+      "key": "packages/api-client/src/client.ts|JaitClient",
+      "count": 1,
+      "reason": "forwards the API client meeting recording paths to the configured gateway"
+    },
+    {
       "key": "packages/api-client/src/client.ts|JaitClient.assessmentRequest",
       "count": 1,
       "reason": "helper; callers pass literal /api/security paths in this file"
@@ -11825,6 +11986,11 @@
       "key": "packages/api-client/src/client.ts|JaitClient.health",
       "count": 1,
       "reason": "health probe (${baseUrl}/health)"
+    },
+    {
+      "key": "packages/api-client/src/meeting-recordings.ts|createMeetingRecordingApi",
+      "count": 11,
+      "reason": "request adds /api/meeting-recordings to settings, preview, and recording job paths"
     },
     {
       "key": "packages/cli/src/commands/resources.ts|runCronList",

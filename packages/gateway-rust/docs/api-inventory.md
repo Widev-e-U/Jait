@@ -6,32 +6,32 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 
 ```json
 {
-  "httpTotal": 454,
+  "httpTotal": 466,
   "mounted-fail-closed": 121,
   "native-tested": 255,
-  "missing": 34,
+  "missing": 46,
   "mounted-incomplete": 12,
   "native-untested": 32,
-  "nativeRouteReferencePct": 63.2,
+  "nativeRouteReferencePct": 61.6,
   "nativeTested": 289,
-  "nativeTestedDenominator": 627,
-  "nativeTestedPct": 46.09,
+  "nativeTestedDenominator": 639,
+  "nativeTestedPct": 45.23,
   "wsTotal": 152,
   "wsInbound": 44,
   "wsOutboundCandidates": 108,
   "wsWithoutDirectionalRustReference": 77,
-  "clientPathCandidates": 263,
-  "clientOnlyRoutes": 5,
+  "clientPathCandidates": 264,
+  "clientOnlyRoutes": 6,
   "rustOnlyRoutes": 18,
-  "clientRequestCalls": 388,
-  "clientNonLiteralRequestCalls": 76,
-  "clientReviewedRequestSites": 71,
+  "clientRequestCalls": 401,
+  "clientNonLiteralRequestCalls": 89,
+  "clientReviewedRequestSites": 74,
   "backgroundServices": 21,
   "backgroundServicesMissing": 20,
   "httpRustStatus": {
     "native-tested": 255,
     "native-untested": 32,
-    "missing": 167
+    "missing": 179
   },
   "wsRustStatus": {
     "native-tested": 33,
@@ -60,6 +60,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | DELETE | `/api/email/accounts/:id` | missing | mounted-fail-closed |  | routes/email.ts |
 | DELETE | `/api/jait-todos/:id` | native-tested | native-tested | `tests/binary_misc_routes.rs::misc_routes_are_owned_through_the_binary` | routes/repo-proposals.ts |
 | DELETE | `/api/jobs/:id` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
+| DELETE | `/api/meeting-recordings/jobs/:id` | missing | missing |  | routes/meeting-recordings.ts |
 | DELETE | `/api/messenger` | missing | missing |  | routes/messenger.ts |
 | DELETE | `/api/messenger/bridge-accounts/teams` | missing | missing |  | routes/messenger.ts |
 | DELETE | `/api/messenger/bridge-reauth/teams` | missing | missing |  | routes/messenger.ts |
@@ -135,6 +136,8 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | GET | `/api/live-view/:port/focus` | missing | mounted-fail-closed |  | server.ts |
 | GET | `/api/maintenance/runs` | native-tested | native-tested | `tests/binary_misc_routes.rs::maintenance_reads_persisted_runs_with_node_filter_and_limit` | routes/maintenance.ts |
 | GET | `/api/maintenance/runs/:id` | native-tested | native-tested | `tests/binary_misc_routes.rs::maintenance_reads_persisted_runs_with_node_filter_and_limit` | routes/maintenance.ts |
+| GET | `/api/meeting-recordings/jobs` | missing | missing |  | routes/meeting-recordings.ts |
+| GET | `/api/meeting-recordings/settings` | missing | missing |  | routes/meeting-recordings.ts |
 | GET | `/api/messenger` | missing | missing |  | routes/messenger.ts |
 | GET | `/api/messenger/bridge-reauth/teams` | missing | missing |  | routes/messenger.ts |
 | GET | `/api/messenger/bridge-status` | missing | missing |  | routes/messenger.ts |
@@ -344,6 +347,12 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | POST | `/api/jobs` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | POST | `/api/jobs/:id/trigger` | native-tested | native-tested | `tests/binary_jobs_routes.rs::jobs_routes_through_the_binary` | routes/jobs.ts |
 | POST | `/api/maintenance/run` | missing | mounted-fail-closed |  | routes/maintenance.ts |
+| POST | `/api/meeting-recordings/jobs` | missing | missing |  | routes/meeting-recordings.ts |
+| POST | `/api/meeting-recordings/jobs/:id/retry` | missing | missing |  | routes/meeting-recordings.ts |
+| POST | `/api/meeting-recordings/jobs/:id/save` | missing | missing |  | routes/meeting-recordings.ts |
+| POST | `/api/meeting-recordings/jobs/:id/submit` | missing | missing |  | routes/meeting-recordings.ts |
+| POST | `/api/meeting-recordings/preview` | missing | missing |  | routes/meeting-recordings.ts |
+| POST | `/api/meeting-recordings/test` | missing | missing |  | routes/meeting-recordings.ts |
 | POST | `/api/messenger` | missing | missing |  | routes/messenger.ts |
 | POST | `/api/messenger/bridge-reauth/teams` | missing | missing |  | routes/messenger.ts |
 | POST | `/api/messenger/bridge-status` | missing | missing |  | routes/messenger.ts |
@@ -493,6 +502,8 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | POST | `/mcp/sse` | missing | mounted-fail-closed |  | routes/mcp-server.ts |
 | PUT | `/api/agents/:agentId/github-app/intake` | missing | mounted-fail-closed |  | routes/agent-github-apps.ts |
 | PUT | `/api/architecture` | native-tested | native-tested | `tests/binary_sessions_projects.rs::sessions_and_projects_are_owned_through_the_binary`, `tests/binary_architecture.rs::architecture_refuses_linked_storage_outside_project` | routes/architecture.ts |
+| PUT | `/api/meeting-recordings/jobs/:id/audio` | missing | missing |  | routes/meeting-recordings.ts |
+| PUT | `/api/meeting-recordings/settings` | missing | missing |  | routes/meeting-recordings.ts |
 | PUT | `/api/messenger/presence` | missing | missing |  | routes/messenger.ts |
 | PUT | `/api/mobile/routines/:kind` | missing | mounted-fail-closed |  | routes/mobile.ts |
 | PUT | `/api/persona-agents/:id` | native-tested | native-tested | `tests/binary_thread_routes.rs::thread_routes_through_the_binary` | routes/threads.ts |
@@ -500,6 +511,7 @@ HTTP routes are read with the TypeScript compiler API from every Node gateway so
 | ANY | `/api/dev-file` | missing | missing |  |  |
 | ANY | `/api/dev-proxy` | missing | missing |  |  |
 | ANY | `/api/git` | missing | missing |  |  |
+| ANY | `/api/meeting-recordings` | missing | missing |  |  |
 | ALL | `/api/project` | native-untested | native-untested |  |  |
 | ANY | `/api/security/findings` | missing | missing |  |  |
 
@@ -531,10 +543,11 @@ Every background site in the Node gateway source is listed in tooling/services-i
 
 ## Reviewed timers and loops (not services)
 
+- `meetings/endpoints.ts|MeetingEndpoints.json` — meetings/endpoints.ts:55 while (true) — per-request response reader with a byte limit and cleanup
 - `routes/plan-runs-crash.fixture.ts|(top level)` — routes/plan-runs-crash.fixture.ts:40 setInterval — test-only child process stays alive until the restart regression kills it
 - `channels/telegram/connector.ts|TelegramConnector.startTyping` — channels/telegram/connector.ts:578 setInterval — typing indicator while one chat reply is pending
 - `routes/browser-devtools.ts|registerBrowserDevToolsRoutes.upgrade` — routes/browser-devtools.ts:133 setInterval — validity check on one devtools transport, cleared with that transport
-- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4590 setInterval, routes/chat.ts:6609 setInterval, routes/chat.ts:6723 setInterval, routes/chat.ts:6731 setInterval, routes/chat.ts:6819 setInterval, routes/chat.ts:6853 setInterval, routes/chat.ts:6916 setInterval, routes/chat.ts:6943 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
+- `routes/chat.ts|registerChatRoutes` — routes/chat.ts:4602 setInterval, routes/chat.ts:6615 setInterval, routes/chat.ts:6729 setInterval, routes/chat.ts:6737 setInterval, routes/chat.ts:6825 setInterval, routes/chat.ts:6859 setInterval, routes/chat.ts:6922 setInterval, routes/chat.ts:6949 setInterval — per-stream SSE keepalive, heartbeat and access rechecks, cleared on stream close
 - `routes/mcp-server.ts|registerMcpRoutes` — routes/mcp-server.ts:501 setInterval, routes/mcp-server.ts:622 setInterval — keepalive on one MCP connection
 - `tools/browser-handoff.ts|createBrowserHandoffTool.wait` — tools/browser-handoff.ts:25 setInterval — poll inside one browser handoff tool call
 - `tools/terminal-tools.ts|executeInTerminal` — tools/terminal-tools.ts:1029 setInterval — poll inside one terminal tool execution
@@ -553,8 +566,8 @@ Every background site in the Node gateway source is listed in tooling/services-i
 
 Lexical `/api/` references from web, desktop, CLI and API-client source may include comments, partial expressions and non-requests. Shapes are normalized (glued query suffixes and trailing punctuation dropped). A shape that matches a Node route references it; any other shape has its own row in the HTTP table with an empty Node source. A matching path does not identify a method or establish parity. Dynamic constructions that are not literal may still be omitted.
 
-- `/api/{}/{}/runtime` — ALL /api/dev-proxy/:port/*, DELETE /api/assistants/profiles/:id, DELETE /api/calendar/accounts/:id, DELETE /api/email/accounts/:id, DELETE /api/mobile/push-devices/:deviceId, DELETE /api/preview/devtools/:grantId, DELETE /api/security/checks/:id, DELETE /api/store/skills/:slug, GET /api/assistants/profiles/:id, GET /api/consent/pending/:sessionId, GET /api/dev-file/:encodedPath/*, GET /api/email/connect/:provider, GET /api/email/messages/:id, GET /api/maintenance/runs/:id, GET /api/preview/inspect/:sessionId, GET /api/preview/logs/:sessionId, GET /api/preview/screenshot/:sessionId, GET /api/preview/session/:sessionId, GET /api/screen-share/chat/:chatId, GET /api/security/assessments/:id, GET /api/security/checks/:id, GET /api/sessions/:sessionId/runtime, GET /api/store/skills/:slug, GET /api/threads/:id/runtime, GET /api/trust/levels/:actionType, GET /api/voice/state/:sessionId, PATCH /api/assistants/profiles/:id, PATCH /api/email/accounts/:id, PATCH /api/voice/state/:sessionId, POST /api/email/config/:provider, POST /api/screen-share/control/:operation, PUT /api/mobile/routines/:kind — apps/web/src/lib/agents-api.ts
-- `/api/{}/{}/state` — ALL /api/dev-proxy/:port/*, DELETE /api/assistants/profiles/:id, DELETE /api/calendar/accounts/:id, DELETE /api/email/accounts/:id, DELETE /api/mobile/push-devices/:deviceId, DELETE /api/preview/devtools/:grantId, DELETE /api/security/checks/:id, DELETE /api/store/skills/:slug, GET /api/assistants/profiles/:id, GET /api/consent/pending/:sessionId, GET /api/dev-file/:encodedPath/*, GET /api/email/connect/:provider, GET /api/email/messages/:id, GET /api/maintenance/runs/:id, GET /api/preview/inspect/:sessionId, GET /api/preview/logs/:sessionId, GET /api/preview/screenshot/:sessionId, GET /api/preview/session/:sessionId, GET /api/projects/:id/state, GET /api/screen-share/chat/:chatId, GET /api/security/assessments/:id, GET /api/security/checks/:id, GET /api/sessions/:id/state, GET /api/store/skills/:slug, GET /api/trust/levels/:actionType, GET /api/voice/state/:sessionId, PATCH /api/assistants/profiles/:id, PATCH /api/email/accounts/:id, PATCH /api/projects/:id/state, PATCH /api/sessions/:id/state, PATCH /api/voice/state/:sessionId, POST /api/email/config/:provider, POST /api/screen-share/control/:operation, PUT /api/mobile/routines/:kind — apps/web/src/hooks/useBackendState.ts, apps/web/src/lib/state-batch.ts
+- `/api/{}/{}/runtime` — ALL /api/dev-proxy/:port/*, DELETE /api/assistants/profiles/:id, DELETE /api/calendar/accounts/:id, DELETE /api/email/accounts/:id, DELETE /api/meeting-recordings/jobs/:id, DELETE /api/mobile/push-devices/:deviceId, DELETE /api/preview/devtools/:grantId, DELETE /api/security/checks/:id, DELETE /api/store/skills/:slug, GET /api/assistants/profiles/:id, GET /api/consent/pending/:sessionId, GET /api/dev-file/:encodedPath/*, GET /api/email/connect/:provider, GET /api/email/messages/:id, GET /api/maintenance/runs/:id, GET /api/preview/inspect/:sessionId, GET /api/preview/logs/:sessionId, GET /api/preview/screenshot/:sessionId, GET /api/preview/session/:sessionId, GET /api/screen-share/chat/:chatId, GET /api/security/assessments/:id, GET /api/security/checks/:id, GET /api/sessions/:sessionId/runtime, GET /api/store/skills/:slug, GET /api/threads/:id/runtime, GET /api/trust/levels/:actionType, GET /api/voice/state/:sessionId, PATCH /api/assistants/profiles/:id, PATCH /api/email/accounts/:id, PATCH /api/voice/state/:sessionId, POST /api/email/config/:provider, POST /api/screen-share/control/:operation, PUT /api/mobile/routines/:kind — apps/web/src/lib/agents-api.ts
+- `/api/{}/{}/state` — ALL /api/dev-proxy/:port/*, DELETE /api/assistants/profiles/:id, DELETE /api/calendar/accounts/:id, DELETE /api/email/accounts/:id, DELETE /api/meeting-recordings/jobs/:id, DELETE /api/mobile/push-devices/:deviceId, DELETE /api/preview/devtools/:grantId, DELETE /api/security/checks/:id, DELETE /api/store/skills/:slug, GET /api/assistants/profiles/:id, GET /api/consent/pending/:sessionId, GET /api/dev-file/:encodedPath/*, GET /api/email/connect/:provider, GET /api/email/messages/:id, GET /api/maintenance/runs/:id, GET /api/preview/inspect/:sessionId, GET /api/preview/logs/:sessionId, GET /api/preview/screenshot/:sessionId, GET /api/preview/session/:sessionId, GET /api/projects/:id/state, GET /api/screen-share/chat/:chatId, GET /api/security/assessments/:id, GET /api/security/checks/:id, GET /api/sessions/:id/state, GET /api/store/skills/:slug, GET /api/trust/levels/:actionType, GET /api/voice/state/:sessionId, PATCH /api/assistants/profiles/:id, PATCH /api/email/accounts/:id, PATCH /api/projects/:id/state, PATCH /api/sessions/:id/state, PATCH /api/voice/state/:sessionId, POST /api/email/config/:provider, POST /api/screen-share/control/:operation, PUT /api/mobile/routines/:kind — apps/web/src/hooks/useBackendState.ts, apps/web/src/lib/state-batch.ts
 - `/api/agent-control` — GET /api/agent-control — apps/web/src/lib/agent-control-api.ts
 - `/api/agent-control/halt` — POST /api/agent-control/halt — apps/web/src/lib/agent-control-api.ts
 - `/api/agent-control/resume` — POST /api/agent-control/resume — apps/web/src/lib/agent-control-api.ts
@@ -629,6 +642,7 @@ Lexical `/api/` references from web, desktop, CLI and API-client source may incl
 - `/api/jobs/{}/runs` — GET /api/jobs/:id/runs — apps/web/src/lib/jobs-api.ts
 - `/api/jobs/{}/trigger` — POST /api/jobs/:id/trigger — apps/web/src/lib/jobs-api.ts
 - `/api/jobs/providers/available` — GET /api/jobs/providers/available — apps/web/src/lib/jobs-api.ts
+- `/api/meeting-recordings` — client-only row (see HTTP table) — packages/api-client/src/meeting-recordings.ts
 - `/api/messenger` — DELETE /api/messenger, GET /api/messenger, POST /api/messenger — apps/web/src/lib/messenger/gateway-store.ts
 - `/api/messenger/bridge-accounts/teams` — DELETE /api/messenger/bridge-accounts/teams — apps/web/src/components/messenger/teams-connection-card.tsx
 - `/api/messenger/bridge-reauth/teams` — DELETE /api/messenger/bridge-reauth/teams, GET /api/messenger/bridge-reauth/teams, POST /api/messenger/bridge-reauth/teams — apps/web/src/components/messenger/teams-connection-card.tsx
@@ -886,8 +900,11 @@ Each request call (fetch, apiFetch, request, this.request, getJson) whose path i
 - `apps/web/src/lib/terminal-snapshot.ts|loadTerminalSnapshot` (1) — getApiUrl() + '/api/terminals' in the same expression
 - `apps/web/src/lib/usage-summary-store.ts|refreshUsageSummary` (2) — local request(mode) builds ${getApiUrl()}/api/provider-usage/summary?refresh=mode in this file
 - `apps/web/src/lib/version-watchdog.ts|currentBuildStamp` (1) — the web origin's own root document for the build stamp; not a gateway route
+- `apps/web/src/lib/meeting-recording.ts|(top level)` (1) — forwards the API client’s /api/meeting-recordings paths to the configured gateway
+- `packages/api-client/src/client.ts|JaitClient` (1) — forwards the API client meeting recording paths to the configured gateway
 - `packages/api-client/src/client.ts|JaitClient.assessmentRequest` (1) — helper; callers pass literal /api/security paths in this file
 - `packages/api-client/src/client.ts|JaitClient.health` (1) — health probe (${baseUrl}/health)
+- `packages/api-client/src/meeting-recordings.ts|createMeetingRecordingApi` (11) — request adds /api/meeting-recordings to settings, preview, and recording job paths
 - `packages/cli/src/commands/resources.ts|runCronList` (1) — GET ${baseUrl}/jobs from the gateway root; the Node gateway serves no /jobs route (see the report)
 - `packages/cli/src/commands/resources.ts|runSurfacesList` (1) — GET ${baseUrl}/surfaces from the gateway root; the Node gateway serves no /surfaces route (see the report)
 - `packages/cli/src/lib/doctor.ts|checkPort` (1) — health probe of the local gateway port (/health)

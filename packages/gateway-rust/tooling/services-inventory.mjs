@@ -102,6 +102,7 @@ const COMPOSITION_STARTS = [
 // setInterval sites and self re-arming timers, keyed by file and enclosing function. `services` lists the services of
 // the sites in source order. A key with `reason` instead is a per-request or per-tool timer, reviewed as not a service.
 const TIMER_SITES = [
+  { key: 'meetings/endpoints.ts|MeetingEndpoints.json', reason: 'per-request response reader with a byte limit and cleanup' },
   { key: 'routes/plan-runs-crash.fixture.ts|(top level)', reason: 'test-only child process stays alive until the restart regression kills it' },
   { key: 'index.ts|main', services: ['terminalReaper', 'browserReaper'] },
   { key: 'providers/jait-provider.ts|JaitProvider.startSandboxMaintenance', services: ['sandboxMaintenance'] },
