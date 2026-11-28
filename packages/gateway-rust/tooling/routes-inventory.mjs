@@ -151,22 +151,36 @@ export const PLUGIN_SITES = [
 const propertyName = (property) => (property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) ? property.name.text : undefined);
 const propertyValueNode = (property) => (ts.isShorthandPropertyAssignment(property) ? property.name : ts.isPropertyAssignment(property) ? property.initializer : undefined);
 
-// The text of a literal path. A template's ${name} becomes :name, so a route keeps its parameter.
-function literalText(node) {
-  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
-  if (ts.isTemplateExpression(node)) {
-    return node.head.text + node.templateSpans
-      .map((span) => `:${ts.isIdentifier(span.expression) ? span.expression.text : 'param'}${span.literal.text}`)
-      .join('');
+function unwrapExpression(node) {
+  while (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)) node = node.expression;
+  return node;
+}
+
+// Preserve ordinary template placeholders, but expand a loop-bound segment from its literal values.
+function templatePaths(node, info) {
+  const bound = node.templateSpans.map(({ expression }) => ts.isIdentifier(expression) ? loopBinding(expression) : null);
+  const index = bound.findIndex(Boolean);
+  const binding = index === -1 ? null : node.templateSpans[index].expression;
+  // More than one loop variable requires modelling the iteration pairs.
+  if (binding && bound.some((loop, i) => loop && (loop !== bound[index] || node.templateSpans[i].expression.text !== binding.text))) {
+    return null;
   }
-  return null;
+  const values = binding ? loopValues(bound[index], binding.text, info) : [''];
+  if (!values) return null;
+  return values.map((value) => {
+    const suffix = node.templateSpans.map(({ expression, literal }, i) => {
+      const segment = bound[i] ? value : `:${ts.isIdentifier(expression) ? expression.text : 'param'}`;
+      return segment + literal.text;
+    }).join('');
+    return node.head.text + suffix;
+  });
 }
 
 // Every string an expression can take, or null when literal evidence in this file does not establish them.
 function valuesOf(node, info) {
-  if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)) return valuesOf(node.expression, info);
-  const literal = literalText(node);
-  if (literal !== null) return [literal];
+  node = unwrapExpression(node);
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return [node.text];
+  if (ts.isTemplateExpression(node)) return templatePaths(node, info);
   if (ts.isArrayLiteralExpression(node)) {
     const out = [];
     for (const element of node.elements) {
@@ -227,12 +241,13 @@ function loopValues(loop, name, info) {
 }
 
 function iterableItems(expression, info) {
-  if (ts.isArrayLiteralExpression(expression)) return expression.elements;
-  if (ts.isIdentifier(expression)) {
-    const initializer = info.consts.get(expression.text);
-    return initializer && ts.isArrayLiteralExpression(initializer) ? initializer.elements : null;
+  let array = unwrapExpression(expression);
+  if (ts.isIdentifier(array)) {
+    const initializer = info.consts.get(array.text);
+    if (!initializer) return null;
+    array = unwrapExpression(initializer);
   }
-  return null;
+  return ts.isArrayLiteralExpression(array) ? array.elements : null;
 }
 
 function routeObjectRoutes(object, info, call) {
@@ -354,12 +369,13 @@ function scanCall(call, info, index, out) {
   const method = ROUTE_METHODS.get(name);
   if (!method || call.arguments.length === 0) return;
   const first = call.arguments[0];
-  const literal = literalText(first);
-  if (literal !== null) {
-    if (literal.startsWith('/')) routeSite(call, info, out, [{ method, path: literal }]);
+  if (ts.isStringLiteral(first) || ts.isNoSubstitutionTemplateLiteral(first)) {
+    if (first.text.startsWith('/')) routeSite(call, info, out, [{ method, path: first.text }]);
     return;
   }
-  if (!isFastifyReceiver(callee.expression) || call.arguments.length < 2) return;
+  if (ts.isTemplateExpression(first)) {
+    if (!first.head.text.startsWith('/')) return;
+  } else if (!isFastifyReceiver(callee.expression) || call.arguments.length < 2) return;
   const paths = valuesOf(first, info);
   if (!paths || paths.some((path) => !path.startsWith('/'))) {
     throw new Error(`unexpanded route path in ${file} (${enclosingName(call)}): ${first.getText(info.sf)}`);

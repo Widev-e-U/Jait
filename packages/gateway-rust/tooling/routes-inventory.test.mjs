@@ -28,6 +28,20 @@ test('reads literal, template, array, route-object and method-array registration
   ]);
 });
 
+test('expands a literal loop action in a template without losing route parameters', () => {
+  const files = [{
+    path: 'routes/jobs.ts',
+    text: [
+      'export function registerJobs(app) {',
+      '  for (const action of (["submit", "retry"] as const)) {',
+      '    app.post(`/jobs/${id}/${action}`, handler);',
+      '  }',
+      '}',
+    ].join('\n'),
+  }];
+  assert.deepEqual(routesOf(files), ['POST /jobs/:id/retry', 'POST /jobs/:id/submit']);
+});
+
 test('a path that literal evidence cannot expand throws instead of dropping out', () => {
   assert.throws(
     () => scanGateway([{ path: 'routes/b.ts', text: 'export function registerB(app, path) { app.get(path, handler); }' }]),
