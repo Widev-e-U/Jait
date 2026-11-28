@@ -4,6 +4,26 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.986](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.986) — 2026-11-28
+
+- fix(web): default mobile device names to dome — 9b85688b
+- feat: record meetings and save notes to Obsidian — 9f840e0e
+- fix(gateway-rust): retain Messenger thread replies — 9dc98026
+- fix(gateway-rust): match Messenger sender presence projections — 676dd28c
+- chore(contract): recapture interface manifest — 27c1ebc4
+- test(gateway-rust): bind node capabilities and version to connection identity — 20da4d6f
+- feat(web): collapsible chat fork branches in the session sidebar — 35e6dc7a
+- feat(messenger): Teams sign-in email prefill and sender-id message grouping — c46a7302
+- feat(gateway): add plan.create tool that drafts plans for owner approval — 8a65e9c8
+- chore(gateway-rust): refresh API inventory — 587157c4
+- fix(gateway-rust): reset node metadata on client replacement — ee7f0823
+- feat: add chat forks for loops and first-run device naming — d0b69c0c
+- test(gateway-rust): check that unavailable providers stay hidden — 615b0040
+- fix(messenger): carry sender avatars through notifications — 70e49a26
+- fix(desktop): harden the guest IPC bridge — 140e0122
+- fix(android): retain sender avatars across messenger notifications — 4cf678b5
+- feat(gateway-rust): supervise automatic scheduled jobs — c4c3ac54
+
 ## [v0.1.985](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.985) — 2026-11-28
 
 - feat: record meetings and save notes to Obsidian — 9f840e0e
