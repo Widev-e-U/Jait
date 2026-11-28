@@ -130,7 +130,11 @@ test('a plugin that registers itself with a prefix is a cycle and throws', () =>
 
 test('the reviewed tables cover every route and registration in the real gateway source', () => {
   const routes = gatewayRoutes(walkGatewaySource(gatewaySrc));
-  assert.equal(routes.length, 449);
+  assert.equal(routes.length, 460);
+  for (const action of ['submit', 'retry']) {
+    const path = `/api/meeting-recordings/jobs/:id/${action}`;
+    assert.deepEqual(routes.find(route => route.method === 'POST' && route.path === path)?.files, ['routes/meeting-recordings.ts']);
+  }
   assert.ok(routes.some((route) => route.method === 'GET' && route.path === '/api/sessions/:sessionId/shared-stream'));
   assert.ok(routes.some((route) => route.method === 'PATCH' && route.path === '/api/sessions/:id/share'));
   assert.ok(routes.some((route) => route.method === 'DELETE' && route.path === '/api/projects/:id/members/:userId'));
